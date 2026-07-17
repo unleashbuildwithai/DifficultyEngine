@@ -1,0 +1,127 @@
+package com.yourname.difficulty.skills;
+
+import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.plugin.java.JavaPlugin;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
+/**
+ * SkillManager — Persistent per-player skill XP storage.
+ *
+ * Data is saved to plugins/DifficultyEngine/skills.yml.
+ * Format:
+ *   skills:
+ *     <uuid>:
+ *       MELEE: 1234
+ *       RANGED: 567
+ *       ...
+ */
+public class SkillManager {
+
+    private final JavaPlugin plugin;
+    private final File       dataFile;
+
+    /** uuid → (SkillType → totalXp) */
+    private final Map<UUID, Map<SkillType, Long>> skillData = new HashMap<>();
+
+    public SkillManager(JavaPlugin plugin) {
+        this.plugin   = plugin;
+        this.dataFile = new File(plugin.getDataFolder(), "skills.yml");
+        loadAll();
+    }
+
+    // ── XP API ────────────────────────────────────────────────────────────────
+
+    /** Returns total accumulated XP for the given skill. */
+    public long getXp(UUID uuid, SkillType skill) {
+        return skillData
+                .getOrDefault(uuid, Map.of())
+                .getOrDefault(skill, 0L);
+    }
+
+    /** Returns the current level (1–99) for the given skill. */
+    public int getLevel(UUID uuid, SkillType skill) {
+        return SkillLevel.getLevelForXp(getXp(uuid, skill));
+    }
+
+    /**
+     * Adds XP to the given skill.
+     * Returns the new level after the addition (for level-up detection).
+     */
+    public int addXp(UUID uuid, SkillType skill, long amount) {
+        int oldLevel = getLevel(uuid, skill);
+
+        skillData.computeIfAbsent(uuid, k -> new EnumMap<>(SkillType.class))
+                 .merge(skill, amount, Long::sum);
+
+        int newLevel = getLevel(uuid, skill);
+
+        // Autosave — not every tick, but on each XP gain.
+        // In a high-load scenario you'd batch saves; for a custom plugin this is fine.
+        saveAll();
+
+        return newLevel;
+    }
+
+    /** Returns the sum of all skill levels (like RS Total Level). */
+    public int getTotalLevel(UUID uuid) {
+        int total = 0;
+        for (SkillType skill : SkillType.values()) {
+            total += getLevel(uuid, skill);
+        }
+        return total;
+    }
+
+    /** Returns true if ALL skills are level 99. */
+    public boolean isMaxed(UUID uuid) {
+        for (SkillType skill : SkillType.values()) {
+            if (getLevel(uuid, skill) < SkillLevel.MAX_LEVEL) return false;
+        }
+        return true;
+    }
+
+    // ── Persistence ───────────────────────────────────────────────────────────
+
+    public void saveAll() {
+        YamlConfiguration yaml = new YamlConfiguration();
+        for (Map.Entry<UUID, Map<SkillType, Long>> playerEntry : skillData.entrySet()) {
+            String uuidStr = playerEntry.getKey().toString();
+            for (Map.Entry<SkillType, Long> skillEntry : playerEntry.getValue().entrySet()) {
+                yaml.set("skills." + uuidStr + "." + skillEntry.getKey().name(),
+                         skillEntry.getValue());
+            }
+        }
+        try {
+            yaml.save(dataFile);
+        } catch (IOException ex) {
+            plugin.getLogger().warning("[SkillManager] Could not save skills.yml: " + ex.getMessage());
+        }
+    }
+
+    private void loadAll() {
+        if (!dataFile.exists()) return;
+        YamlConfiguration yaml = YamlConfiguration.loadConfiguration(dataFile);
+
+        if (!yaml.isConfigurationSection("skills")) return;
+
+        for (String uuidStr : yaml.getConfigurationSection("skills").getKeys(false)) {
+            try {
+                UUID uuid = UUID.fromString(uuidStr);
+                Map<SkillType, Long> map = new EnumMap<>(SkillType.class);
+                for (SkillType skill : SkillType.values()) {
+                    long xp = yaml.getLong("skills." + uuidStr + "." + skill.name(), 0L);
+                    if (xp > 0) map.put(skill, xp);
+                }
+                if (!map.isEmpty()) skillData.put(uuid, map);
+            } catch (IllegalArgumentException ignored) {}
+        }
+
+        plugin.getLogger().info("[SkillManager] Loaded skill data for "
+                + skillData.size() + " player(s).");
+    }
+}

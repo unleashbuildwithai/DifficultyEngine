@@ -8,6 +8,11 @@ import com.yourname.difficulty.listeners.MinecartListener;
 import com.yourname.difficulty.listeners.NightmareAggroListener;
 import com.yourname.difficulty.listeners.SitListener;
 import com.yourname.difficulty.listeners.SoulfurPotionListener;
+import com.yourname.difficulty.skills.SkillCommand;
+import com.yourname.difficulty.skills.SkillGUI;
+import com.yourname.difficulty.skills.SkillGUIListener;
+import com.yourname.difficulty.skills.SkillListener;
+import com.yourname.difficulty.skills.SkillManager;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -17,6 +22,8 @@ public class Main extends JavaPlugin {
     private ItemFactory             itemFactory;
     private RegistryGUI             registryGUI;
     private SitListener             sitListener;
+    private SkillManager            skillManager;
+    private AdminLightCommand       adminLightCommand;
 
     @Override
     public void onEnable() {
@@ -24,10 +31,14 @@ public class Main extends JavaPlugin {
 
         // ── Core managers ─────────────────────────────────────────────────────
         this.difficultyManager = new PlayerDifficultyManager(this);
+        this.skillManager      = new SkillManager(this);
 
         // ── Item & GUI layer ──────────────────────────────────────────────────
         this.itemFactory = new ItemFactory(this);
         this.registryGUI = new RegistryGUI(itemFactory);
+
+        // ── Skill GUI ─────────────────────────────────────────────────────────
+        SkillGUI skillGUI = new SkillGUI(skillManager);
 
         // ── Register listeners ────────────────────────────────────────────────
 
@@ -55,6 +66,14 @@ public class Main extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new MinecartListener(itemFactory), this);
 
+        // Skill system: XP tracking for melee, ranged, woodcutting, fishing, farming
+        getServer().getPluginManager().registerEvents(
+                new SkillListener(this, skillManager), this);
+
+        // Skill GUI: prevent item theft from /mystats inventory
+        getServer().getPluginManager().registerEvents(
+                new SkillGUIListener(), this);
+
         // ── Register commands ─────────────────────────────────────────────────
 
         getCommand("difficulty").setExecutor(new DifficultyCommand(difficultyManager));
@@ -71,6 +90,23 @@ public class Main extends JavaPlugin {
             return true;
         });
 
+        // ── New commands ──────────────────────────────────────────────────────
+
+        // /curecosmetic — removes blindness, nausea, darkness, etc.
+        getCommand("curecosmetic").setExecutor(new CureCosmeticCommand());
+
+        // /adminlight — toggles personal Night Vision for admins
+        this.adminLightCommand = new AdminLightCommand(this);
+        getCommand("adminlight").setExecutor(adminLightCommand);
+
+        // /skills — text summary of skill levels
+        getCommand("skills").setExecutor(
+                new SkillCommand(skillManager, skillGUI, false));
+
+        // /mystats — RuneScape-style skill tree GUI
+        getCommand("mystats").setExecutor(
+                new SkillCommand(skillManager, skillGUI, true));
+
         // ── Scheduled tasks ───────────────────────────────────────────────────
 
         // Nightmare bonus-spawn — every 30 seconds
@@ -83,13 +119,15 @@ public class Main extends JavaPlugin {
         }
 
         getLogger().info("DifficultyEngine: Ready!");
-        getLogger().info("  Players : /difficulty  /hpbar  /sit  /registry");
-        getLogger().info("  Admins  : /gear");
+        getLogger().info("  Players : /difficulty  /hpbar  /sit  /registry  /skills  /mystats");
+        getLogger().info("  Admins  : /gear  /curecosmetic  /adminlight");
     }
 
     @Override
     public void onDisable() {
         if (difficultyManager != null) difficultyManager.saveAll();
+        if (skillManager      != null) skillManager.saveAll();
+        if (adminLightCommand != null) adminLightCommand.disableAll();
         getLogger().info("DifficultyEngine: Data saved. Goodbye.");
     }
 }

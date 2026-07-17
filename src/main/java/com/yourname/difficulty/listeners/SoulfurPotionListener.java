@@ -68,6 +68,13 @@ public class SoulfurPotionListener implements Listener {
     private final Map<UUID, Integer>    sipCount            = new HashMap<>();
     /** Active drunken-sway BukkitTasks. */
     private final Map<UUID, BukkitTask> activeSways         = new HashMap<>();
+    /**
+     * Per-player blindness refresh tasks.
+     * A task is created when sips cross the BLINDNESS threshold (15+).
+     * It re-applies BLINDNESS every second and auto-cancels when sips fall below 15.
+     * cleanse() also cancels it so going in water/bed fully clears vision.
+     */
+    private final Map<UUID, BukkitTask> blindnessTasks      = new HashMap<>();
     /** Epoch-ms timestamp for when next sip-damage fires. */
     private final Map<UUID, Long>       nextDamageTime      = new HashMap<>();
     /** Epoch-ms timestamp for when next sunlight-curse damage fires. */
@@ -349,13 +356,29 @@ public class SoulfurPotionListener implements Listener {
         activeSways.put(player.getUniqueId(), task);
     }
 
+    /**
+     * Full cleanse: removes NAUSEA, BLINDNESS, DARKNESS, cancels sway,
+     * and — critically — CLEARS the sip counter so tickSipEffects() stops
+     * re-applying blindness after the player goes in water or sleeps.
+     */
     private void cleanse(Player player) {
+        UUID uuid = player.getUniqueId();
         player.removePotionEffect(PotionEffectType.NAUSEA);
-        cancelSway(player.getUniqueId());
+        player.removePotionEffect(PotionEffectType.BLINDNESS);
+        player.removePotionEffect(PotionEffectType.DARKNESS);
+        sipCount.remove(uuid);
+        nextDamageTime.remove(uuid);
+        cancelBlindnessTask(uuid);
+        cancelSway(uuid);
     }
 
     private void cancelSway(UUID uuid) {
         BukkitTask task = activeSways.remove(uuid);
+        if (task != null) task.cancel();
+    }
+
+    private void cancelBlindnessTask(UUID uuid) {
+        BukkitTask task = blindnessTasks.remove(uuid);
         if (task != null) task.cancel();
     }
 

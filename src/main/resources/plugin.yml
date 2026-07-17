@@ -2,7 +2,7 @@ name: DifficultyEngine
 version: 1.0
 main: com.yourname.difficulty.Main
 api-version: 1.21
-description: Per-player difficulty scaling with Peaceful, Easy, Medium, Hard, and Nightmare modes.
+description: Per-player difficulty scaling with Peaceful, Easy, Medium, Hard, and Nightmare modes. Includes a full RuneScape-style skill system.
 author: yourname
 
 commands:
@@ -41,9 +41,37 @@ commands:
     permission: difficultyengine.registry
     permission-message: §cThis command is for admins only.
 
+  curecosmetic:
+    description: Remove all cosmetic effects (blindness, nausea, darkness, etc.) from yourself or a player.
+    usage: /curecosmetic [player]
+    aliases: [cureblind, cureffect, cleansight]
+    permission: difficultyengine.curecosmetic
+    permission-message: §cThis command is for admins only.
+
+  adminlight:
+    description: Toggle permanent personal Night Vision so you can see in the dark (admin only).
+    usage: /adminlight [on|off]
+    aliases: [alight, nightvision, nv]
+    permission: difficultyengine.adminlight
+    permission-message: §cThis command is for admins only.
+
+  skills:
+    description: View your skill levels and XP in chat.
+    usage: /skills [player]
+    aliases: [skill, xp, checkskills]
+    permission: difficultyengine.use
+    permission-message: You do not have permission to use this command.
+
+  mystats:
+    description: Open the RuneScape-style skill tree GUI showing all your skill levels.
+    usage: /mystats [player]
+    aliases: [skilltree, stats, skills]
+    permission: difficultyengine.use
+    permission-message: You do not have permission to use this command.
+
 permissions:
   difficultyengine.use:
-    description: Allows players to set difficulty, use /hpbar, /sit, and open the Item Registry.
+    description: Allows players to set difficulty, use /hpbar, /sit, /registry, /skills, and /mystats.
     default: true
 
   difficultyengine.gear:
@@ -60,4 +88,20 @@ permissions:
 
   difficultyengine.turbocart:
     description: Allows obtaining the Turbo Minecart from the Item Registry (VIP/Admin perk).
+    default: op
+
+  difficultyengine.curecosmetic:
+    description: Allows use of /curecosmetic on yourself.
+    default: op
+
+  difficultyengine.curecosmetic.others:
+    description: Allows use of /curecosmetic on other players.
+    default: op
+
+  difficultyengine.adminlight:
+    description: Allows use of /adminlight to toggle personal Night Vision. Admin-only.
+    default: op
+
+  difficultyengine.skills.others:
+    description: Allows viewing another player's skill levels via /skills <player> or /mystats <player>.
     default: op
