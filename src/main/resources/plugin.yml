@@ -65,7 +65,13 @@ commands:
   mystats:
     description: Open the RuneScape-style skill tree GUI showing all your skill levels.
     usage: /mystats [player]
-    aliases: [skilltree, stats, skills]
+    aliases: [skilltree]
+    permission: difficultyengine.use
+    permission-message: You do not have permission to use this command.
+
+  stats:
+    description: Open the RuneScape-style skill tree GUI (alias for /mystats).
+    usage: /stats [player]
     permission: difficultyengine.use
     permission-message: You do not have permission to use this command.
 

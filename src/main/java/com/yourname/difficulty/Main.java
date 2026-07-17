@@ -116,9 +116,10 @@ public class Main extends JavaPlugin {
         getCommand("skills").setExecutor(
                 new SkillCommand(skillManager, skillGUI, false));
 
-        // /mystats — RuneScape-style skill tree GUI
-        getCommand("mystats").setExecutor(
-                new SkillCommand(skillManager, skillGUI, true));
+        // /mystats and /stats — both open the RuneScape-style skill tree GUI
+        SkillCommand guiCmd = new SkillCommand(skillManager, skillGUI, true);
+        getCommand("mystats").setExecutor(guiCmd);
+        getCommand("stats").setExecutor(guiCmd);
 
         // ── Scheduled tasks ───────────────────────────────────────────────────
 
