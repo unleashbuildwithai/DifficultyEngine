@@ -36,6 +36,8 @@ When **ON** — every mob you hit shows its health above its head:
 The number updates in real-time with each hit and disappears when the mob dies.  
 Type `/hpbar` again to turn it off.
 
+Your `/hpbar` preference is **saved automatically** — it will still be on the next time you join the server.
+
 > **Tip:** The HP shown reflects actual scaled health — so a Nightmare zombie might show `❤ 30 / 30` instead of the vanilla `20 / 20`.
 
 ---
@@ -71,6 +73,47 @@ Type `/hpbar` again to turn it off.
 
 ---
 
+## How Mob Scaling Works
+
+When a hostile mob spawns, the plugin:
+
+1. Scans all players within **64 blocks**
+2. Finds the **highest difficulty** player in range
+3. Applies that difficulty's stat multipliers to the mob
+
+> One Nightmare player in a group of Easy players → all nearby mobs spawn at Nightmare stats for everyone.
+
+---
+
+## Nightmare Bonus Spawns
+
+Every **30 seconds**, 3 extra hostile mobs spawn within 8–24 blocks of each Nightmare player.  
+Spawn pool: Zombie (weighted), Skeleton, Creeper, Spider, Zombie Villager.
+
+---
+
+## Data Persistence
+
+Player settings are saved to `plugins/DifficultyEngine/player_data.yml` immediately on change.  
+Both `/difficulty` and `/hpbar` preferences survive server restarts and reconnects automatically.
+
+---
+
+## Installation
+
+1. Place `DifficultyEngine-1.0.jar` in your server's `plugins/` folder
+2. Restart the server
+3. Players use `/difficulty` to choose their mode and `/hpbar` to toggle HP display
+
+---
+
+## Requirements
+
+- **Paper 1.21+**
+- **Java 21+**
+
+---
+
 ## FAQ
 
 **Does my difficulty setting save when I log out?**  
@@ -80,7 +123,11 @@ Yes — your choice is saved to disk automatically and restored next time you jo
 Yes, as many times as you like. Only mobs that spawn *after* you change will be affected.
 
 **Does `/hpbar` persist after I log out?**  
-No — it's a session toggle. You'll need to run `/hpbar` again when you rejoin. This is intentional so it doesn't clutter everyone's screen by default.
+Yes — your preference is saved to disk the moment you toggle it, just like your difficulty choice. It will be restored automatically when you rejoin.
 
 **What counts as a "nearby" player for mob scaling?**  
 Mobs check within a 64-block radius at the moment they spawn. The highest difficulty player in that radius determines the mob's stats.
+
+---
+
+*DifficultyEngine — because some players want to suffer more than others.*

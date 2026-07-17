@@ -11,7 +11,8 @@ import org.bukkit.entity.Player;
  * When ON:  every mob you hit shows  §c❤ §f{current} §7/ §f{max}  above it.
  * When OFF: no names are shown (vanilla behaviour).
  *
- * The toggle is per-player and resets when the server restarts.
+ * The preference is saved to player_data.yml immediately and persists across
+ * server restarts and reconnects.
  * Permission: difficultyengine.use  (same as /difficulty — default: true)
  */
 public class HpBarCommand implements CommandExecutor {
@@ -35,9 +36,9 @@ public class HpBarCommand implements CommandExecutor {
 
         if (nowOn) {
             player.sendMessage("§8[§6DifficultyEngine§8] §aHP display §2ON " +
-                    "§7— hit a mob to see its health above its head.");
+                    "§7— hit a mob to see its health above its head. §8(saved)");
         } else {
-            player.sendMessage("§8[§6DifficultyEngine§8] §cHP display §4OFF§7.");
+            player.sendMessage("§8[§6DifficultyEngine§8] §cHP display §4OFF§7. §8(saved)");
         }
 
         return true;

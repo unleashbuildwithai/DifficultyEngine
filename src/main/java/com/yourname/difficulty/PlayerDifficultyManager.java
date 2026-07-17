@@ -22,8 +22,8 @@ public class PlayerDifficultyManager {
 
     /**
      * Players who have opted into the live HP display above mob heads.
-     * Stored in memory only — resets on server restart (intentional: it's a
-     * session preference, not something that needs to persist).
+     * Persisted to player_data.yml alongside difficulty choices so the
+     * setting survives server restarts and reconnects.
      */
     private final Set<UUID> hpDisplayEnabled = new HashSet<>();
 
@@ -54,12 +54,16 @@ public class PlayerDifficultyManager {
      * @return {@code true} if the display is now ON, {@code false} if now OFF.
      */
     public boolean toggleHpDisplay(UUID uuid) {
+        boolean nowOn;
         if (hpDisplayEnabled.contains(uuid)) {
             hpDisplayEnabled.remove(uuid);
-            return false;
+            nowOn = false;
+        } else {
+            hpDisplayEnabled.add(uuid);
+            nowOn = true;
         }
-        hpDisplayEnabled.add(uuid);
-        return true;
+        saveAll(); // persist immediately, same as setDifficulty()
+        return nowOn;
     }
 
     /** Returns {@code true} if the player has HP display enabled. */
@@ -80,9 +84,17 @@ public class PlayerDifficultyManager {
     /** Saves all player data to disk. */
     public void saveAll() {
         YamlConfiguration yaml = new YamlConfiguration();
+
+        // Difficulty choices
         for (Map.Entry<UUID, DifficultyLevel> entry : data.entrySet()) {
             yaml.set("players." + entry.getKey().toString(), entry.getValue().name());
         }
+
+        // HP bar preferences — save every UUID that has it enabled
+        for (UUID uuid : hpDisplayEnabled) {
+            yaml.set("hpbar." + uuid.toString(), true);
+        }
+
         try {
             yaml.save(dataFile);
         } catch (IOException e) {
@@ -94,19 +106,37 @@ public class PlayerDifficultyManager {
     private void loadAll() {
         if (!dataFile.exists()) return;
         YamlConfiguration yaml = YamlConfiguration.loadConfiguration(dataFile);
-        if (!yaml.isConfigurationSection("players")) return;
 
-        for (String key : yaml.getConfigurationSection("players").getKeys(false)) {
-            try {
-                UUID uuid = UUID.fromString(key);
-                String levelName = yaml.getString("players." + key, "EASY");
-                DifficultyLevel level = DifficultyLevel.valueOf(levelName);
-                data.put(uuid, level);
-            } catch (IllegalArgumentException ignored) {
-                // Skip malformed entries
+        // ── Difficulty choices ────────────────────────────────────────────────
+        if (yaml.isConfigurationSection("players")) {
+            for (String key : yaml.getConfigurationSection("players").getKeys(false)) {
+                try {
+                    UUID uuid = UUID.fromString(key);
+                    String levelName = yaml.getString("players." + key, "EASY");
+                    DifficultyLevel level = DifficultyLevel.valueOf(levelName);
+                    data.put(uuid, level);
+                } catch (IllegalArgumentException ignored) {
+                    // Skip malformed entries
+                }
             }
         }
-        plugin.getLogger().info("Loaded difficulty data for " + data.size() + " player(s).");
+
+        // ── HP bar preferences ────────────────────────────────────────────────
+        if (yaml.isConfigurationSection("hpbar")) {
+            for (String key : yaml.getConfigurationSection("hpbar").getKeys(false)) {
+                try {
+                    UUID uuid = UUID.fromString(key);
+                    if (yaml.getBoolean("hpbar." + key, false)) {
+                        hpDisplayEnabled.add(uuid);
+                    }
+                } catch (IllegalArgumentException ignored) {
+                    // Skip malformed entries
+                }
+            }
+        }
+
+        plugin.getLogger().info("Loaded difficulty data for " + data.size() +
+                " player(s), HP bar enabled for " + hpDisplayEnabled.size() + ".");
     }
 
     public Main getPlugin() {
