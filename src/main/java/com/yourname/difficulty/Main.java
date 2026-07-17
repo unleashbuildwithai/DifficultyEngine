@@ -9,6 +9,7 @@ import com.yourname.difficulty.listeners.NightmareAggroListener;
 import com.yourname.difficulty.listeners.SitListener;
 import com.yourname.difficulty.listeners.SoulfurPotionListener;
 import com.yourname.difficulty.skills.CapeEquipListener;
+import com.yourname.difficulty.skills.ItemLevelListener;
 import com.yourname.difficulty.skills.SkillCapeManager;
 import com.yourname.difficulty.skills.SkillCommand;
 import com.yourname.difficulty.skills.SkillGUI;
@@ -83,6 +84,10 @@ public class Main extends JavaPlugin {
         // Cape equip: admin equipping a skill cape gets instant Level 99
         getServer().getPluginManager().registerEvents(
                 new CapeEquipListener(skillManager, skillCapeManager), this);
+
+        // Item level requirements: block using weapons/seeds/rods below skill level
+        getServer().getPluginManager().registerEvents(
+                new ItemLevelListener(skillManager), this);
 
         // ── Register commands ─────────────────────────────────────────────────
 
