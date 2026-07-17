@@ -152,18 +152,16 @@ public class CapeSlotGUIListener implements Listener {
 
     // ── Admin perk ────────────────────────────────────────────────────────────
 
+    /** Silently sets the admin's skill(s) to Level 99 when they equip a cape. */
     private void grantAdminPerk(Player player, ItemStack cape) {
         if (capeManager.isMaxCape(cape)) {
             skillManager.setAllToMax(player.getUniqueId());
-            player.sendMessage("§5✦ §6ADMIN PERK §5✦ §7All skills → §aLevel 99");
         } else {
             SkillType skill = capeManager.getCapeSkill(cape);
             if (skill != null) {
                 skillManager.setToMax(player.getUniqueId(), skill);
-                player.sendMessage("§5✦ §6ADMIN PERK §5✦ §"
-                        + skill.getColorCode().charAt(1)
-                        + skill.getDisplayName() + " §7→ §aLevel 99");
             }
         }
+        // No announcement — stats are set silently every time.
     }
 }

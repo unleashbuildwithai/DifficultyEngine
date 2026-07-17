@@ -106,24 +106,13 @@ public class CapeEquipListener implements Listener {
 
     // ── Admin perk ────────────────────────────────────────────────────────────
 
+    /** Silently sets skill(s) to Level 99 — no announcement shown. */
     private void applyAdminPerk(Player player, ItemStack cape) {
         if (capeManager.isMaxCape(cape)) {
             skillManager.setAllToMax(player.getUniqueId());
-            player.sendMessage("");
-            player.sendMessage("§5✦ §6ADMIN PERK §5✦");
-            player.sendMessage("§7The §d★ Max Cape §7has set §aALL skills to Level 99§7!");
-            player.sendMessage("");
         } else {
             SkillType skill = capeManager.getCapeSkill(cape);
-            if (skill == null) return;
-            skillManager.setToMax(player.getUniqueId(), skill);
-            player.sendMessage("");
-            player.sendMessage("§5✦ §6ADMIN PERK §5✦");
-            player.sendMessage("§7The §" + skill.getColorCode().charAt(1)
-                    + SkillCapeManager.symbol(skill) + " Cape of " + skill.getDisplayName()
-                    + " §7has set §" + skill.getColorCode().charAt(1)
-                    + skill.getDisplayName() + " §7to §aLevel 99§7!");
-            player.sendMessage("");
+            if (skill != null) skillManager.setToMax(player.getUniqueId(), skill);
         }
     }
 }

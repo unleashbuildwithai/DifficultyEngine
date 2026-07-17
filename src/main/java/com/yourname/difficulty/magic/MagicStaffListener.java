@@ -75,7 +75,7 @@ public class MagicStaffListener implements Listener {
     public static final String META_WET   = "magic_wet";    // value = expiry ms
     public static final String META_MUDDY = "magic_muddy";  // value = expiry ms
 
-    private static final int  AIR_RANGE    = 7;     // blocks for air/earth/water direct check
+    private static final int  AIR_RANGE    = 15;    // max range for air gust (blocks)
 
     private final ItemFactory   itemFactory;
     private final SkillManager  skillManager;
@@ -264,33 +264,39 @@ public class MagicStaffListener implements Listener {
     // ── AIR ───────────────────────────────────────────────────────────────────
 
     /**
-     * Air gust: distance-based knockback — the CLOSER the opponent, the STRONGER
-     * the launch. Level also multiplies the overall strength.
+     * Air gust: linear distance-based knockback.
      *
-     * strength = (1 + (1 - dist/maxRange)) × levelFactor
-     * At dist=1, Lv99: ~4× base knockback. At dist=7, Lv1: ~0.5× base.
+     * knockbackBlocks = 2 + (AIR_RANGE − distance)
+     *   At dist=15: 2 blocks knockback
+     *   At dist=14: 3 blocks knockback
+     *   At dist= 1: 16 blocks knockback
+     *
+     * velocity ≈ knockbackBlocks × 0.09  (Minecraft horizontal friction ≈ 0.91/tick)
+     * Level multiplier: 0.5× at Lv1, 2.0× at Lv99
      */
     private void castAir(Player player, int magicLevel) {
         LivingEntity target = nearestEntity(player, AIR_RANGE);
         if (target != null) {
             if (isWet(target)) {
-                // WET absorbs air — dry the target
                 removeWet(target, true);
                 player.sendActionBar("§7💨 §7Air §bdried §7the wet target! No knockback.");
                 return;
             }
 
-            double dist = target.getLocation().distance(player.getLocation());
-            // Closer = stronger: factor goes from 2.0 (at dist=0) to 1.0 (at dist=maxRange)
-            double distanceFactor = 1.0 + Math.max(0, 1.0 - dist / AIR_RANGE);
-            // Level factor: 0.5 at Lv1, 2.0 at Lv99
-            double levelFactor = 0.5 + (magicLevel / 99.0) * 1.5;
-            double strength = distanceFactor * levelFactor;
+            double dist = Math.max(0.5, target.getLocation().distance(player.getLocation()));
+            // knockback blocks = 2 at max range, rising by 1 per block closer
+            double knockbackBlocks = 2.0 + (AIR_RANGE - dist);
+            // Level multiplier: 0.5 at Lv1 → 2.0 at Lv99
+            double levelMult = 0.5 + (magicLevel / 99.0) * 1.5;
+            // Convert blocks to velocity (Minecraft ~11 blocks per 1.0 horizontal velocity)
+            double velocity = knockbackBlocks * 0.09 * levelMult;
+            // Upward component increases with level and knockback force
+            double upward = 0.25 + (magicLevel / 99.0) * 0.25 + (knockbackBlocks / AIR_RANGE) * 0.15;
 
             Vector dir = target.getLocation().subtract(player.getLocation())
                 .toVector().normalize();
-            dir.setY(0.35 + (magicLevel / 99.0) * 0.25); // higher level = more upward arc
-            dir = dir.multiply(strength);
+            dir.setY(upward);
+            dir = dir.multiply(velocity / dir.length()); // normalize then scale
             target.setVelocity(dir);
 
             double damage = 1.0 + SkillBonusManager.magicDamageBonus(magicLevel) * 2;
@@ -298,15 +304,17 @@ public class MagicStaffListener implements Listener {
             awardMagicXp(player, MAGIC_XP_HIT);
 
             target.getWorld().spawnParticle(Particle.CLOUD,
-                target.getLocation().add(0, 1, 0), 25, 0.5, 0.5, 0.5, 0.15);
+                target.getLocation().add(0, 1, 0), 30, 0.6, 0.6, 0.6, 0.2);
 
-            player.sendActionBar(String.format("§7💨 §7Air gust! §8(dist: %.1fb, str: %.1fx)", dist, strength));
+            player.sendActionBar(String.format(
+                "§7💨 §7Gust! §8dist: §e%.1fb §8→ §7~%.0f §8blocks §8(×%.1f level)",
+                dist, knockbackBlocks, levelMult));
             if (target instanceof Player tp)
-                tp.sendActionBar("§7💨 §7You were launched by an air gust!");
+                tp.sendActionBar(String.format("§7💨 §7Air gust launched you ~%.0f blocks!", knockbackBlocks));
         } else {
             player.getWorld().spawnParticle(Particle.CLOUD,
-                player.getLocation().add(player.getLocation().getDirection().multiply(3)).add(0, 1, 0),
-                30, 0.5, 0.5, 0.5, 0.1);
+                player.getLocation().add(player.getLocation().getDirection().multiply(4)).add(0, 1, 0),
+                40, 0.6, 0.6, 0.6, 0.12);
             player.sendActionBar("§7💨 §7No target within " + AIR_RANGE + " blocks.");
         }
     }
@@ -450,20 +458,11 @@ public class MagicStaffListener implements Listener {
         return true;
     }
 
-    // ── Crafting validation ───────────────────────────────────────────────────
-
-    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
-    public void onCraft(CraftItemEvent event) {
-        ItemStack result = event.getRecipe().getResult();
-        if (itemFactory.getStaffElement(result) == null) return;
-        for (ItemStack ingredient : event.getInventory().getMatrix()) {
-            if (itemFactory.isEnchantedShard(ingredient)) return;
-        }
-        event.setCancelled(true);
-        if (event.getWhoClicked() instanceof Player p) {
-            p.sendMessage("§c✗ §7Crafting a staff requires an §5Enchanted Shard §7(mob drop).");
-        }
-    }
+    // ── Crafting note (no validation — any amethyst shard works in the recipe) ──
+    // The CraftItemEvent validation was removed. The recipe uses AMETHYST_SHARD
+    // as the base material. Custom Enchanted Shards (from mob drops, with PDC)
+    // work the same as regular amethyst shards from geodes in the crafting table.
+    // Admins can use /registry to get the custom shard, or find amethyst geodes.
 
     // ── Rune consumption ──────────────────────────────────────────────────────
 
