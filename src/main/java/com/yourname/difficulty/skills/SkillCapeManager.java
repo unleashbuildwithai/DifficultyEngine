@@ -48,6 +48,8 @@ public class SkillCapeManager {
             case MELEE       -> "⚔";
             case RANGED      -> "➤";
             case DEFENCE     -> "⛨";
+            case PRAYER      -> "🕊";
+            case MAGIC       -> "✦";
             case WOODCUTTING -> "⛏";
             case FISHING     -> "≋";
             case FARMING     -> "✿";
@@ -60,12 +62,14 @@ public class SkillCapeManager {
             case MELEE       -> 1001;
             case RANGED      -> 1002;
             case DEFENCE     -> 1003;
-            case WOODCUTTING -> 1004;
-            case FISHING     -> 1005;
-            case FARMING     -> 1006;
+            case PRAYER      -> 1004;
+            case MAGIC       -> 1005;
+            case WOODCUTTING -> 1006;
+            case FISHING     -> 1007;
+            case FARMING     -> 1008;
         };
     }
-    private static final int MAX_CAPE_MODEL = 1007;
+    private static final int MAX_CAPE_MODEL = 1009;
 
     // ── PDC keys ──────────────────────────────────────────────────────────────
     private final JavaPlugin plugin;

@@ -6,10 +6,14 @@ import com.yourname.difficulty.gui.RegistryGUI;
 import com.yourname.difficulty.gui.RegistryGUIListener;
 import com.yourname.difficulty.items.ItemFactory;
 import com.yourname.difficulty.listeners.DifficultyEngine;
+import com.yourname.difficulty.listeners.LevelProtectionListener;
 import com.yourname.difficulty.listeners.MinecartListener;
 import com.yourname.difficulty.listeners.NightmareAggroListener;
+import com.yourname.difficulty.listeners.PrayerListener;
 import com.yourname.difficulty.listeners.SitListener;
 import com.yourname.difficulty.listeners.SoulfurPotionListener;
+import com.yourname.difficulty.magic.MagicElement;
+import com.yourname.difficulty.magic.MagicStaffListener;
 import com.yourname.difficulty.skills.CapeEquipListener;
 import com.yourname.difficulty.skills.ItemLevelListener;
 import com.yourname.difficulty.skills.SkillBonusManager;
@@ -20,7 +24,11 @@ import com.yourname.difficulty.skills.SkillGUI;
 import com.yourname.difficulty.skills.SkillGUIListener;
 import com.yourname.difficulty.skills.SkillListener;
 import com.yourname.difficulty.skills.SkillManager;
+import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.ShapelessRecipe;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class Main extends JavaPlugin {
@@ -43,7 +51,6 @@ public class Main extends JavaPlugin {
         this.skillCapeManager  = new SkillCapeManager(this);
 
         // ── Item & GUI layer ──────────────────────────────────────────────────
-        // ItemFactory now takes SkillCapeManager so capes appear in /registry
         this.itemFactory = new ItemFactory(this, skillCapeManager);
         this.registryGUI = new RegistryGUI(itemFactory);
 
@@ -52,53 +59,53 @@ public class Main extends JavaPlugin {
 
         // ── Register listeners ────────────────────────────────────────────────
 
-        // Core difficulty scaling / HP bar / death cleanup / base aggro
         getServer().getPluginManager().registerEvents(
                 new DifficultyEngine(this, difficultyManager), this);
 
-        // Soulfur Potion: sip counter, escalating darkness/damage, 50-sip curse
         getServer().getPluginManager().registerEvents(
                 new SoulfurPotionListener(this, itemFactory, difficultyManager), this);
 
-        // Nightmare party threat-aggregation (PDC-gated)
         getServer().getPluginManager().registerEvents(
                 new NightmareAggroListener(difficultyManager), this);
 
-        // Registry GUI: permission-checked item distribution
         getServer().getPluginManager().registerEvents(
                 new RegistryGUIListener(itemFactory), this);
 
-        // Sit system: directional edge-sitting on slabs/stairs
         this.sitListener = new SitListener();
         getServer().getPluginManager().registerEvents(sitListener, this);
 
-        // Turbo Minecart: PDC-gated placement, 3× speed, rail magnetization
         getServer().getPluginManager().registerEvents(
                 new MinecartListener(itemFactory), this);
 
-        // Skill system: XP tracking for melee, ranged, woodcutting, fishing, farming
-        // difficultyManager injected so kill XP scales with the player's difficulty tier
+        // SkillListener now receives ItemFactory for Enchanted Shard drops
         getServer().getPluginManager().registerEvents(
-                new SkillListener(this, skillManager, skillCapeManager, difficultyManager), this);
+                new SkillListener(this, skillManager, skillCapeManager, difficultyManager, itemFactory), this);
 
-        // Skill GUI: prevent item theft from /mystats inventory
         getServer().getPluginManager().registerEvents(
                 new SkillGUIListener(), this);
 
-        // Cape equip: admin equipping a skill cape gets instant Level 99
         getServer().getPluginManager().registerEvents(
                 new CapeEquipListener(skillManager, skillCapeManager), this);
 
-        // Item level requirements: block using weapons/seeds/rods below skill level
         getServer().getPluginManager().registerEvents(
                 new ItemLevelListener(skillManager), this);
 
-        // Skill combat bonuses: melee damage/crits, ranged damage, arrow effects,
-        // defence damage reduction + HP, farming/woodcutting double drops
         getServer().getPluginManager().registerEvents(
                 new SkillCombatListener(skillManager, this), this);
 
-        // Cape wardrobe GUI: equip/unequip capes via /cape command
+        // Prayer: bone-burying XP + hit-block chance
+        getServer().getPluginManager().registerEvents(
+                new PrayerListener(skillManager), this);
+
+        // Magic staffs: casting, rune consumption, crafting validation
+        getServer().getPluginManager().registerEvents(
+                new MagicStaffListener(itemFactory, skillManager, this), this);
+
+        // Level protection: OSRS combat-level PvP bracket + passive aura scan
+        getServer().getPluginManager().registerEvents(
+                new LevelProtectionListener(skillManager, this), this);
+
+        // Cape wardrobe GUI
         getServer().getPluginManager().registerEvents(
                 new CapeSlotGUIListener(skillCapeManager, skillManager), this);
 
@@ -118,23 +125,18 @@ public class Main extends JavaPlugin {
             return true;
         });
 
-        // /curecosmetic — removes blindness, nausea, darkness, etc.
         getCommand("curecosmetic").setExecutor(new CureCosmeticCommand());
 
-        // /adminlight — toggles personal Night Vision for admins
         this.adminLightCommand = new AdminLightCommand(this);
         getCommand("adminlight").setExecutor(adminLightCommand);
 
-        // /skills — text summary of skill levels
         getCommand("skills").setExecutor(
                 new SkillCommand(skillManager, skillGUI, false));
 
-        // /mystats and /stats — both open the RuneScape-style skill tree GUI
         SkillCommand guiCmd = new SkillCommand(skillManager, skillGUI, true);
         getCommand("mystats").setExecutor(guiCmd);
         getCommand("stats").setExecutor(guiCmd);
 
-        // /cape — opens the Cape Wardrobe GUI
         CapeSlotGUI capeGui = new CapeSlotGUI(skillCapeManager);
         getCommand("cape").setExecutor((sender, cmd, label, args) -> {
             if (!(sender instanceof Player player)) {
@@ -145,19 +147,21 @@ public class Main extends JavaPlugin {
             return true;
         });
 
-        // ── Scheduled tasks ───────────────────────────────────────────────────
+        // ── Crafting recipes ──────────────────────────────────────────────────
+        registerCraftingRecipes();
 
-        // Nightmare bonus-spawn — every 30 seconds
+        // ── Scheduled tasks ───────────────────────────────────────────────────
         new NightmareSpawnTask(difficultyManager).runTaskTimer(this, 600L, 600L);
 
-        // ── Sync NIGHTMARE PDC tags for already-online players ─────────────────
         for (Player p : getServer().getOnlinePlayers()) {
             difficultyManager.syncNightmareTag(p, difficultyManager.getDifficulty(p.getUniqueId()));
         }
 
         getLogger().info("DifficultyEngine: Ready!");
-        getLogger().info("  Players : /difficulty  /hpbar  /sit  /registry  /skills  /mystats");
+        getLogger().info("  Players : /difficulty  /hpbar  /sit  /registry  /skills  /mystats  /stats  /cape");
         getLogger().info("  Admins  : /gear  /curecosmetic  /adminlight");
+        getLogger().info("  Magic   : Right-click elemental staffs to cast spells.");
+        getLogger().info("  Prayer  : Right-click bone on dirt to bury it for XP.");
     }
 
     @Override
@@ -165,10 +169,42 @@ public class Main extends JavaPlugin {
         if (difficultyManager != null) difficultyManager.saveAll();
         if (skillManager      != null) skillManager.saveAll();
         if (adminLightCommand != null) adminLightCommand.disableAll();
-        // Remove Defence HP modifiers so they don't persist if plugin is removed
-        for (org.bukkit.entity.Player p : getServer().getOnlinePlayers()) {
+        for (Player p : getServer().getOnlinePlayers()) {
             SkillBonusManager.removeDefenceHpBonus(p);
         }
         getLogger().info("DifficultyEngine: Data saved. Goodbye.");
     }
+
+    // ── Crafting recipes ──────────────────────────────────────────────────────
+
+    private void registerCraftingRecipes() {
+        // ── Elemental Staff recipes ────────────────────────────────────────────
+        // Each staff: Enchanted Shard (AMETHYST_SHARD) + element ingredient + STICK
+        // Note: CraftItemEvent in MagicStaffListener verifies the shard has PDC.
+        for (MagicElement el : MagicElement.values()) {
+            NamespacedKey key = new NamespacedKey(this, el.staffKey + "_recipe");
+            ItemStack staffResult = itemFactory.buildStaff(el);
+            ShapelessRecipe recipe = new ShapelessRecipe(key, staffResult);
+            recipe.addIngredient(Material.AMETHYST_SHARD);       // Enchanted Shard base
+            recipe.addIngredient(el.staffCraftIngredient);        // Element ingredient
+            recipe.addIngredient(Material.STICK);                 // Handle
+            getServer().addRecipe(recipe);
+        }
+
+        // ── Rune recipes: 4× base material → 8 runes ─────────────────────────
+        for (MagicElement el : MagicElement.values()) {
+            NamespacedKey key = new NamespacedKey(this, el.runeKey + "_recipe");
+            ItemStack runeResult = itemFactory.buildRune(el, 8);
+            ShapelessRecipe recipe = new ShapelessRecipe(key, runeResult);
+            recipe.addIngredient(4, el.runeCraftIngredient);      // 4× base material
+            getServer().addRecipe(recipe);
+        }
+
+        getLogger().info("DifficultyEngine: Registered " + (MagicElement.values().length * 2)
+                + " crafting recipes (4 staffs + 4 rune batches).");
+    }
+
+    // ── Public accessors ──────────────────────────────────────────────────────
+
+    public ItemFactory getItemFactory() { return itemFactory; }
 }

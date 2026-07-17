@@ -35,10 +35,18 @@ public class SkillGUI {
 
     public static final String TITLE = "§8✦ §6Skill Tree §8✦";
 
-    // Slot positions for each skill
+    // Slot positions for each skill (6 rows × 9 cols = 54 slots)
+    // Row 0 (0-8):   glass + "⚔ Combat" label @4
+    // Row 1 (9-17):  MELEE@10  RANGED@13  DEFENCE@16
+    // Row 2 (18-26): PRAYER@20  "✦ Spirit" label@22  MAGIC@24
+    // Row 3 (27-35): WOODCUTTING@28  FISHING@31  FARMING@34
+    // Row 4 (36-44): glass + TOTAL@40  PLAYTIME@42
+    // Row 5 (45-53): glass
     private static final int SLOT_MELEE       = 10;
     private static final int SLOT_RANGED      = 13;
     private static final int SLOT_DEFENCE     = 16;
+    private static final int SLOT_PRAYER      = 20;
+    private static final int SLOT_MAGIC       = 24;
     private static final int SLOT_WOODCUTTING = 28;
     private static final int SLOT_FISHING     = 31;
     private static final int SLOT_FARMING     = 34;
@@ -69,16 +77,18 @@ public class SkillGUI {
             inv.setItem(i, glass);
         }
 
-        // ── Row 1: separator label ────────────────────────────────────────────
-        inv.setItem(4, label("§6⚔ Combat Skills", Material.NETHERITE_SWORD));
-        inv.setItem(22, label("§2⛏ Gathering Skills", Material.IRON_PICKAXE));
+        // ── Section labels ────────────────────────────────────────────────────
+        inv.setItem(4,  label("§6⚔ Combat Skills",    Material.NETHERITE_SWORD));
+        inv.setItem(22, label("§5✦ Spirit & Magic",    Material.BLAZE_POWDER));
         inv.setItem(40, totalLevelItem(uuid));
         inv.setItem(42, playtimeItem(target));
 
-        // ── Skill items ───────────────────────────────────────────────────────
+        // ── Skill items (8 skills) ────────────────────────────────────────────
         inv.setItem(SLOT_MELEE,       buildSkillItem(uuid, SkillType.MELEE));
         inv.setItem(SLOT_RANGED,      buildSkillItem(uuid, SkillType.RANGED));
         inv.setItem(SLOT_DEFENCE,     buildSkillItem(uuid, SkillType.DEFENCE));
+        inv.setItem(SLOT_PRAYER,      buildSkillItem(uuid, SkillType.PRAYER));
+        inv.setItem(SLOT_MAGIC,       buildSkillItem(uuid, SkillType.MAGIC));
         inv.setItem(SLOT_WOODCUTTING, buildSkillItem(uuid, SkillType.WOODCUTTING));
         inv.setItem(SLOT_FISHING,     buildSkillItem(uuid, SkillType.FISHING));
         inv.setItem(SLOT_FARMING,     buildSkillItem(uuid, SkillType.FARMING));
@@ -215,6 +225,20 @@ public class SkillGUI {
                 lore.add("§7How to train:");
                 lore.add("§8  Block attacks with a shield.");
                 lore.add("§8  XP per successful block.");
+            }
+            case PRAYER -> {
+                lore.add("§7How to train:");
+                lore.add("§8  Right-click a bone on dirt/grass.");
+                lore.add("§8  Bone = 4 XP, Bone Meal = 2 XP.");
+                lore.add("§7Bonus: §fChance to block a hit.");
+                lore.add("§8  Lv99 = 30% block chance per hit.");
+            }
+            case MAGIC -> {
+                lore.add("§7How to train:");
+                lore.add("§8  Cast spells with elemental staffs.");
+                lore.add("§8  10 XP per cast, 5 XP per hit.");
+                lore.add("§7Bonus: §dMore spell damage per level.");
+                lore.add("§8  Craft staffs: Shard + Element + Stick.");
             }
             case WOODCUTTING -> {
                 lore.add("§7How to train:");

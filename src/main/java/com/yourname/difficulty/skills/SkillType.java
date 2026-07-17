@@ -12,6 +12,8 @@ public enum SkillType {
     MELEE      ("Melee Combat",  "§c", Material.IRON_SWORD),
     RANGED     ("Ranged",        "§a", Material.BOW),
     DEFENCE    ("Defence",       "§9", Material.SHIELD),
+    PRAYER     ("Prayer",        "§f", Material.BONE),
+    MAGIC      ("Magic",         "§d", Material.BLAZE_POWDER),
     WOODCUTTING("Woodcutting",   "§2", Material.IRON_AXE),
     FISHING    ("Fishing",       "§b", Material.FISHING_ROD),
     FARMING    ("Farming",       "§e", Material.DIAMOND_HOE);

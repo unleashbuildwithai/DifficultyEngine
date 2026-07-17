@@ -126,3 +126,7 @@ permissions:
   difficultyengine.itemlevel.bypass:
     description: Bypasses all item level requirements (weapons, seeds, fishing rods). Admin/OP only.
     default: op
+
+  difficultyengine.protection.bypass:
+    description: Bypasses the level-difference PvP protection system (can attack/be attacked regardless of combat level gap).
+    default: op

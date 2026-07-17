@@ -2,6 +2,7 @@ package com.yourname.difficulty.skills;
 
 import com.yourname.difficulty.DifficultyLevel;
 import com.yourname.difficulty.PlayerDifficultyManager;
+import com.yourname.difficulty.items.ItemFactory;
 import org.bukkit.Material;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
@@ -52,6 +53,7 @@ public class SkillListener implements Listener {
     private final SkillManager            skillManager;
     private final SkillCapeManager        capeManager;
     private final PlayerDifficultyManager difficultyManager;
+    private final ItemFactory             itemFactory;
 
     // ── Material sets ─────────────────────────────────────────────────────────
 
@@ -98,11 +100,13 @@ public class SkillListener implements Listener {
     }
 
     public SkillListener(JavaPlugin plugin, SkillManager skillManager,
-                         SkillCapeManager capeManager, PlayerDifficultyManager difficultyManager) {
+                         SkillCapeManager capeManager, PlayerDifficultyManager difficultyManager,
+                         ItemFactory itemFactory) {
         this.plugin             = plugin;
         this.skillManager       = skillManager;
         this.capeManager        = capeManager;
         this.difficultyManager  = difficultyManager;
+        this.itemFactory        = itemFactory;
     }
 
     // ── Entity Kill (Melee / Ranged) ──────────────────────────────────────────
@@ -111,6 +115,14 @@ public class SkillListener implements Listener {
     public void onEntityDeath(EntityDeathEvent event) {
         Player killer = event.getEntity().getKiller();
         if (killer == null) return;
+
+        // 5% chance to drop an Enchanted Shard (needed for staff crafting)
+        if (Math.random() < 0.05) {
+            event.getEntity().getWorld().dropItemNaturally(
+                event.getEntity().getLocation(),
+                itemFactory.buildEnchantedShard()
+            );
+        }
 
         Entity dead = event.getEntity();
         if (!(dead instanceof LivingEntity le)) return;

@@ -154,4 +154,51 @@ public final class SkillBonusManager {
             .filter(m -> DEFENCE_HP_UUID.equals(m.getUniqueId()))
             .forEach(attr::removeModifier);
     }
+
+    // ── Prayer ────────────────────────────────────────────────────────────────
+
+    /**
+     * Probability (0–1) of prayer blocking an incoming hit entirely.
+     * Same curve as farming: (level/99)^1.5 × 0.30
+     * Level 1 ≈ 0.03%  |  Level 50 ≈ 10.6%  |  Level 99 = 30%
+     */
+    public static double prayerProtectionChance(int level) {
+        if (level <= 0) return 0;
+        double ratio = level / 99.0;
+        return Math.pow(ratio, 1.5) * 0.30;
+    }
+
+    // ── Magic ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Extra damage (hearts, not HP) for magic staff spells.
+     * +1 heart base, +1 more at level 33, 66, 99.
+     * Level 1–32  → +0   |  Level 33–65 → +1 heart
+     * Level 66–98 → +2   |  Level 99    → +3 hearts
+     */
+    public static double magicDamageBonus(int level) {
+        return Math.floor(level / 33.0);
+    }
+
+    // ── OSRS Combat Level ─────────────────────────────────────────────────────
+
+    /**
+     * Calculates a RuneScape-style combat level based on 5 skills.
+     *
+     * Formula (adapted from OSRS, no Hitpoints/Slayer):
+     *   base   = 0.25 × (Defence + floor(Prayer / 2))
+     *   melee  = 0.650 × Melee          (represents Attack + Strength combined)
+     *   ranged = 0.4875 × Ranged        (0.325 × 1.5 × Ranged)
+     *   magic  = 0.4875 × Magic         (0.325 × 1.5 × Magic)
+     *   combat = min(99, floor(base + max(melee, ranged, magic)))
+     *
+     * Max at all 99: min(99, floor(37 + 64.35)) = 99 (capped)
+     */
+    public static int getCombatLevel(int melee, int ranged, int defence, int prayer, int magic) {
+        double base   = 0.25 * (defence + Math.floor(prayer / 2.0));
+        double meleeLvl  = 0.650  * melee;
+        double rangedLvl = 0.4875 * ranged;
+        double magicLvl  = 0.4875 * magic;
+        return Math.min(99, (int) Math.floor(base + Math.max(meleeLvl, Math.max(rangedLvl, magicLvl))));
+    }
 }
