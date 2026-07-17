@@ -38,8 +38,8 @@ commands:
     description: Open the Item Registry GUI to browse and receive all custom DifficultyEngine items.
     usage: /registry
     aliases: [itemregistry, items]
-    permission: difficultyengine.use
-    permission-message: You do not have permission to use this command.
+    permission: difficultyengine.registry
+    permission-message: §cThis command is for admins only.
 
 permissions:
   difficultyengine.use:
@@ -52,6 +52,10 @@ permissions:
 
   difficultyengine.gear.others:
     description: Allows use of /gear on other players.
+    default: op
+
+  difficultyengine.registry:
+    description: Allows use of /registry (Item Registry GUI). Admin-only.
     default: op
 
   difficultyengine.turbocart:
