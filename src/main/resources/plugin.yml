@@ -2,13 +2,13 @@ name: DifficultyEngine
 version: 1.0
 main: com.yourname.difficulty.Main
 api-version: 1.21
-description: Per-player difficulty scaling with Peaceful, Easy, Hard, and Nightmare modes.
+description: Per-player difficulty scaling with Peaceful, Easy, Medium, Hard, and Nightmare modes.
 author: yourname
 
 commands:
   difficulty:
     description: View or change your personal difficulty level.
-    usage: /difficulty [peaceful|easy|hard|nightmare]
+    usage: /difficulty [peaceful|easy|medium|hard|nightmare]
     aliases: [diff, setdifficulty]
     permission: difficultyengine.use
     permission-message: You do not have permission to use this command.
@@ -21,15 +21,29 @@ commands:
     permission-message: You do not have permission to use this command.
 
   gear:
-    description: Give yourself or another player max-enchanted netherite god gear.
+    description: Give yourself or another player max-enchanted netherite god gear (includes 10x speed boots).
     usage: /gear [player]
     aliases: [godgear, ng]
     permission: difficultyengine.gear
     permission-message: §cThis command is for admins only.
 
+  sit:
+    description: Toggle right-click-to-sit on slabs and stairs. Sneak to stand up.
+    usage: /sit [on|off]
+    aliases: [sitting]
+    permission: difficultyengine.use
+    permission-message: You do not have permission to use this command.
+
+  registry:
+    description: Open the Item Registry GUI to browse and receive all custom DifficultyEngine items.
+    usage: /registry
+    aliases: [itemregistry, items]
+    permission: difficultyengine.use
+    permission-message: You do not have permission to use this command.
+
 permissions:
   difficultyengine.use:
-    description: Allows players to set their own difficulty.
+    description: Allows players to set difficulty, use /hpbar, /sit, and open the Item Registry.
     default: true
 
   difficultyengine.gear:
@@ -38,4 +52,8 @@ permissions:
 
   difficultyengine.gear.others:
     description: Allows use of /gear on other players.
+    default: op
+
+  difficultyengine.turbocart:
+    description: Allows obtaining the Turbo Minecart from the Item Registry (VIP/Admin perk).
     default: op

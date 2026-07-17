@@ -6,11 +6,12 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 /**
- * Handles /difficulty [peaceful|easy|hard|nightmare]
+ * Handles /difficulty [peaceful|easy|medium|hard|nightmare]
  *
  * Usage:
  *   /difficulty           → shows current difficulty
  *   /difficulty easy      → sets difficulty to Easy
+ *   /difficulty medium    → sets difficulty to Medium
  *   /difficulty nightmare → sets difficulty to Nightmare
  */
 public class DifficultyCommand implements CommandExecutor {
@@ -34,19 +35,19 @@ public class DifficultyCommand implements CommandExecutor {
         if (args.length == 0) {
             DifficultyLevel current = manager.getDifficulty(player.getUniqueId());
             player.sendMessage("§8[§6DifficultyEngine§8] §7Your current difficulty: " + current.getDisplayName());
-            player.sendMessage("§7Usage: §f/difficulty <peaceful|easy|hard|nightmare>");
+            player.sendMessage("§7Usage: §f/difficulty <peaceful|easy|medium|hard|nightmare>");
             return true;
         }
 
         // Parse the requested difficulty
         DifficultyLevel requested = DifficultyLevel.fromString(args[0]);
         if (requested == null) {
-            player.sendMessage("§cUnknown difficulty. Choose: §fpersonal/easy/hard/nightmare");
-            player.sendMessage("§7Usage: §f/difficulty <peaceful|easy|hard|nightmare>");
+            player.sendMessage("§cUnknown difficulty. Choose: §fpeaceful/easy/medium/hard/nightmare");
+            player.sendMessage("§7Usage: §f/difficulty <peaceful|easy|medium|hard|nightmare>");
             return true;
         }
 
-        // Apply it
+        // Apply it — this also syncs the PDC nightmare tag if applicable
         manager.setDifficulty(player.getUniqueId(), requested);
 
         player.sendMessage("§8[§6DifficultyEngine§8] §7Difficulty set to: " + requested.getDisplayName());
@@ -57,11 +58,14 @@ public class DifficultyCommand implements CommandExecutor {
                 player.sendMessage("§a  Hostile mobs will ignore you. Enjoy the peace.");
             case EASY ->
                 player.sendMessage("§2  Vanilla experience. No changes to mobs near you.");
+            case MEDIUM ->
+                player.sendMessage("§e  Mobs near you have +10% HP and +8% damage. A step up from Easy.");
             case HARD ->
                 player.sendMessage("§c  Mobs near you spawn with +25% HP, +15% damage, and longer follow range.");
             case NIGHTMARE ->
                 player.sendMessage("§4  ☠ You asked for this. Mobs have +50% HP, +25% damage, +15% speed,\n" +
-                                   "§4  64-block follow range, increased spawn rates, and they PREFER targeting you.");
+                                   "§4  64-block follow range, increased spawn rates, and they PREFER targeting you.\n" +
+                                   "§4  Your presence pulls aggro onto nearby party members.");
         }
 
         return true;

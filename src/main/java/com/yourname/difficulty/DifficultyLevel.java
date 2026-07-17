@@ -1,7 +1,7 @@
 package com.yourname.difficulty;
 
 /**
- * The four difficulty tiers a player can choose from.
+ * The five difficulty tiers a player can choose from.
  * Stats are applied to mobs that spawn near that player.
  */
 public enum DifficultyLevel {
@@ -9,8 +9,9 @@ public enum DifficultyLevel {
     //              tier  health  damage  speed   followRange  bonusSpawns
     PEACEFUL  (0,   0.75,  0.75,  1.00,   16.0,   false),
     EASY      (1,   1.00,  1.00,  1.00,   20.0,   false),
-    HARD      (2,   1.25,  1.15,  1.05,   32.0,   false),
-    NIGHTMARE (3,   1.50,  1.25,  1.15,   64.0,   true);
+    MEDIUM    (2,   1.10,  1.08,  1.02,   26.0,   false),
+    HARD      (3,   1.25,  1.15,  1.05,   32.0,   false),
+    NIGHTMARE (4,   1.50,  1.25,  1.15,   64.0,   true);
 
     private final int    tier;
     private final double healthMult;
@@ -41,6 +42,7 @@ public enum DifficultyLevel {
         return switch (this) {
             case PEACEFUL  -> "§a☮ Peaceful";
             case EASY      -> "§2✦ Easy";
+            case MEDIUM    -> "§e⚡ Medium";
             case HARD      -> "§c⚔ Hard";
             case NIGHTMARE -> "§4☠ Nightmare";
         };
@@ -49,11 +51,12 @@ public enum DifficultyLevel {
     /** Parse from a string (case-insensitive). Returns null if invalid. */
     public static DifficultyLevel fromString(String s) {
         return switch (s.toLowerCase()) {
-            case "peaceful" -> PEACEFUL;
-            case "easy"     -> EASY;
-            case "hard"     -> HARD;
-            case "nightmare", "nm" -> NIGHTMARE;
-            default -> null;
+            case "peaceful"            -> PEACEFUL;
+            case "easy"                -> EASY;
+            case "medium", "med", "normal" -> MEDIUM;
+            case "hard"                -> HARD;
+            case "nightmare", "nm"     -> NIGHTMARE;
+            default                    -> null;
         };
     }
 }

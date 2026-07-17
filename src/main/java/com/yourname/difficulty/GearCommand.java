@@ -1,23 +1,32 @@
 package com.yourname.difficulty;
 
 import org.bukkit.Material;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
+import java.nio.charset.StandardCharsets;
+import java.util.UUID;
+
 /**
  * /gear — Admin-only command that equips a player with max-enchanted
- *         netherite gear and a god-tier netherite sword.
+ *         netherite gear including 10× speed boots.
  *
  * Usage:
  *   /gear           → gives gear to yourself
  *   /gear <player>  → gives gear to another player (requires difficultyengine.gear.others)
  *
- * Permission: difficultyengine.gear (default: op)
+ * Speed boots:
+ *   An AttributeModifier is applied to the boots using ADD_SCALAR operation
+ *   with a value of 9.0 — this multiplies the base walk speed by (1 + 9) = 10×.
+ *   The modifier only activates while the boots are worn (Minecraft attribute system).
  */
 public class GearCommand implements CommandExecutor {
 
@@ -25,7 +34,6 @@ public class GearCommand implements CommandExecutor {
     public boolean onCommand(CommandSender sender, Command command,
                              String label, String[] args) {
 
-        // Resolve the target player
         Player target;
         if (args.length >= 1) {
             if (!sender.hasPermission("difficultyengine.gear.others")) {
@@ -44,7 +52,6 @@ public class GearCommand implements CommandExecutor {
             return true;
         }
 
-        // Give the gear
         giveGear(target);
 
         sender.sendMessage("§8[§6DifficultyEngine§8] §a☠ God gear given to §f" + target.getName() + "§a.");
@@ -56,9 +63,7 @@ public class GearCommand implements CommandExecutor {
         return true;
     }
 
-    // -------------------------------------------------------------------------
-    // Gear building
-    // -------------------------------------------------------------------------
+    // ── Gear building ─────────────────────────────────────────────────────────
 
     private void giveGear(Player player) {
 
@@ -90,7 +95,7 @@ public class GearCommand implements CommandExecutor {
                 e(Enchantment.UNBREAKING, 255),
                 e(Enchantment.MENDING,      1));
 
-        // ── Boots ─────────────────────────────────────────────────────────────
+        // ── Boots — 10× speed via AttributeModifier ───────────────────────────
         ItemStack boots = build(Material.NETHERITE_BOOTS,
                 e(Enchantment.PROTECTION,     255),
                 e(Enchantment.UNBREAKING,     255),
@@ -98,7 +103,22 @@ public class GearCommand implements CommandExecutor {
                 e(Enchantment.FEATHER_FALLING, 255),
                 e(Enchantment.DEPTH_STRIDER,    3));
 
-        // Place armor in the dedicated armor slots, sword into inventory
+        // ADD_SCALAR(9.0): final speed = base × (1 + 9) = 10× walk speed
+        // Modifier only applies while boots are worn — no listener needed
+        ItemMeta bootsMeta = boots.getItemMeta();
+        if (bootsMeta != null) {
+            UUID modId = UUID.nameUUIDFromBytes(
+                    "de_gear_speed".getBytes(StandardCharsets.UTF_8));
+            bootsMeta.addAttributeModifier(
+                    Attribute.GENERIC_MOVEMENT_SPEED,
+                    new AttributeModifier(modId, "de_gear_speed",
+                            9.0,
+                            AttributeModifier.Operation.ADD_SCALAR,
+                            EquipmentSlot.FEET));
+            boots.setItemMeta(bootsMeta);
+        }
+
+        // Place armor in dedicated slots, sword into inventory
         player.getInventory().setHelmet(helmet);
         player.getInventory().setChestplate(chest);
         player.getInventory().setLeggings(legs);
@@ -107,17 +127,14 @@ public class GearCommand implements CommandExecutor {
         player.updateInventory();
     }
 
-    // ── Tiny helper record ────────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
     private record EnchEntry(Enchantment enchantment, int level) {}
 
     private EnchEntry e(Enchantment enchantment, int level) {
         return new EnchEntry(enchantment, level);
     }
 
-    /**
-     * Builds an ItemStack with the given enchantments.
-     * ignoreLevelRestriction = true lets levels exceed vanilla maximums (e.g. 255).
-     */
     private ItemStack build(Material material, EnchEntry... enchantments) {
         ItemStack item = new ItemStack(material);
         ItemMeta  meta = item.getItemMeta();

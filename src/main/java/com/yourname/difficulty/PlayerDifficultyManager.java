@@ -1,6 +1,9 @@
 package com.yourname.difficulty;
 
+import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Player;
+import org.bukkit.persistence.PersistentDataType;
 
 import java.io.File;
 import java.io.IOException;
@@ -11,48 +14,69 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Stores each player's chosen DifficultyLevel and persists it to disk.
- * Data file: plugins/DifficultyEngine/player_data.yml
+ * PlayerDifficultyManager — Persistent per-player data store.
+ *
+ * Manages three types of player state:
+ *  1. Difficulty level (PEACEFUL / EASY / MEDIUM / HARD / NIGHTMARE).
+ *  2. HP bar display toggle.
+ *  3. Soulfur Curse expiry — a timestamp (epoch ms) set when a player dies
+ *     with 50+ Soulfur Potion sips. The curse lasts 24 real hours and
+ *     persists across server restarts by being written to player_data.yml.
+ *
+ * NIGHTMARE PDC tag:
+ *   Written directly to the online player entity whenever their difficulty
+ *   is NIGHTMARE so NightmareAggroListener can do a fast PDC check.
  */
 public class PlayerDifficultyManager {
 
     private final Main plugin;
     private final File dataFile;
-    private final Map<UUID, DifficultyLevel> data = new HashMap<>();
+    private final Map<UUID, DifficultyLevel> data           = new HashMap<>();
+    private final Set<UUID>                  hpDisplayEnabled = new HashSet<>();
 
-    /**
-     * Players who have opted into the live HP display above mob heads.
-     * Persisted to player_data.yml alongside difficulty choices so the
-     * setting survives server restarts and reconnects.
-     */
-    private final Set<UUID> hpDisplayEnabled = new HashSet<>();
+    /** Soulfur Curse expiry — epoch milliseconds. 0 = not cursed. */
+    private final Map<UUID, Long> cursedUntil = new HashMap<>();
+
+    private final NamespacedKey nightmareKey;
 
     public PlayerDifficultyManager(Main plugin) {
-        this.plugin = plugin;
+        this.plugin       = plugin;
+        this.nightmareKey = new NamespacedKey(plugin, "nightmare_status");
 
-        // Ensure the data folder exists
-        if (!plugin.getDataFolder().exists()) {
-            plugin.getDataFolder().mkdirs();
-        }
-
+        if (!plugin.getDataFolder().exists()) plugin.getDataFolder().mkdirs();
         this.dataFile = new File(plugin.getDataFolder(), "player_data.yml");
         loadAll();
     }
 
-    /** Returns the difficulty for a player UUID. Defaults to EASY if not set. */
+    // ── Difficulty ────────────────────────────────────────────────────────────
+
     public DifficultyLevel getDifficulty(UUID uuid) {
         return data.getOrDefault(uuid, DifficultyLevel.EASY);
     }
 
-    // -------------------------------------------------------------------------
-    // HP display toggle
-    // -------------------------------------------------------------------------
+    public void setDifficulty(UUID uuid, DifficultyLevel level) {
+        data.put(uuid, level);
+        saveAll();
+        Player onlinePlayer = plugin.getServer().getPlayer(uuid);
+        if (onlinePlayer != null) syncNightmareTag(onlinePlayer, level);
+    }
 
-    /**
-     * Flips the HP display flag for a player.
-     *
-     * @return {@code true} if the display is now ON, {@code false} if now OFF.
-     */
+    public void syncNightmareTag(Player player, DifficultyLevel level) {
+        if (level == DifficultyLevel.NIGHTMARE) {
+            player.getPersistentDataContainer()
+                  .set(nightmareKey, PersistentDataType.BYTE, (byte) 1);
+        } else {
+            player.getPersistentDataContainer().remove(nightmareKey);
+        }
+    }
+
+    public boolean isNightmareTagged(Player player) {
+        return player.getPersistentDataContainer()
+                     .has(nightmareKey, PersistentDataType.BYTE);
+    }
+
+    // ── HP bar toggle ─────────────────────────────────────────────────────────
+
     public boolean toggleHpDisplay(UUID uuid) {
         boolean nowOn;
         if (hpDisplayEnabled.contains(uuid)) {
@@ -62,84 +86,113 @@ public class PlayerDifficultyManager {
             hpDisplayEnabled.add(uuid);
             nowOn = true;
         }
-        saveAll(); // persist immediately, same as setDifficulty()
+        saveAll();
         return nowOn;
     }
 
-    /** Returns {@code true} if the player has HP display enabled. */
     public boolean isHpDisplayEnabled(UUID uuid) {
         return hpDisplayEnabled.contains(uuid);
     }
 
-    // -------------------------------------------------------------------------
-    // Difficulty persistence
-    // -------------------------------------------------------------------------
+    // ── Soulfur Curse ─────────────────────────────────────────────────────────
 
-    /** Sets and immediately persists a player's difficulty. */
-    public void setDifficulty(UUID uuid, DifficultyLevel level) {
-        data.put(uuid, level);
+    /**
+     * Sets the curse expiry to {@code now + 24 hours} for the given player
+     * and immediately persists it.
+     */
+    public void setCursed(UUID uuid) {
+        long expiry = System.currentTimeMillis() + 24L * 60 * 60 * 1000;
+        cursedUntil.put(uuid, expiry);
         saveAll();
     }
 
-    /** Saves all player data to disk. */
+    /**
+     * Returns {@code true} if the player currently has an active Soulfur Curse
+     * (expiry timestamp is in the future).
+     */
+    public boolean isCursed(UUID uuid) {
+        Long expiry = cursedUntil.get(uuid);
+        if (expiry == null) return false;
+        if (System.currentTimeMillis() >= expiry) {
+            cursedUntil.remove(uuid); // auto-expire
+            return false;
+        }
+        return true;
+    }
+
+    /** Removes the curse immediately (e.g. for admin commands). */
+    public void clearCurse(UUID uuid) {
+        cursedUntil.remove(uuid);
+        saveAll();
+    }
+
+    /** Returns the raw expiry epoch ms, or 0 if not cursed. */
+    public long getCursedUntil(UUID uuid) {
+        return cursedUntil.getOrDefault(uuid, 0L);
+    }
+
+    // ── Persistence ───────────────────────────────────────────────────────────
+
     public void saveAll() {
         YamlConfiguration yaml = new YamlConfiguration();
 
-        // Difficulty choices
-        for (Map.Entry<UUID, DifficultyLevel> entry : data.entrySet()) {
-            yaml.set("players." + entry.getKey().toString(), entry.getValue().name());
+        for (Map.Entry<UUID, DifficultyLevel> e : data.entrySet()) {
+            yaml.set("players." + e.getKey(), e.getValue().name());
         }
-
-        // HP bar preferences — save every UUID that has it enabled
         for (UUID uuid : hpDisplayEnabled) {
-            yaml.set("hpbar." + uuid.toString(), true);
+            yaml.set("hpbar." + uuid, true);
+        }
+        for (Map.Entry<UUID, Long> e : cursedUntil.entrySet()) {
+            // Only save unexpired entries
+            if (e.getValue() > System.currentTimeMillis()) {
+                yaml.set("cursed." + e.getKey(), e.getValue());
+            }
         }
 
         try {
             yaml.save(dataFile);
-        } catch (IOException e) {
-            plugin.getLogger().warning("Could not save player_data.yml: " + e.getMessage());
+        } catch (IOException ex) {
+            plugin.getLogger().warning("Could not save player_data.yml: " + ex.getMessage());
         }
     }
 
-    /** Loads all player data from disk. */
     private void loadAll() {
         if (!dataFile.exists()) return;
         YamlConfiguration yaml = YamlConfiguration.loadConfiguration(dataFile);
 
-        // ── Difficulty choices ────────────────────────────────────────────────
         if (yaml.isConfigurationSection("players")) {
             for (String key : yaml.getConfigurationSection("players").getKeys(false)) {
                 try {
                     UUID uuid = UUID.fromString(key);
-                    String levelName = yaml.getString("players." + key, "EASY");
-                    DifficultyLevel level = DifficultyLevel.valueOf(levelName);
+                    DifficultyLevel level = DifficultyLevel.valueOf(
+                            yaml.getString("players." + key, "EASY"));
                     data.put(uuid, level);
-                } catch (IllegalArgumentException ignored) {
-                    // Skip malformed entries
-                }
+                } catch (IllegalArgumentException ignored) {}
             }
         }
-
-        // ── HP bar preferences ────────────────────────────────────────────────
         if (yaml.isConfigurationSection("hpbar")) {
             for (String key : yaml.getConfigurationSection("hpbar").getKeys(false)) {
                 try {
-                    UUID uuid = UUID.fromString(key);
-                    if (yaml.getBoolean("hpbar." + key, false)) {
-                        hpDisplayEnabled.add(uuid);
-                    }
-                } catch (IllegalArgumentException ignored) {
-                    // Skip malformed entries
-                }
+                    if (yaml.getBoolean("hpbar." + key, false))
+                        hpDisplayEnabled.add(UUID.fromString(key));
+                } catch (IllegalArgumentException ignored) {}
+            }
+        }
+        if (yaml.isConfigurationSection("cursed")) {
+            long now = System.currentTimeMillis();
+            for (String key : yaml.getConfigurationSection("cursed").getKeys(false)) {
+                try {
+                    long expiry = yaml.getLong("cursed." + key, 0L);
+                    if (expiry > now) cursedUntil.put(UUID.fromString(key), expiry);
+                } catch (IllegalArgumentException ignored) {}
             }
         }
 
         plugin.getLogger().info("Loaded difficulty data for " + data.size() +
-                " player(s), HP bar enabled for " + hpDisplayEnabled.size() + ".");
+                " player(s). HP bar: " + hpDisplayEnabled.size() +
+                ", cursed: " + cursedUntil.size() + ".");
     }
 
-    public Main getPlugin() {
-        return plugin;
-    }
+    public Main getPlugin()            { return plugin; }
+    public NamespacedKey getNightmareKey() { return nightmareKey; }
 }
