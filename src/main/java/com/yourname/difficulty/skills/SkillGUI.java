@@ -164,10 +164,22 @@ public class SkillGUI {
 
         meta.setDisplayName("§b⏱ Playtime");
 
-        // Bukkit stores ticks played; convert to hours
-        long ticksPlayed  = player.getStatistic(org.bukkit.Statistic.PLAY_ONE_MINUTE);
+        // Safely read ticks played — wrapping in try/catch because Paper 1.21
+        // can throw IllegalArgumentException for certain Statistic calls.
+        long ticksPlayed = 0L;
+        try {
+            ticksPlayed = player.getStatistic(org.bukkit.Statistic.PLAY_ONE_MINUTE);
+        } catch (Exception ignored) {
+            // Fallback: use ticks lived as a rough estimate
+            try {
+                ticksPlayed = player.getTicksLived();
+            } catch (Exception ignored2) {
+                ticksPlayed = 0L;
+            }
+        }
+
         long secondsPlayed = ticksPlayed / 20;
-        long hours  = secondsPlayed / 3600;
+        long hours   = secondsPlayed / 3600;
         long minutes = (secondsPlayed % 3600) / 60;
 
         List<String> lore = new ArrayList<>();
