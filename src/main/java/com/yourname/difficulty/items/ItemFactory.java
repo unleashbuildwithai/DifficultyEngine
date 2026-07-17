@@ -1,5 +1,7 @@
 package com.yourname.difficulty.items;
 
+import com.yourname.difficulty.skills.SkillCapeManager;
+import com.yourname.difficulty.skills.SkillType;
 import org.bukkit.Color;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -17,6 +19,12 @@ import java.util.List;
  *
  * Identity is determined exclusively through PersistentDataContainer tags.
  * Display names are cosmetic only and never used for logic checks.
+ *
+ * Registered items (in order, appear left-to-right in /registry):
+ *   1. Soulfur Potion
+ *   2. Turbo Minecart
+ *   3–8.  Skill Capes (Melee, Ranged, Defence, Woodcutting, Fishing, Farming)
+ *   9.    Max Cape
  */
 public class ItemFactory {
 
@@ -28,12 +36,16 @@ public class ItemFactory {
     private final NamespacedKey soulfurPotionKey;
     private final NamespacedKey turboMinecartKey;
 
+    // ── Cape manager reference ────────────────────────────────────────────────
+    private final SkillCapeManager capeManager;
+
     // ── Internal registry ─────────────────────────────────────────────────────
     private final List<ItemStack> registry = new ArrayList<>();
 
-    public ItemFactory(JavaPlugin plugin) {
+    public ItemFactory(JavaPlugin plugin, SkillCapeManager capeManager) {
         this.soulfurPotionKey = new NamespacedKey(plugin, SOULFUR_POTION_KEY);
         this.turboMinecartKey = new NamespacedKey(plugin, TURBO_MINECART_KEY);
+        this.capeManager      = capeManager;
         register();
     }
 
@@ -42,6 +54,8 @@ public class ItemFactory {
     private void register() {
         registry.add(buildSoulfurPotion());
         registry.add(buildTurboMinecart());
+        // All 6 skill capes + Max Cape (requires difficultyengine.cape.admin)
+        registry.addAll(capeManager.buildAllCapes());
     }
 
     // ── Soulfur Potion ────────────────────────────────────────────────────────
@@ -101,6 +115,23 @@ public class ItemFactory {
         if (item == null || !item.hasItemMeta()) return false;
         return item.getItemMeta().getPersistentDataContainer()
                    .has(turboMinecartKey, PersistentDataType.BYTE);
+    }
+
+    // ── Cape delegation ───────────────────────────────────────────────────────
+
+    /** Returns the SkillType for a skill cape, or null. */
+    public SkillType getCapeSkill(ItemStack item) {
+        return capeManager.getCapeSkill(item);
+    }
+
+    /** Returns true if the item is any cape (skill or max). */
+    public boolean isAnyCape(ItemStack item) {
+        return capeManager.isAnyCape(item);
+    }
+
+    /** Returns true if the item is the Max Cape. */
+    public boolean isMaxCape(ItemStack item) {
+        return capeManager.isMaxCape(item);
     }
 
     // ── Registry access ───────────────────────────────────────────────────────

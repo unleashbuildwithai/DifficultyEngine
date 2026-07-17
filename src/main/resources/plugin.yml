@@ -105,3 +105,7 @@ permissions:
   difficultyengine.skills.others:
     description: Allows viewing another player's skill levels via /skills <player> or /mystats <player>.
     default: op
+
+  difficultyengine.cape.admin:
+    description: Allows obtaining skill capes from /registry and grants instant Level 99 when equipping a cape.
+    default: op

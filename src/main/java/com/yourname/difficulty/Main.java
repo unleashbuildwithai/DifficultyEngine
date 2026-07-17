@@ -8,6 +8,8 @@ import com.yourname.difficulty.listeners.MinecartListener;
 import com.yourname.difficulty.listeners.NightmareAggroListener;
 import com.yourname.difficulty.listeners.SitListener;
 import com.yourname.difficulty.listeners.SoulfurPotionListener;
+import com.yourname.difficulty.skills.CapeEquipListener;
+import com.yourname.difficulty.skills.SkillCapeManager;
 import com.yourname.difficulty.skills.SkillCommand;
 import com.yourname.difficulty.skills.SkillGUI;
 import com.yourname.difficulty.skills.SkillGUIListener;
@@ -23,6 +25,7 @@ public class Main extends JavaPlugin {
     private RegistryGUI             registryGUI;
     private SitListener             sitListener;
     private SkillManager            skillManager;
+    private SkillCapeManager        skillCapeManager;
     private AdminLightCommand       adminLightCommand;
 
     @Override
@@ -32,9 +35,11 @@ public class Main extends JavaPlugin {
         // ── Core managers ─────────────────────────────────────────────────────
         this.difficultyManager = new PlayerDifficultyManager(this);
         this.skillManager      = new SkillManager(this);
+        this.skillCapeManager  = new SkillCapeManager(this);
 
         // ── Item & GUI layer ──────────────────────────────────────────────────
-        this.itemFactory = new ItemFactory(this);
+        // ItemFactory now takes SkillCapeManager so capes appear in /registry
+        this.itemFactory = new ItemFactory(this, skillCapeManager);
         this.registryGUI = new RegistryGUI(itemFactory);
 
         // ── Skill GUI ─────────────────────────────────────────────────────────
@@ -68,11 +73,15 @@ public class Main extends JavaPlugin {
 
         // Skill system: XP tracking for melee, ranged, woodcutting, fishing, farming
         getServer().getPluginManager().registerEvents(
-                new SkillListener(this, skillManager), this);
+                new SkillListener(this, skillManager, skillCapeManager), this);
 
         // Skill GUI: prevent item theft from /mystats inventory
         getServer().getPluginManager().registerEvents(
                 new SkillGUIListener(), this);
+
+        // Cape equip: admin equipping a skill cape gets instant Level 99
+        getServer().getPluginManager().registerEvents(
+                new CapeEquipListener(skillManager, skillCapeManager), this);
 
         // ── Register commands ─────────────────────────────────────────────────
 
@@ -89,8 +98,6 @@ public class Main extends JavaPlugin {
             registryGUI.open(player);
             return true;
         });
-
-        // ── New commands ──────────────────────────────────────────────────────
 
         // /curecosmetic — removes blindness, nausea, darkness, etc.
         getCommand("curecosmetic").setExecutor(new CureCosmeticCommand());
@@ -113,7 +120,6 @@ public class Main extends JavaPlugin {
         new NightmareSpawnTask(difficultyManager).runTaskTimer(this, 600L, 600L);
 
         // ── Sync NIGHTMARE PDC tags for already-online players ─────────────────
-        // (handles /reload or late-enable scenarios)
         for (Player p : getServer().getOnlinePlayers()) {
             difficultyManager.syncNightmareTag(p, difficultyManager.getDifficulty(p.getUniqueId()));
         }

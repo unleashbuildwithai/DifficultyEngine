@@ -12,9 +12,13 @@ import org.bukkit.inventory.ItemStack;
  *
  * When a player clicks a non-empty slot in the GUI:
  *   • The click is always cancelled (items stay in the GUI).
- *   • Permission-restricted items (e.g. Turbo Minecart) require the appropriate
- *     permission node — players without it see an error message instead.
+ *   • Permission-restricted items require the appropriate permission node.
  *   • Permitted items are cloned and added to the player's inventory.
+ *
+ * Permission tiers:
+ *   Turbo Minecart  → difficultyengine.turbocart
+ *   Skill Capes     → difficultyengine.cape.admin
+ *   Max Cape        → difficultyengine.cape.admin
  */
 public class RegistryGUIListener implements Listener {
 
@@ -41,10 +45,20 @@ public class RegistryGUIListener implements Listener {
         if (clicked == null || clicked.getType().isAir()) return;
 
         // ── Per-item permission checks ─────────────────────────────────────────
+
         if (itemFactory.isTurboMinecart(clicked)) {
             if (!player.hasPermission("difficultyengine.turbocart")) {
                 player.sendMessage("§8[§6DifficultyEngine§8] §c✗ The §6Turbo Minecart §crequires VIP or Admin access.");
                 player.sendMessage("§8  Permission: §fdifficultyengine.turbocart");
+                return;
+            }
+        }
+
+        if (itemFactory.isAnyCape(clicked)) {
+            if (!player.hasPermission("difficultyengine.cape.admin")) {
+                player.sendMessage("§8[§6DifficultyEngine§8] §c✗ Skill Capes are §4Admin Only§c.");
+                player.sendMessage("§8  Permission: §fdifficultyengine.cape.admin");
+                player.sendMessage("§8  Earn capes by reaching §aLevel 99 §8in a skill!");
                 return;
             }
         }

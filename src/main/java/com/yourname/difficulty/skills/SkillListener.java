@@ -46,8 +46,9 @@ import java.util.UUID;
  */
 public class SkillListener implements Listener {
 
-    private final JavaPlugin    plugin;
-    private final SkillManager  skillManager;
+    private final JavaPlugin       plugin;
+    private final SkillManager     skillManager;
+    private final SkillCapeManager capeManager;
 
     // ── Material sets ─────────────────────────────────────────────────────────
 
@@ -93,9 +94,10 @@ public class SkillListener implements Listener {
         };
     }
 
-    public SkillListener(JavaPlugin plugin, SkillManager skillManager) {
+    public SkillListener(JavaPlugin plugin, SkillManager skillManager, SkillCapeManager capeManager) {
         this.plugin       = plugin;
         this.skillManager = skillManager;
+        this.capeManager  = capeManager;
     }
 
     // ── Entity Kill (Melee / Ranged) ──────────────────────────────────────────
@@ -199,7 +201,7 @@ public class SkillListener implements Listener {
 
             // Cape at 99
             if (newLevel >= SkillLevel.MAX_LEVEL) {
-                SkillCapeManager.checkAndAward(player, skill, skillManager);
+                capeManager.checkAndAward(player, skill, skillManager);
             }
         }
     }

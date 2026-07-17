@@ -85,6 +85,27 @@ public class SkillManager {
         return true;
     }
 
+    /**
+     * Instantly sets a skill to Level 99 by writing the max XP value.
+     * Used by the admin cape equip perk (difficultyengine.cape.admin).
+     */
+    public void setToMax(UUID uuid, SkillType skill) {
+        long maxXp = SkillLevel.XP_TABLE[SkillLevel.MAX_LEVEL - 1]; // 13,034,431
+        skillData.computeIfAbsent(uuid, k -> new EnumMap<>(SkillType.class))
+                 .put(skill, maxXp);
+        saveAll();
+    }
+
+    /**
+     * Instantly sets ALL skills to Level 99.
+     * Used by the admin Max Cape equip perk.
+     */
+    public void setAllToMax(UUID uuid) {
+        for (SkillType skill : SkillType.values()) {
+            setToMax(uuid, skill);
+        }
+    }
+
     // ── Persistence ───────────────────────────────────────────────────────────
 
     public void saveAll() {
