@@ -208,6 +208,13 @@ public class SkillListener implements Listener {
             player.sendMessage("  §7Rank: " + SkillLevel.getRank(newLevel));
             player.sendMessage("");
 
+            // Reapply Defence HP bonus whenever Defence levels up
+            if (skill == SkillType.DEFENCE) {
+                SkillBonusManager.applyDefenceHpBonus(player, newLevel);
+                double extraHearts = SkillBonusManager.defenceExtraHp(newLevel) / 2.0;
+                player.sendMessage("  §b⛨ §7Defence HP bonus: §a+" + extraHearts + " §7hearts");
+            }
+
             // Cape at 99
             if (newLevel >= SkillLevel.MAX_LEVEL) {
                 capeManager.checkAndAward(player, skill, skillManager);

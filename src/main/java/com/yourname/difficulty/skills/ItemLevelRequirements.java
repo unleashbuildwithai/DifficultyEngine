@@ -56,6 +56,21 @@ public final class ItemLevelRequirements {
         };
     }
 
+    // ── Shovels (FARMING skill) ───────────────────────────────────────────────
+    // Shovels are tied to Farming because they're used to till land and harvest.
+
+    public static int getShovelRequirement(Material mat) {
+        return switch (mat) {
+            case WOODEN_SHOVEL    ->  1;
+            case STONE_SHOVEL     ->  5;
+            case GOLDEN_SHOVEL    -> 10;
+            case IRON_SHOVEL      -> 20;
+            case DIAMOND_SHOVEL   -> 40;
+            case NETHERITE_SHOVEL -> 70;
+            default -> 0;
+        };
+    }
+
     // ── Ranged ────────────────────────────────────────────────────────────────
 
     public static int getRangedRequirement(Material mat) {
@@ -115,6 +130,10 @@ public final class ItemLevelRequirements {
     public static LevelRequirement getRequirement(ItemStack item) {
         if (item == null || item.getType().isAir()) return null;
         Material mat = item.getType();
+
+        // Shovel → Farming
+        int shovelReq = getShovelRequirement(mat);
+        if (shovelReq > 0) return new LevelRequirement(SkillType.FARMING, shovelReq);
 
         int meleeReq = getMeleeRequirement(mat);
         if (meleeReq > 0) return new LevelRequirement(SkillType.MELEE, meleeReq);

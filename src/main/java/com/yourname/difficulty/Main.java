@@ -12,6 +12,8 @@ import com.yourname.difficulty.listeners.SitListener;
 import com.yourname.difficulty.listeners.SoulfurPotionListener;
 import com.yourname.difficulty.skills.CapeEquipListener;
 import com.yourname.difficulty.skills.ItemLevelListener;
+import com.yourname.difficulty.skills.SkillBonusManager;
+import com.yourname.difficulty.skills.SkillCombatListener;
 import com.yourname.difficulty.skills.SkillCapeManager;
 import com.yourname.difficulty.skills.SkillCommand;
 import com.yourname.difficulty.skills.SkillGUI;
@@ -91,6 +93,11 @@ public class Main extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new ItemLevelListener(skillManager), this);
 
+        // Skill combat bonuses: melee damage/crits, ranged damage, arrow effects,
+        // defence damage reduction + HP, farming/woodcutting double drops
+        getServer().getPluginManager().registerEvents(
+                new SkillCombatListener(skillManager, this), this);
+
         // Cape wardrobe GUI: equip/unequip capes via /cape command
         getServer().getPluginManager().registerEvents(
                 new CapeSlotGUIListener(skillCapeManager, skillManager), this);
@@ -158,6 +165,10 @@ public class Main extends JavaPlugin {
         if (difficultyManager != null) difficultyManager.saveAll();
         if (skillManager      != null) skillManager.saveAll();
         if (adminLightCommand != null) adminLightCommand.disableAll();
+        // Remove Defence HP modifiers so they don't persist if plugin is removed
+        for (org.bukkit.entity.Player p : getServer().getOnlinePlayers()) {
+            SkillBonusManager.removeDefenceHpBonus(p);
+        }
         getLogger().info("DifficultyEngine: Data saved. Goodbye.");
     }
 }
