@@ -72,8 +72,9 @@ public class Main extends JavaPlugin {
                 new MinecartListener(itemFactory), this);
 
         // Skill system: XP tracking for melee, ranged, woodcutting, fishing, farming
+        // difficultyManager injected so kill XP scales with the player's difficulty tier
         getServer().getPluginManager().registerEvents(
-                new SkillListener(this, skillManager, skillCapeManager), this);
+                new SkillListener(this, skillManager, skillCapeManager, difficultyManager), this);
 
         // Skill GUI: prevent item theft from /mystats inventory
         getServer().getPluginManager().registerEvents(

@@ -35,9 +35,11 @@ public class AdminLightCommand implements CommandExecutor {
     /** Active refresh tasks per player UUID. */
     private final Map<UUID, BukkitTask>  activeTasks = new HashMap<>();
 
-    // Night Vision duration in ticks — 5 seconds refresh, 6s effect = always active
-    private static final int EFFECT_DURATION = 120; // 6 seconds (in ticks)
-    private static final int REFRESH_PERIOD  = 80;  // refresh every 4 seconds
+    // Night Vision duration: Integer.MAX_VALUE ticks (~36 years) so the client
+    // NEVER reaches the "about to expire" threshold that causes the icon to flash.
+    // We still refresh periodically in case milk/other effects clear it.
+    private static final int EFFECT_DURATION = Integer.MAX_VALUE;
+    private static final int REFRESH_PERIOD  = 3600; // reapply every 3 minutes (safety net)
 
     public AdminLightCommand(JavaPlugin plugin) {
         this.plugin = plugin;

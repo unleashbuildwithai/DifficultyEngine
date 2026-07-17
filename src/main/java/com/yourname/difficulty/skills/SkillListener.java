@@ -1,5 +1,7 @@
 package com.yourname.difficulty.skills;
 
+import com.yourname.difficulty.DifficultyLevel;
+import com.yourname.difficulty.PlayerDifficultyManager;
 import org.bukkit.Material;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
@@ -46,9 +48,10 @@ import java.util.UUID;
  */
 public class SkillListener implements Listener {
 
-    private final JavaPlugin       plugin;
-    private final SkillManager     skillManager;
-    private final SkillCapeManager capeManager;
+    private final JavaPlugin              plugin;
+    private final SkillManager            skillManager;
+    private final SkillCapeManager        capeManager;
+    private final PlayerDifficultyManager difficultyManager;
 
     // ── Material sets ─────────────────────────────────────────────────────────
 
@@ -94,10 +97,12 @@ public class SkillListener implements Listener {
         };
     }
 
-    public SkillListener(JavaPlugin plugin, SkillManager skillManager, SkillCapeManager capeManager) {
-        this.plugin       = plugin;
-        this.skillManager = skillManager;
-        this.capeManager  = capeManager;
+    public SkillListener(JavaPlugin plugin, SkillManager skillManager,
+                         SkillCapeManager capeManager, PlayerDifficultyManager difficultyManager) {
+        this.plugin             = plugin;
+        this.skillManager       = skillManager;
+        this.capeManager        = capeManager;
+        this.difficultyManager  = difficultyManager;
     }
 
     // ── Entity Kill (Melee / Ranged) ──────────────────────────────────────────
@@ -118,11 +123,15 @@ public class SkillListener implements Listener {
         Material  mat     = hand.getType();
         UUID      uuid    = killer.getUniqueId();
 
+        // Apply difficulty multiplier — higher difficulty = more XP per kill
+        double diffMult = difficultyKillMultiplier(
+                difficultyManager.getDifficulty(uuid));
+
         if (SWORDS.contains(mat) || AXES.contains(mat)) {
-            long xp       = Math.round(baseXp * weaponMultiplier(mat));
+            long xp = Math.round(baseXp * weaponMultiplier(mat) * diffMult);
             awardXp(killer, uuid, SkillType.MELEE, xp);
         } else if (BOWS.contains(mat)) {
-            long xp       = Math.round(baseXp * weaponMultiplier(mat));
+            long xp = Math.round(baseXp * weaponMultiplier(mat) * diffMult);
             awardXp(killer, uuid, SkillType.RANGED, xp);
         }
         // If killed with bare hands or other tools, no skill XP
@@ -215,6 +224,26 @@ public class SkillListener implements Listener {
         if (maxHealth <= 120) return 35L;
         if (maxHealth <= 200) return 70L;
         return 150L;
+    }
+
+    /**
+     * XP bonus multiplier for kills based on the player's chosen difficulty.
+     * Higher difficulty = tougher mobs = more XP rewarded.
+     *
+     *  PEACEFUL  → 0.5×  (mobs are nerfed, so half XP)
+     *  EASY      → 1.0×  (baseline)
+     *  MEDIUM    → 1.25×
+     *  HARD      → 1.5×
+     *  NIGHTMARE → 2.0×  (mobs are 50% stronger — double XP)
+     */
+    private static double difficultyKillMultiplier(DifficultyLevel level) {
+        return switch (level) {
+            case PEACEFUL  -> 0.5;
+            case EASY      -> 1.0;
+            case MEDIUM    -> 1.25;
+            case HARD      -> 1.5;
+            case NIGHTMARE -> 2.0;
+        };
     }
 
     private static double weaponMultiplier(Material mat) {
