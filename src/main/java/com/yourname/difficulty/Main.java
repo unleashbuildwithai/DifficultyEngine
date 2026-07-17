@@ -151,7 +151,8 @@ public class Main extends JavaPlugin {
         registerCraftingRecipes();
 
         // ── Scheduled tasks ───────────────────────────────────────────────────
-        new NightmareSpawnTask(difficultyManager).runTaskTimer(this, 600L, 600L);
+        // Nightmare bonus-spawn — every 15 seconds (doubled frequency, 6 mobs, 16-48 block range)
+        new NightmareSpawnTask(difficultyManager).runTaskTimer(this, 300L, 300L);
 
         for (Player p : getServer().getOnlinePlayers()) {
             difficultyManager.syncNightmareTag(p, difficultyManager.getDifficulty(p.getUniqueId()));
