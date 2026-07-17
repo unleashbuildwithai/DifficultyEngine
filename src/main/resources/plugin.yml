@@ -1,0 +1,34 @@
+name: DifficultyEngine
+version: 1.0
+main: com.yourname.difficulty.Main
+api-version: 1.21
+description: Per-player difficulty scaling with Peaceful, Easy, Hard, and Nightmare modes.
+author: yourname
+
+commands:
+  difficulty:
+    description: View or change your personal difficulty level.
+    usage: /difficulty [peaceful|easy|hard|nightmare]
+    aliases: [diff, setdifficulty]
+    permission: difficultyengine.use
+    permission-message: You do not have permission to use this command.
+
+  gear:
+    description: Give yourself or another player max-enchanted netherite god gear.
+    usage: /gear [player]
+    aliases: [godgear, ng]
+    permission: difficultyengine.gear
+    permission-message: §cThis command is for admins only.
+
+permissions:
+  difficultyengine.use:
+    description: Allows players to set their own difficulty.
+    default: true
+
+  difficultyengine.gear:
+    description: Allows use of /gear on yourself.
+    default: op
+
+  difficultyengine.gear.others:
+    description: Allows use of /gear on other players.
+    default: op
