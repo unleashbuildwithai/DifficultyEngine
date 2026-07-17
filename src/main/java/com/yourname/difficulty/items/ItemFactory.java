@@ -7,9 +7,11 @@ import org.bukkit.Color;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.enchantments.Enchantment;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.inventory.meta.PotionMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -40,11 +42,16 @@ public class ItemFactory {
     public static final String SOULFUR_POTION_KEY  = "soulfur_potion";
     public static final String TURBO_MINECART_KEY  = "turbo_minecart";
     public static final String ENCHANTED_SHARD_KEY = "enchanted_shard";
+    public static final String MAGE_GEAR_KEY       = "mage_gear"; // shared tag on all mage pieces
+
+    /** Deep arcane purple for mage gear leather colour. */
+    private static final Color MAGE_COLOR = Color.fromRGB(45, 0, 110);
 
     // ── NamespacedKeys ────────────────────────────────────────────────────────
     private final NamespacedKey soulfurPotionKey;
     private final NamespacedKey turboMinecartKey;
     private final NamespacedKey enchantedShardKey;
+    private final NamespacedKey mageGearKey;
     private final Map<MagicElement, NamespacedKey> staffKeys = new EnumMap<>(MagicElement.class);
     private final Map<MagicElement, NamespacedKey> runeKeys  = new EnumMap<>(MagicElement.class);
 
@@ -58,6 +65,7 @@ public class ItemFactory {
         this.soulfurPotionKey  = new NamespacedKey(plugin, SOULFUR_POTION_KEY);
         this.turboMinecartKey  = new NamespacedKey(plugin, TURBO_MINECART_KEY);
         this.enchantedShardKey = new NamespacedKey(plugin, ENCHANTED_SHARD_KEY);
+        this.mageGearKey       = new NamespacedKey(plugin, MAGE_GEAR_KEY);
         for (MagicElement el : MagicElement.values()) {
             staffKeys.put(el, new NamespacedKey(plugin, el.staffKey));
             runeKeys.put(el,  new NamespacedKey(plugin, el.runeKey));
@@ -74,6 +82,11 @@ public class ItemFactory {
         registry.add(buildEnchantedShard());
         for (MagicElement el : MagicElement.values()) registry.add(buildStaff(el));
         for (MagicElement el : MagicElement.values()) registry.add(buildRune(el, 8));
+        // Mage gear set (4 pieces)
+        registry.add(buildMageGear(Material.LEATHER_HELMET,     "§5✦ Mage Hood",       "-250ms cooldown"));
+        registry.add(buildMageGear(Material.LEATHER_CHESTPLATE, "§5✦ Mage Robe Top",   "-250ms cooldown"));
+        registry.add(buildMageGear(Material.LEATHER_LEGGINGS,   "§5✦ Mage Robe Bottom","-250ms cooldown"));
+        registry.add(buildMageGear(Material.LEATHER_BOOTS,      "§5✦ Mage Boots",      "-250ms cooldown"));
         registry.addAll(capeManager.buildAllCapes());
     }
 
@@ -221,6 +234,51 @@ public class ItemFactory {
         if (item == null || !item.hasItemMeta()) return false;
         return item.getItemMeta().getPersistentDataContainer()
                    .has(staffKeys.get(element), PersistentDataType.BYTE);
+    }
+
+    // ── Mage Gear ──────────────────────────────────────────────────────────────
+
+    public ItemStack buildMageGear(Material mat, String name, String bonus) {
+        ItemStack item = new ItemStack(mat);
+        LeatherArmorMeta meta = (LeatherArmorMeta) item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(name);
+            meta.setColor(MAGE_COLOR);
+            meta.setUnbreakable(true);
+            meta.addItemFlags(ItemFlag.HIDE_UNBREAKABLE, ItemFlag.HIDE_ATTRIBUTES);
+            meta.setLore(List.of(
+                "§8" + "─".repeat(24),
+                "§7Arcane mage gear imbued with",
+                "§7elemental magic power.",
+                "§8" + "─".repeat(24),
+                "§d✦ §7Staff cooldown: §a" + bonus,
+                "§7Full set (4 pieces): §a−1000ms",
+                "§8" + "─".repeat(24),
+                "§8[DifficultyEngine — Mage Gear]"
+            ));
+            meta.getPersistentDataContainer()
+                .set(mageGearKey, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    public boolean isMageGear(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer()
+                   .has(mageGearKey, PersistentDataType.BYTE);
+    }
+
+    /**
+     * Counts how many mage gear pieces (helmet, chestplate, leggings, boots)
+     * the player currently has equipped. Used for cooldown reduction.
+     */
+    public int countMageGearPieces(Player player) {
+        int count = 0;
+        for (ItemStack piece : player.getInventory().getArmorContents()) {
+            if (isMageGear(piece)) count++;
+        }
+        return count;
     }
 
     /** Returns the element of a staff item, or null if not a staff. */
