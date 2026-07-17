@@ -137,6 +137,8 @@ public class DifficultyEngine implements Listener {
         if (!(event.getDamager() instanceof Player attacker)) return;
         if (!(event.getEntity() instanceof LivingEntity mob))  return;
         if (mob instanceof Player) return;
+        // Skip our invisible seat ArmorStands
+        if (mob.getScoreboardTags().contains("DE_seat")) return;
 
         // Only show HP if this player has the toggle on
         if (!manager.isHpDisplayEnabled(attacker.getUniqueId())) return;

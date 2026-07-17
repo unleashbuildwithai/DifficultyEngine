@@ -84,10 +84,14 @@ public class SitListener implements Listener {
         if (data instanceof Slab slab) {
             if (slab.getType() == Slab.Type.DOUBLE) return; // full block — skip
             feetFace = getHorizontalFacing(player);          // player chooses edge
+            // TOP slab surface is at blockY+1.0; BOTTOM slab surface is at blockY+0.5.
+            // ArmorStand Y = surface - 0.5 puts the player butt flush with the surface.
             yOffset  = (slab.getType() == Slab.Type.TOP) ? 0.5 : 0.0;
 
         } else if (data instanceof Stairs stair) {
             feetFace = stair.getFacing();   // flat/low side of the step
+            // Stair step surface ≈ blockY+0.5; offset 0.0 places ArmorStand at base,
+            // raising by 0.0 keeps player butt flush with the step.
             yOffset  = 0.0;
 
         } else {
@@ -124,12 +128,18 @@ public class SitListener implements Listener {
 
         // ── Spawn invisible marker seat ───────────────────────────────────────
         ArmorStand seat = (ArmorStand) world.spawnEntity(sitLoc, EntityType.ARMOR_STAND);
-        seat.setVisible(false);
+        seat.setVisible(false);           // hide armor / body
         seat.setGravity(false);
         seat.setInvulnerable(true);
         seat.setSmall(true);
-        seat.setMarker(true);
+        seat.setMarker(true);             // no hitbox, not interactable
         seat.setCollidable(false);
+        seat.setCustomName(null);         // explicitly blank — suppresses name tags
+        seat.setCustomNameVisible(false); // belt-and-braces: never show name
+        seat.setSilent(true);             // no sounds
+        seat.setPersistent(false);        // cleaned up if server crashes
+        // Tag so our own HP-bar listener skips it
+        seat.addScoreboardTag("DE_seat");
         seat.addPassenger(player);
 
         seats.put(player.getUniqueId(), seat);
