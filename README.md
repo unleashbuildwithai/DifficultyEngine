@@ -1,135 +1,86 @@
 # DifficultyEngine
 
-A Paper Minecraft plugin that lets **each player choose their own personal difficulty level** — completely independent of the server's global difficulty setting.
+A **per-player difficulty scaling** plugin for Paper 1.21.  
+Every player on the server chooses their own challenge level — mobs that spawn near you are scaled to match your setting, and only yours.
 
 ---
 
 ## Commands
 
-| Command | Description |
-|---|---|
-| `/difficulty` | Shows your current difficulty |
-| `/difficulty peaceful` | Switch to Peaceful mode |
-| `/difficulty easy` | Switch to Easy mode (default) |
-| `/difficulty hard` | Switch to Hard mode |
-| `/difficulty nightmare` | Switch to Nightmare mode |
-
+### `/difficulty`
 **Aliases:** `/diff`, `/setdifficulty`
 
----
+View or change your personal difficulty level.
 
-## Difficulty Levels
-
-### ☮ Peaceful
-- Hostile mobs **will not target you**
-- Mob stats around you are slightly reduced (0.75× HP & damage)
-- If a Nightmare player is in your group, their aggro pulls mobs away from you
-- You are protected even in mixed groups — **unless a Nightmare player overrides all aggro**
-
-### ✦ Easy *(Default)*
-- **Fully vanilla experience** — no changes to mob stats or behaviour
-- All players start here by default
-- Your difficulty choice is saved and persists through server restarts
-
-### ⚔ Hard
-- Mobs spawning near you get **+25% Max HP**
-- **+15% Attack Damage**
-- **+5% Movement Speed**
-- Extended follow range: **32 blocks** (vanilla is ~16–20)
-
-### ☠ Nightmare
-- Mobs spawning near you get **+50% Max HP**
-- **+25% Attack Damage**
-- **+15% Movement Speed**
-- Massive follow range: **64 blocks** — they will not give up
-- **Increased spawn rate:** ~3 bonus hostile mobs spawn near you every 30 seconds
-- **Higher aggro preference:** Mobs in the area have a **35% chance** to re-lock onto you even if they are already targeting another player
-- In groups, you become the primary target — you carry the team's danger
+| Usage | Description |
+|---|---|
+| `/difficulty` | Shows your current difficulty |
+| `/difficulty peaceful` | Hostile mobs ignore you completely |
+| `/difficulty easy` | Vanilla experience — no changes *(default)* |
+| `/difficulty hard` | Mobs near you spawn tougher |
+| `/difficulty nightmare` | Full nightmare mode — see below |
 
 ---
 
-## How Mob Scaling Works
+### `/hpbar`
+**Aliases:** `/showhp`, `/healthbar`, `/hpdisplay`
 
-When a hostile mob spawns, the plugin:
+**Toggles the live HP display above mob heads.**
 
-1. Scans all players within **64 blocks**
-2. Finds the **highest difficulty player** in range
-3. Applies that difficulty's stat multipliers to the mob
+When **ON** — every mob you hit shows its health above its head:
 
-**Example:** One Nightmare player + three Easy players nearby → all mobs that spawn will have Nightmare-tier stats (1.5× HP, 1.25× damage, 1.15× speed, 64-block follow range).
+```
+❤ 18 / 25
+```
 
-> This means a Nightmare player makes their surrounding area genuinely more dangerous for **everyone nearby** — not just themselves.
+The number updates in real-time with each hit and disappears when the mob dies.  
+Type `/hpbar` again to turn it off.
+
+> **Tip:** The HP shown reflects actual scaled health — so a Nightmare zombie might show `❤ 30 / 30` instead of the vanilla `20 / 20`.
 
 ---
 
-## Group / Multiplayer Behaviour
+## Difficulty Tiers Explained
+
+| Tier | Mob HP | Mob Damage | Mob Speed | Follow Range | Bonus Spawns |
+|---|---|---|---|---|---|
+| ☮ **Peaceful** | ×0.75 | ×0.75 | ×1.00 | 16 blocks | No |
+| ✦ **Easy** | ×1.00 | ×1.00 | ×1.00 | 20 blocks | No |
+| ⚔ **Hard** | ×1.25 | ×1.15 | ×1.05 | 32 blocks | No |
+| ☠ **Nightmare** | ×1.50 | ×1.25 | ×1.15 | 64 blocks | Yes (+3 mobs every 30s) |
+
+### Notes
+
+- **Peaceful** — Mobs will not target you. If a Nightmare player is nearby, that protection is removed (the Nightmare player absorbs all aggro).
+- **Easy** — Vanilla behavior. No stat changes.
+- **Hard** — Mobs that spawn within 64 blocks of you receive boosted stats.
+- **Nightmare** — Everything in Hard, plus:
+  - Extra hostile mobs spawn near you every 30 seconds
+  - Mobs have a 35% chance to re-target you even if they were targeting someone else
+  - Your difficulty setting is saved and persists through server restarts
+
+---
+
+## Multiplayer Behavior
 
 | Situation | Result |
 |---|---|
-| Solo Nightmare player | Full Nightmare buffs + bonus spawns + high aggro |
-| Nightmare + Easy group | Mobs scale to Nightmare stats; 35% chance mobs retarget the Nightmare player |
-| Nightmare + Peaceful group | Nightmare player absorbs nearly all aggro; Peaceful players are rarely targeted |
-| All Easy players | Pure vanilla — no changes |
-| All Peaceful players | Mobs do not attack anyone (peaceful protection active for all) |
+| You're **Nightmare**, friend is **Peaceful** | Mobs spawn at Nightmare stats; your friend is left alone unless they're right next to you |
+| You're **Easy**, friend is **Nightmare** | Mobs near you both spawn at Nightmare tier (highest nearby player wins) |
+| You're **Peaceful** alone | Mobs spawn weakly and ignore you |
 
 ---
 
-## Nightmare Bonus Spawns
+## FAQ
 
-Every **30 seconds**, the plugin spawns **3 extra hostile mobs** within 8–24 blocks of each Nightmare player. Mob types are drawn from a weighted pool:
+**Does my difficulty setting save when I log out?**  
+Yes — your choice is saved to disk automatically and restored next time you join.
 
-- Zombie (most common)
-- Skeleton
-- Creeper
-- Spider
-- Zombie Villager
+**Can I change my difficulty at any time?**  
+Yes, as many times as you like. Only mobs that spawn *after* you change will be affected.
 
-Bonus mobs spawn on the surface at valid air locations — they will not spawn inside walls or buildings.
+**Does `/hpbar` persist after I log out?**  
+No — it's a session toggle. You'll need to run `/hpbar` again when you rejoin. This is intentional so it doesn't clutter everyone's screen by default.
 
----
-
-## Drops & Loot
-
-This plugin does **not** modify any loot tables, drop rates, or XP values. All mob drops are **100% vanilla**.
-
----
-
-## Data Persistence
-
-Player difficulty choices are saved to:
-```
-plugins/DifficultyEngine/player_data.yml
-```
-
-Your setting **persists through server restarts and reconnects**. You only need to set it once.
-
----
-
-## Installation
-
-1. Place `DifficultyEngine-1.0.jar` in your server's `plugins/` folder
-2. Restart the server
-3. Players use `/difficulty` to choose their mode immediately
-
----
-
-## Requirements
-
-- **Paper 1.21+**
-- **Java 21+**
-- No other dependencies required
-
----
-
-## Stat Reference Table
-
-| Mode | HP Mult | Damage Mult | Speed Mult | Follow Range | Bonus Spawns |
-|---|---|---|---|---|---|
-| Peaceful | 0.75× | 0.75× | 1.0× | 16 blocks | ✗ |
-| Easy | 1.0× | 1.0× | 1.0× | 20 blocks | ✗ |
-| Hard | 1.25× | 1.15× | 1.05× | 32 blocks | ✗ |
-| Nightmare | 1.50× | 1.25× | 1.15× | 64 blocks | ✓ (+3 every 30s) |
-
----
-
-*DifficultyEngine — because some players want to suffer more than others.*
+**What counts as a "nearby" player for mob scaling?**  
+Mobs check within a 64-block radius at the moment they spawn. The highest difficulty player in that radius determines the mob's stats.

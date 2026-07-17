@@ -23,10 +23,13 @@ public class Main extends JavaPlugin {
         // Register /gear command (admins only — enforced via permission)
         getCommand("gear").setExecutor(new GearCommand());
 
+        // Register /hpbar command (all players — toggles live HP above mobs)
+        getCommand("hpbar").setExecutor(new HpBarCommand(difficultyManager));
+
         // Start the nightmare bonus-spawn scheduler (every 30 seconds = 600 ticks)
         new NightmareSpawnTask(difficultyManager).runTaskTimer(this, 600L, 600L);
 
-        getLogger().info("DifficultyEngine: Ready! Players: /difficulty  |  Admins: /gear");
+        getLogger().info("DifficultyEngine: Ready! Players: /difficulty  /hpbar  |  Admins: /gear");
     }
 
     @Override

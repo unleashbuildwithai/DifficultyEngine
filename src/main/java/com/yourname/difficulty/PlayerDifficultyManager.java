@@ -5,7 +5,9 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -17,6 +19,13 @@ public class PlayerDifficultyManager {
     private final Main plugin;
     private final File dataFile;
     private final Map<UUID, DifficultyLevel> data = new HashMap<>();
+
+    /**
+     * Players who have opted into the live HP display above mob heads.
+     * Stored in memory only — resets on server restart (intentional: it's a
+     * session preference, not something that needs to persist).
+     */
+    private final Set<UUID> hpDisplayEnabled = new HashSet<>();
 
     public PlayerDifficultyManager(Main plugin) {
         this.plugin = plugin;
@@ -34,6 +43,33 @@ public class PlayerDifficultyManager {
     public DifficultyLevel getDifficulty(UUID uuid) {
         return data.getOrDefault(uuid, DifficultyLevel.EASY);
     }
+
+    // -------------------------------------------------------------------------
+    // HP display toggle
+    // -------------------------------------------------------------------------
+
+    /**
+     * Flips the HP display flag for a player.
+     *
+     * @return {@code true} if the display is now ON, {@code false} if now OFF.
+     */
+    public boolean toggleHpDisplay(UUID uuid) {
+        if (hpDisplayEnabled.contains(uuid)) {
+            hpDisplayEnabled.remove(uuid);
+            return false;
+        }
+        hpDisplayEnabled.add(uuid);
+        return true;
+    }
+
+    /** Returns {@code true} if the player has HP display enabled. */
+    public boolean isHpDisplayEnabled(UUID uuid) {
+        return hpDisplayEnabled.contains(uuid);
+    }
+
+    // -------------------------------------------------------------------------
+    // Difficulty persistence
+    // -------------------------------------------------------------------------
 
     /** Sets and immediately persists a player's difficulty. */
     public void setDifficulty(UUID uuid, DifficultyLevel level) {

@@ -13,6 +13,13 @@ commands:
     permission: difficultyengine.use
     permission-message: You do not have permission to use this command.
 
+  hpbar:
+    description: Toggle the live HP display (❤ current / max) above mob heads when you hit them.
+    usage: /hpbar
+    aliases: [showhp, healthbar, hpdisplay]
+    permission: difficultyengine.use
+    permission-message: You do not have permission to use this command.
+
   gear:
     description: Give yourself or another player max-enchanted netherite god gear.
     usage: /gear [player]

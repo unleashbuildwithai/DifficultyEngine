@@ -1,5 +1,6 @@
 package com.yourname.difficulty;
 
+import org.bukkit.NamespacedKey;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Entity;
@@ -9,18 +10,25 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.CreatureSpawnEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
+import org.bukkit.persistence.PersistentDataType;
 
 import java.util.Random;
 
 /**
  * DifficultyEngine — The Brain
  *
- * Two responsibilities:
+ * Four responsibilities:
  *  1. onCreatureSpawn  — Scale mob stats based on the highest difficulty
  *                        player within 64 blocks.
  *  2. onEntityTarget   — Redirect mob aggro toward Nightmare players (35%
  *                        chance) and protect Peaceful players from targeting.
+ *  3. onEntityDeath    — Clean up display state on death to prevent the Paper
+ *                        1.21 "ghost health bar floating at death location" bug.
+ *  4. onEntityDamage   — When a player has /hpbar ON, update the mob's custom
+ *                        name to show live HP (❤ current / max) after each hit.
  */
 public class DifficultyEngine implements Listener {
 
@@ -34,11 +42,21 @@ public class DifficultyEngine implements Listener {
      */
     private static final int NIGHTMARE_AGGRO_CHANCE = 35;
 
+    private final Main plugin;
     private final PlayerDifficultyManager manager;
     private final Random random = new Random();
 
+    /**
+     * PDC key used to mark every mob whose stats were scaled by this plugin.
+     * Checked in onEntityDeath to trigger display cleanup and prevent the
+     * Paper 1.21 ghost-health-bar bug.
+     */
+    private final NamespacedKey scaledKey;
+
     public DifficultyEngine(Main plugin, PlayerDifficultyManager manager) {
-        this.manager = manager;
+        this.plugin    = plugin;
+        this.manager   = manager;
+        this.scaledKey = new NamespacedKey(plugin, "difficulty_scaled");
     }
 
     // -------------------------------------------------------------------------
@@ -85,6 +103,83 @@ public class DifficultyEngine implements Listener {
         AttributeInstance follow = mob.getAttribute(Attribute.GENERIC_FOLLOW_RANGE);
         if (follow != null) {
             follow.setBaseValue(level.getFollowRange());
+        }
+
+        // ── Tag this mob so onEntityDeath can clean it up ─────────────────────
+        // Paper 1.21 leaves a ghost health bar floating at the death location
+        // for any mob whose GENERIC_MAX_HEALTH base value was modified. We tag
+        // scaled mobs here so we can wipe their display state on death.
+        mob.getPersistentDataContainer().set(scaledKey, PersistentDataType.BYTE, (byte) 1);
+    }
+
+    // -------------------------------------------------------------------------
+    // Live HP display  —  /hpbar feature
+    // -------------------------------------------------------------------------
+
+    /**
+     * When a player with /hpbar ON damages a mob, we schedule a 1-tick
+     * delayed task so the damage has already been applied, then write the
+     * real post-hit health as the mob's custom name:
+     *
+     *   §c❤ §f18 §7/ §f25
+     *
+     * The name is cleared automatically in onEntityDeath (see below).
+     */
+    @EventHandler
+    public void onEntityDamage(EntityDamageByEntityEvent event) {
+        // Only care about player → mob hits
+        if (!(event.getDamager() instanceof Player attacker)) return;
+        if (!(event.getEntity() instanceof LivingEntity mob))  return;
+        if (mob instanceof Player) return;
+
+        // Only show HP if this player has the toggle on
+        if (!manager.isHpDisplayEnabled(attacker.getUniqueId())) return;
+
+        // Wait 1 tick so damage is applied before we read health
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            if (!mob.isValid() || mob.isDead()) return;
+
+            AttributeInstance maxHpAttr = mob.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+            double maxHp = maxHpAttr != null ? maxHpAttr.getValue() : mob.getHealth();
+            double curHp = mob.getHealth();
+
+            // Format as whole numbers — keeps the tag short and readable
+            String tag = String.format("§c❤ §f%d §7/ §f%d",
+                    (int) Math.ceil(curHp), (int) Math.round(maxHp));
+
+            mob.setCustomName(tag);
+            mob.setCustomNameVisible(true);
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // Death cleanup  —  fixes the floating / ghost health-bar bug
+    // -------------------------------------------------------------------------
+
+    /**
+     * Clears custom name + visibility on every non-player mob death.
+     *
+     * This serves two purposes:
+     *  a) Prevents the Paper 1.21 ghost-health-bar bug for scaled mobs
+     *     (GENERIC_MAX_HEALTH metadata desync on death).
+     *  b) Removes the HP tag set by onEntityDamage so it doesn't linger
+     *     after the mob is dead.
+     *
+     * We guard on ALL mobs (not just PDC-tagged ones) because unscaled mobs
+     * can also receive an HP tag via the /hpbar feature.
+     */
+    @EventHandler
+    public void onEntityDeath(EntityDeathEvent event) {
+        LivingEntity entity = event.getEntity();
+        if (entity instanceof Player) return;
+
+        // Wipe name/display state — dismisses ghost bars AND HP tags
+        entity.setCustomName(null);
+        entity.setCustomNameVisible(false);
+
+        // Clean up PDC tag if this was a scaled mob
+        if (entity.getPersistentDataContainer().has(scaledKey, PersistentDataType.BYTE)) {
+            entity.getPersistentDataContainer().remove(scaledKey);
         }
     }
 
