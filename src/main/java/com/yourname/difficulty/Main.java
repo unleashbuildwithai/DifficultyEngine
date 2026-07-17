@@ -1,5 +1,7 @@
 package com.yourname.difficulty;
 
+import com.yourname.difficulty.gui.CapeSlotGUI;
+import com.yourname.difficulty.gui.CapeSlotGUIListener;
 import com.yourname.difficulty.gui.RegistryGUI;
 import com.yourname.difficulty.gui.RegistryGUIListener;
 import com.yourname.difficulty.items.ItemFactory;
@@ -89,6 +91,10 @@ public class Main extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new ItemLevelListener(skillManager), this);
 
+        // Cape wardrobe GUI: equip/unequip capes via /cape command
+        getServer().getPluginManager().registerEvents(
+                new CapeSlotGUIListener(skillCapeManager, skillManager), this);
+
         // ── Register commands ─────────────────────────────────────────────────
 
         getCommand("difficulty").setExecutor(new DifficultyCommand(difficultyManager));
@@ -120,6 +126,17 @@ public class Main extends JavaPlugin {
         SkillCommand guiCmd = new SkillCommand(skillManager, skillGUI, true);
         getCommand("mystats").setExecutor(guiCmd);
         getCommand("stats").setExecutor(guiCmd);
+
+        // /cape — opens the Cape Wardrobe GUI
+        CapeSlotGUI capeGui = new CapeSlotGUI(skillCapeManager);
+        getCommand("cape").setExecutor((sender, cmd, label, args) -> {
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage("§cOnly players can open the Cape Wardrobe.");
+                return true;
+            }
+            capeGui.open(player);
+            return true;
+        });
 
         // ── Scheduled tasks ───────────────────────────────────────────────────
 

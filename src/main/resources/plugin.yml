@@ -75,6 +75,13 @@ commands:
     permission: difficultyengine.use
     permission-message: You do not have permission to use this command.
 
+  cape:
+    description: Open the Cape Wardrobe GUI to equip or unequip your skill cape.
+    usage: /cape
+    aliases: [wardrobe, mycape, equipcape]
+    permission: difficultyengine.use
+    permission-message: You do not have permission to use this command.
+
 permissions:
   difficultyengine.use:
     description: Allows players to set difficulty, use /hpbar, /sit, /registry, /skills, and /mystats.
