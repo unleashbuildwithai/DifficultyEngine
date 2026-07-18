@@ -1,5 +1,6 @@
 package com.yourname.difficulty.listeners;
 
+import com.yourname.difficulty.items.ItemFactory;
 import com.yourname.difficulty.skills.SkillCapeManager;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -66,6 +67,7 @@ public class BossEventListener implements Listener {
 
     private final JavaPlugin       plugin;
     private final SkillCapeManager capeManager;
+    private final ItemFactory      itemFactory;
     private final Random           random = new Random();
 
     /**
@@ -75,8 +77,13 @@ public class BossEventListener implements Listener {
     private final Map<UUID, DoubleBossEvent> activeEvents = new HashMap<>();
 
     public BossEventListener(JavaPlugin plugin, SkillCapeManager capeManager) {
-        this.plugin      = plugin;
-        this.capeManager = capeManager;
+        this(plugin, capeManager, null);
+    }
+
+    public BossEventListener(JavaPlugin plugin, SkillCapeManager capeManager, ItemFactory itemFactory) {
+        this.plugin       = plugin;
+        this.capeManager  = capeManager;
+        this.itemFactory  = itemFactory;
         startBossFightMobTask();
     }
 
@@ -170,9 +177,17 @@ public class BossEventListener implements Listener {
             // Award Boss Cape
             ItemStack bossCape = capeManager.buildBossCape();
             HashMap<Integer, ItemStack> leftover = p.getInventory().addItem(bossCape);
-            // Drop at feet if inventory full
             for (ItemStack leftoverItem : leftover.values()) {
                 p.getWorld().dropItemNaturally(p.getLocation(), leftoverItem);
+            }
+
+            // Award Ancient Kill Tome (instant-kill combo knowledge)
+            if (itemFactory != null) {
+                ItemStack killTome = itemFactory.buildAncientKillTome();
+                HashMap<Integer, ItemStack> tomeLeftover = p.getInventory().addItem(killTome);
+                for (ItemStack leftoverItem : tomeLeftover.values()) {
+                    p.getWorld().dropItemNaturally(p.getLocation(), leftoverItem);
+                }
             }
 
             p.sendMessage("");
@@ -180,6 +195,8 @@ public class BossEventListener implements Listener {
             p.sendMessage("§7You defeated §c§lBOTH §r§7bosses without dying!");
             p.sendMessage("§5The §d★ Boss Cape §5has been added to your inventory!");
             p.sendMessage("§7Equip it via §e/cape §7to wear it on your back.");
+            p.sendMessage("§cThe §4Ancient Kill Tome §chas also been added!");
+            p.sendMessage("§8Carry it to unlock instant-kill combo hints.");
             p.sendMessage("");
             anyWinner = true;
         }

@@ -13,8 +13,11 @@ import com.yourname.difficulty.listeners.CapeVisualTask;
 import com.yourname.difficulty.listeners.DifficultyEngine;
 import com.yourname.difficulty.listeners.GroupDifficultyListener;
 import com.yourname.difficulty.listeners.LevelProtectionListener;
+import com.yourname.difficulty.items.MageGearTier;
 import com.yourname.difficulty.listeners.MageGearCraftListener;
+import com.yourname.difficulty.listeners.MageGearEquipListener;
 import com.yourname.difficulty.listeners.MagicCauldronCraftListener;
+import com.yourname.difficulty.vip.VipShopListener;
 import com.yourname.difficulty.listeners.MinecartListener;
 import com.yourname.difficulty.listeners.NightmareAggroListener;
 import com.yourname.difficulty.listeners.PrayerListener;
@@ -79,6 +82,7 @@ public class Main extends JavaPlugin {
     private PartyListener  partyListener;
     private QuestGUI       questGUI;
     private TradeListener  tradeListener;
+    private VipShopListener vipShopListener;
 
     /** All crafting recipe keys registered by this plugin — used for recipe-book discovery. */
     private final List<NamespacedKey> allRecipeKeys = new ArrayList<>();
@@ -114,7 +118,7 @@ public class Main extends JavaPlugin {
                 new NightmareAggroListener(difficultyManager), this);
 
         getServer().getPluginManager().registerEvents(
-                new RegistryGUIListener(itemFactory), this);
+                new RegistryGUIListener(itemFactory, registryGUI), this);
 
         this.sitListener = new SitListener();
         getServer().getPluginManager().registerEvents(sitListener, this);
@@ -162,13 +166,17 @@ public class Main extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new GroupDifficultyListener(difficultyManager, this), this);
 
-        // ── Boss events: double spawn (1 %), boss-fight mobs, boss cape ────────
+        // ── Boss events: double spawn (1 %), boss-fight mobs, boss cape + kill tome ──
         getServer().getPluginManager().registerEvents(
-                new BossEventListener(this, skillCapeManager), this);
+                new BossEventListener(this, skillCapeManager, itemFactory), this);
 
         // ── Mage Gear crafting: replaces vanilla result with PDC item ──────────
         getServer().getPluginManager().registerEvents(
                 new MageGearCraftListener(itemFactory), this);
+
+        // ── Mage Gear equip: enforces Magic level requirements ─────────────────
+        getServer().getPluginManager().registerEvents(
+                new MageGearEquipListener(itemFactory, skillManager), this);
 
         // ── Magic Cauldron crafting: replaces placeholder with PDC Rune Dust ───
         getServer().getPluginManager().registerEvents(
@@ -179,6 +187,11 @@ public class Main extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new GoldDropListener(goldManager, difficultyManager, this), this);
         getServer().getPluginManager().registerEvents(new GoldValueListener(), this);
+
+        // ── VIP Shop: villager NPC with gold-coin trades + Unicorn Slippers ─────
+        // (must come after goldManager is initialized)
+        this.vipShopListener = new VipShopListener(this, itemFactory, goldManager);
+        getServer().getPluginManager().registerEvents(vipShopListener, this);
 
         // ── Rune mob drops (Air, Fire, Water, Earth from specific mobs) ────────
         getServer().getPluginManager().registerEvents(
@@ -266,6 +279,26 @@ public class Main extends JavaPlugin {
         getCommand("party").setExecutor(partyListener);
         getCommand("trade").setExecutor(tradeListener);
 
+        // ── VIP Shop command ───────────────────────────────────────────────────
+        getCommand("vipshop").setExecutor((sender, cmd, label, args) -> {
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage("§cOnly players can use /vipshop.");
+                return true;
+            }
+            if (args.length > 0 && args[0].equalsIgnoreCase("spawn")) {
+                if (!player.hasPermission("difficultyengine.cape.admin")) {
+                    player.sendMessage("§cNo permission.");
+                    return true;
+                }
+                vipShopListener.spawnVipKeeper(player.getLocation());
+                player.sendMessage("§6✦ §7VIP Shop Keeper spawned at your location!");
+                return true;
+            }
+            player.sendMessage("§6Usage: §e/vipshop spawn §8(Admin) §7— Spawns the VIP Shop villager.");
+            player.sendMessage("§7Right-click the VIP Shop Keeper to browse cosmetics.");
+            return true;
+        });
+
         getCommand("spellbook").setExecutor((sender, cmd, label, args) -> {
             if (!(sender instanceof Player player)) {
                 sender.sendMessage("§cOnly players can open the Arcane Tome.");
@@ -351,6 +384,7 @@ public class Main extends JavaPlugin {
         if (spellBookManager  != null) spellBookManager.save();
         if (goldManager       != null) goldManager.saveAll();
         if (questManager      != null) questManager.saveAll();
+        if (vipShopListener   != null) vipShopListener.shutdown();
         for (Player p : getServer().getOnlinePlayers()) {
             SkillBonusManager.removeDefenceHpBonus(p);
         }
@@ -419,6 +453,65 @@ public class Main extends JavaPlugin {
         bootsRecipe.addIngredient(Material.BLAZE_POWDER);
         getServer().addRecipe(bootsRecipe);
         allRecipeKeys.add(bootsKey);
+
+        // ── Apprentice Mage Gear: Leather + Purple Dye + String (Lv 1) ────────
+        for (Material[] mat : new Material[][]{
+            {Material.LEATHER_HELMET,     Material.LEATHER_HELMET},
+            {Material.LEATHER_CHESTPLATE, Material.LEATHER_CHESTPLATE},
+            {Material.LEATHER_LEGGINGS,   Material.LEATHER_LEGGINGS},
+            {Material.LEATHER_BOOTS,      Material.LEATHER_BOOTS}
+        }) {
+            String suffix = mat[0] == Material.LEATHER_HELMET ? "apprentice_hood_recipe"
+                : mat[0] == Material.LEATHER_CHESTPLATE ? "apprentice_top_recipe"
+                : mat[0] == Material.LEATHER_LEGGINGS   ? "apprentice_bottom_recipe"
+                : "apprentice_boots_recipe";
+            NamespacedKey k = new NamespacedKey(this, suffix);
+            ShapelessRecipe r = new ShapelessRecipe(k, new ItemStack(mat[0]));
+            r.addIngredient(mat[0]);
+            r.addIngredient(Material.PURPLE_DYE);
+            r.addIngredient(Material.STRING);
+            getServer().addRecipe(r);
+            allRecipeKeys.add(k);
+        }
+
+        // ── Alch Mage Gear: Leather + Blue Dye + Blaze Powder + Eye of Ender (Lv 60) ──
+        for (Material mat : new Material[]{
+            Material.LEATHER_HELMET, Material.LEATHER_CHESTPLATE,
+            Material.LEATHER_LEGGINGS, Material.LEATHER_BOOTS
+        }) {
+            String suffix = mat == Material.LEATHER_HELMET ? "alch_hood_recipe"
+                : mat == Material.LEATHER_CHESTPLATE ? "alch_top_recipe"
+                : mat == Material.LEATHER_LEGGINGS   ? "alch_bottom_recipe"
+                : "alch_boots_recipe";
+            NamespacedKey k = new NamespacedKey(this, suffix);
+            ShapelessRecipe r = new ShapelessRecipe(k, new ItemStack(mat));
+            r.addIngredient(mat);
+            r.addIngredient(Material.BLUE_DYE);
+            r.addIngredient(Material.BLAZE_POWDER);
+            r.addIngredient(Material.ENDER_EYE);
+            getServer().addRecipe(r);
+            allRecipeKeys.add(k);
+        }
+
+        // ── Master Mage Gear: Leather + Black Dye + Blaze Powder + Shard + Dragon Breath (Lv 90) ──
+        for (Material mat : new Material[]{
+            Material.LEATHER_HELMET, Material.LEATHER_CHESTPLATE,
+            Material.LEATHER_LEGGINGS, Material.LEATHER_BOOTS
+        }) {
+            String suffix = mat == Material.LEATHER_HELMET ? "master_hood_recipe"
+                : mat == Material.LEATHER_CHESTPLATE ? "master_top_recipe"
+                : mat == Material.LEATHER_LEGGINGS   ? "master_bottom_recipe"
+                : "master_boots_recipe";
+            NamespacedKey k = new NamespacedKey(this, suffix);
+            ShapelessRecipe r = new ShapelessRecipe(k, new ItemStack(mat));
+            r.addIngredient(mat);
+            r.addIngredient(Material.BLACK_DYE);
+            r.addIngredient(Material.BLAZE_POWDER);
+            r.addIngredient(Material.AMETHYST_SHARD);   // Enchanted Shard (by material)
+            r.addIngredient(Material.DRAGON_BREATH);
+            getServer().addRecipe(r);
+            allRecipeKeys.add(k);
+        }
 
         // ── Magic Cauldron recipes → Rune Dust ────────────────────────────────
         // BASIC  (no diamond):    CAULDRON + element ingredients          → 16 dust

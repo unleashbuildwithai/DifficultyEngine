@@ -41,6 +41,13 @@ commands:
     permission: difficultyengine.registry
     permission-message: §cThis command is for admins only.
 
+  vipshop:
+    description: Open the VIP Shop (right-click the keeper) or spawn the keeper villager (Admin).
+    usage: /vipshop [spawn]
+    aliases: [vip, cosmetics]
+    permission: difficultyengine.use
+    permission-message: You do not have permission to use this command.
+
 permissions:
   difficultyengine.use:
     description: Allows players to set difficulty, use /hpbar, /sit, and open the Item Registry.

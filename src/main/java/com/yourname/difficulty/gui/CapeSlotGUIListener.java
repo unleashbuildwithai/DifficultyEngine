@@ -10,6 +10,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.inventory.ItemStack;
@@ -60,9 +61,35 @@ public class CapeSlotGUIListener implements Listener {
 
         if (!isTopInventory) {
             // ── Player's own inventory (bottom rows) ─────────────────────────
-            // Allow all clicks freely — players should be able to pick up and
-            // move items from their own inventory while the GUI is open.
-            return; // do NOT cancel
+            // Normal left/right clicks: always allowed (player manages their items).
+            // Shift-clicks: if the item is a cape, auto-equip it. Otherwise cancel
+            // to prevent items from shift-jumping into glass pane slots.
+            if (event.getClick() == ClickType.SHIFT_LEFT || event.getClick() == ClickType.SHIFT_RIGHT) {
+                ItemStack clicked = event.getCurrentItem();
+                if (clicked != null && capeManager.isAnyCape(clicked)) {
+                    event.setCancelled(true);
+                    // Simulate equipping the cape directly
+                    if (canEquip(player, clicked)) {
+                        if (player.hasPermission("difficultyengine.cape.admin")) grantAdminPerk(player, clicked);
+                        ItemStack current = player.getInventory().getChestplate();
+                        if (current != null && !current.getType().isAir()) {
+                            player.getInventory().addItem(current);
+                        }
+                        player.getInventory().setChestplate(clicked.clone());
+                        capeDataManager.equipCape(player.getUniqueId(), clicked);
+                        // Remove the cape from the player's inventory slot
+                        event.setCurrentItem(new ItemStack(Material.AIR));
+                        // Refresh the GUI cape slot
+                        event.getView().getTopInventory().setItem(
+                            CapeSlotGUI.CAPE_SLOT, clicked.clone());
+                        player.sendMessage("§5✦ §7Cape equipped via shift-click! §5✦");
+                    }
+                } else {
+                    // Non-cape item — cancel the shift so it can't go into glass slots
+                    event.setCancelled(true);
+                }
+            }
+            return;
         }
 
         // ── Top (GUI) inventory ───────────────────────────────────────────────
