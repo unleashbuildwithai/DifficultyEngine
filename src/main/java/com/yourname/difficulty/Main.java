@@ -22,6 +22,8 @@ import com.yourname.difficulty.listeners.SoulfurPotionListener;
 import com.yourname.difficulty.magic.MagicElement;
 import com.yourname.difficulty.magic.MagicStaffListener;
 import com.yourname.difficulty.magic.RuneDropListener;
+import com.yourname.difficulty.magic.SpellBookListener;
+import com.yourname.difficulty.magic.SpellBookManager;
 import com.yourname.difficulty.party.PartyHudTask;
 import com.yourname.difficulty.party.PartyListener;
 import com.yourname.difficulty.party.PartyManager;
@@ -63,6 +65,7 @@ public class Main extends JavaPlugin {
     private AdminLightCommand       adminLightCommand;
     private CapeVisualTask          capeVisualTask;
     // ── New systems ────────────────────────────────────────────────────────────
+    private SpellBookManager spellBookManager;
     private GoldManager    goldManager;
     private QuestManager   questManager;
     private PartyManager   partyManager;
@@ -164,6 +167,11 @@ public class Main extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new RuneDropListener(itemFactory), this);
 
+        // ── Spell Book system (Arcane Tome + Spell Pages) ──────────────────────
+        this.spellBookManager = new SpellBookManager(this);
+        getServer().getPluginManager().registerEvents(
+                new SpellBookListener(spellBookManager), this);
+
         // ── Quest system ───────────────────────────────────────────────────────
         this.questManager = new QuestManager(this, goldManager, skillManager, itemFactory);
         this.questGUI     = new QuestGUI(questManager);
@@ -241,6 +249,40 @@ public class Main extends JavaPlugin {
         getCommand("party").setExecutor(partyListener);
         getCommand("trade").setExecutor(tradeListener);
 
+        getCommand("spellbook").setExecutor((sender, cmd, label, args) -> {
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage("§cOnly players can open the Arcane Tome.");
+                return true;
+            }
+            int count = spellBookManager.getUnlockedCount(player.getUniqueId());
+            player.openBook(spellBookManager.buildBookForPlayer(player.getUniqueId()));
+            player.sendActionBar("§5✦ §dArcane Tome §8— §7" + count + " §8/ §7"
+                    + SpellBookManager.TOTAL_PAGES + " §dpages unlocked");
+            return true;
+        });
+
+        getCommand("spellpage").setExecutor((sender, cmd, label, args) -> {
+            Player target;
+            if (args.length > 0) {
+                target = getServer().getPlayerExact(args[0]);
+                if (target == null) {
+                    sender.sendMessage("§cPlayer not found: " + args[0]);
+                    return true;
+                }
+            } else if (sender instanceof Player p) {
+                target = p;
+            } else {
+                sender.sendMessage("§cUsage: /spellpage [player]");
+                return true;
+            }
+            target.getInventory().addItem(spellBookManager.buildSpellPageItem());
+            target.sendMessage(
+                "§d✧ §7You received a §dSpell Page§7! Right-click it to unlock a tome page.");
+            if (!target.equals(sender))
+                sender.sendMessage("§7Gave a §dSpell Page §7to §d" + target.getName() + "§7.");
+            return true;
+        });
+
         // ── Crafting recipes ──────────────────────────────────────────────────
         registerCraftingRecipes();
 
@@ -273,6 +315,7 @@ public class Main extends JavaPlugin {
         getLogger().info("  Players : /difficulty  /hpbar  /sit  /registry  /skills  /mystats  /stats  /cape");
         getLogger().info("  Admins  : /gear  /curecosmetic  /adminlight");
         getLogger().info("  Magic   : Right-click elemental staffs to cast spells.");
+        getLogger().info("  Spell Book: Find Spell Pages from mobs (4%) or /spellpage. /spellbook to read.");
         getLogger().info("  Prayer  : Right-click bone on dirt to bury it for XP.");
         getLogger().info("  Mage Gear: Craft with LEATHER_PIECE + PURPLE_DYE + BLAZE_POWDER");
         getLogger().info("  Boss Cape: Defeat a Double Boss event without dying.");
@@ -286,6 +329,7 @@ public class Main extends JavaPlugin {
         if (adminLightCommand != null) adminLightCommand.disableAll();
         if (capeVisualTask    != null) capeVisualTask.cleanup();
         if (partyHudTask      != null) partyHudTask.cleanup();
+        if (spellBookManager  != null) spellBookManager.save();
         if (goldManager       != null) goldManager.saveAll();
         if (questManager      != null) questManager.saveAll();
         for (Player p : getServer().getOnlinePlayers()) {

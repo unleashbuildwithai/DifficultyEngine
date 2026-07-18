@@ -110,6 +110,20 @@ commands:
     permission: difficultyengine.use
     permission-message: You do not have permission to use this command.
 
+  spellbook:
+    description: Open your Arcane Spell Tome to browse combo knowledge.
+    usage: /spellbook
+    aliases: [tome, arcane, spelltome]
+    permission: difficultyengine.use
+    permission-message: You do not have permission to use this command.
+
+  spellpage:
+    description: Give a Spell Page to yourself or another player (admin).
+    usage: /spellpage [player]
+    aliases: [givepage, givespellpage]
+    permission: difficultyengine.spellpage
+    permission-message: §cThis command is for admins only.
+
 permissions:
   difficultyengine.use:
     description: Allows players to set difficulty, use /hpbar, /sit, /registry, /skills, and /mystats.
@@ -157,4 +171,8 @@ permissions:
 
   difficultyengine.protection.bypass:
     description: Bypasses the level-difference PvP protection system (can attack/be attacked regardless of combat level gap).
+    default: op
+
+  difficultyengine.spellpage:
+    description: Allows use of /spellpage to give Spell Pages to players.
     default: op
