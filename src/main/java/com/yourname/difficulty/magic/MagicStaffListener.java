@@ -323,6 +323,22 @@ public class MagicStaffListener implements Listener {
 
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_PHANTOM_FLAP, 1.0f, 1.8f);
         player.sendActionBar("§7[Air] §7Air bolt fired! §8(Lv " + magicLevel + ")");
+
+        // ── Air gust sweeps nearby magic dirt blocks (from earth hits) ───────
+        // Clears DIRT blocks in the 4 cardinal directions at foot + head height.
+        for (int dy = 0; dy <= 1; dy++) {
+            for (BlockFace face : new BlockFace[]{
+                    BlockFace.NORTH, BlockFace.SOUTH,
+                    BlockFace.EAST,  BlockFace.WEST}) {
+                Block b = player.getLocation().getBlock().getRelative(face).getRelative(0, dy, 0);
+                if (b.getType() == Material.DIRT) {
+                    b.getWorld().spawnParticle(Particle.BLOCK,
+                        b.getLocation().add(0.5, 0.5, 0.5), 8, 0.3, 0.3, 0.3,
+                        Material.DIRT.createBlockData());
+                    b.setType(Material.AIR);
+                }
+            }
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -624,6 +640,44 @@ public class MagicStaffListener implements Listener {
             }
         }
         rollMindBomb(target, shooter);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  SPELL DEFLECTION — sword deflects fire/water bolts back at the caster
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Hitting a tracked staff projectile (Snowball or SmallFireball) with any
+     * sword deflects it back toward the original shooter at 2.8× speed.
+     * The hitter becomes the new shooter so the bolt can damage the original mage.
+     */
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    public void onSpellDeflect(org.bukkit.event.entity.EntityDamageByEntityEvent event) {
+        if (!(event.getDamager() instanceof Player hitter)) return;
+
+        UUID projId = event.getEntity().getUniqueId();
+        if (!trackedProjectiles.containsKey(projId)) return;
+
+        // Must be holding a sword
+        ItemStack hand = hitter.getInventory().getItemInMainHand();
+        if (hand == null || !hand.getType().name().endsWith("_SWORD")) return;
+
+        event.setCancelled(true); // don't destroy the projectile
+
+        // Deflect away from the hitter
+        Vector deflect = event.getEntity().getLocation()
+            .subtract(hitter.getEyeLocation()).toVector().normalize().multiply(2.8);
+        if (deflect.getY() < 0.1) deflect.setY(0.1);
+        event.getEntity().setVelocity(deflect);
+
+        // New shooter = the hitter (can now damage original caster)
+        projectileShooters.put(projId, hitter.getUniqueId());
+
+        hitter.getWorld().playSound(hitter.getLocation(),
+            Sound.ENTITY_PLAYER_ATTACK_SWEEP, 1.2f, 2.0f);
+        hitter.getWorld().spawnParticle(Particle.CRIT,
+            event.getEntity().getLocation(), 12, 0.3, 0.3, 0.3, 0.2);
+        hitter.sendActionBar("§f§lDEFLECTED! §7The spell flies back!");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -995,6 +1049,21 @@ public class MagicStaffListener implements Listener {
             if (target instanceof Player tp) tp.sendActionBar("§c§f§lINFERNO BLAST §7ripped through you!");
             if (shooter != null) awardMagicXp(shooter, MAGIC_XP_COMBO);
             return;
+        }
+
+        // ── AIR BOLT NEGATION: player holding Air staff while hovering → negate ──
+        if (target instanceof Player tp) {
+            ItemStack targetHand = tp.getInventory().getItemInMainHand();
+            if (itemFactory.getStaffElement(targetHand) == MagicElement.AIR
+                    && tp.hasPotionEffect(PotionEffectType.SLOW_FALLING)) {
+                tp.getWorld().spawnParticle(Particle.CLOUD,
+                    tp.getLocation().add(0, 1, 0), 20, 0.4, 0.4, 0.4, 0.1);
+                tp.getWorld().playSound(tp.getLocation(),
+                    Sound.ENTITY_PHANTOM_FLAP, 1.0f, 2.0f);
+                tp.sendActionBar("§7☁ §fYour Air staff deflected the gust!");
+                if (shooter != null) shooter.sendActionBar("§7☁ §7Their Air staff negated your gust!");
+                return;
+            }
         }
 
         // SCORCHED + AIR = FANNED FLAMES
