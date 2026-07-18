@@ -11,7 +11,7 @@ public enum DifficultyLevel {
     EASY      (1,   1.00,  1.00,  1.00,   20.0,   false),
     MEDIUM    (2,   1.10,  1.08,  1.02,   26.0,   false),
     HARD      (3,   1.25,  1.15,  1.05,   32.0,   false),
-    NIGHTMARE (4,   1.50,  1.25,  1.15,   64.0,   true);
+    NIGHTMARE (4,   1.50,  1.25,  1.15,  128.0,   true);
 
     private final int    tier;
     private final double healthMult;

@@ -183,22 +183,30 @@ public final class SkillBonusManager {
     // ── OSRS Combat Level ─────────────────────────────────────────────────────
 
     /**
-     * Calculates a RuneScape-style combat level based on 5 skills.
+     * Calculates a RuneScape-style combat level using ALL combat stats.
      *
-     * Formula (adapted from OSRS, no Hitpoints/Slayer):
-     *   base   = 0.25 × (Defence + floor(Prayer / 2))
-     *   melee  = 0.650 × Melee          (represents Attack + Strength combined)
-     *   ranged = 0.4875 × Ranged        (0.325 × 1.5 × Ranged)
-     *   magic  = 0.4875 × Magic         (0.325 × 1.5 × Magic)
-     *   combat = min(99, floor(base + max(melee, ranged, magic)))
+     * MELEE represents both Attack AND Strength combined (attack+strength = MELEE).
+     * All five combat skills contribute to the final level, not just the dominant one.
      *
-     * Max at all 99: min(99, floor(37 + 64.35)) = 99 (capped)
+     * Formula:
+     *   base      = 0.25 × (Defence + floor(Prayer / 2))
+     *   melee     = 0.65   × Melee   (0.325 × attack + 0.325 × strength = 0.65 × MELEE)
+     *   ranged    = 0.4875 × Ranged
+     *   magic     = 0.4875 × Magic
+     *   dominant  = max(melee, ranged, magic)
+     *   secondary = (melee + ranged + magic − dominant) × 0.15  ← non-dominant styles add 15 %
+     *   combat    = min(99, floor(base + dominant + secondary))
+     *
+     * At all 99: 37 + 64.35 + (48.26+48.26)×0.15 ≈ 115 → capped at 99.
+     * At melee99 only: ~65 — specialised fighters still show strong combat level.
      */
     public static int getCombatLevel(int melee, int ranged, int defence, int prayer, int magic) {
-        double base   = 0.25 * (defence + Math.floor(prayer / 2.0));
-        double meleeLvl  = 0.650  * melee;
-        double rangedLvl = 0.4875 * ranged;
-        double magicLvl  = 0.4875 * magic;
-        return Math.min(99, (int) Math.floor(base + Math.max(meleeLvl, Math.max(rangedLvl, magicLvl))));
+        double base      = 0.25 * (defence + Math.floor(prayer / 2.0));
+        double meleeC    = 0.65   * melee;   // Attack + Strength combined
+        double rangedC   = 0.4875 * ranged;
+        double magicC    = 0.4875 * magic;
+        double dominant  = Math.max(meleeC, Math.max(rangedC, magicC));
+        double secondary = (meleeC + rangedC + magicC - dominant) * 0.15;
+        return Math.min(99, (int) Math.floor(base + dominant + secondary));
     }
 }

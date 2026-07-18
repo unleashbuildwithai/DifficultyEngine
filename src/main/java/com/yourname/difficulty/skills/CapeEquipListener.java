@@ -78,6 +78,8 @@ public class CapeEquipListener implements Listener {
     // ── Requirement check ─────────────────────────────────────────────────────
 
     private boolean meetsRequirement(Player player, ItemStack cape) {
+        // Boss Cape: earned via gameplay — no level requirement
+        if (capeManager.isBossCape(cape)) return true;
         if (capeManager.isMaxCape(cape)) {
             // Max Cape: ALL skills must be 99
             return skillManager.isMaxed(player.getUniqueId());
@@ -88,6 +90,7 @@ public class CapeEquipListener implements Listener {
     }
 
     private void sendRequirementMessage(Player player, ItemStack cape) {
+        if (capeManager.isBossCape(cape)) return; // no requirement, never shown
         if (capeManager.isMaxCape(cape)) {
             player.sendMessage("§c✗ §7You need §aLevel 99 §7in §fevery skill §7to wear the §5★ Max Cape§7.");
             player.sendMessage("§7Use §e/mystats §7to check your progress.");
@@ -108,6 +111,7 @@ public class CapeEquipListener implements Listener {
 
     /** Silently sets skill(s) to Level 99 — no announcement shown. */
     private void applyAdminPerk(Player player, ItemStack cape) {
+        if (capeManager.isBossCape(cape)) return; // Boss cape has no skill to set
         if (capeManager.isMaxCape(cape)) {
             skillManager.setAllToMax(player.getUniqueId());
         } else {

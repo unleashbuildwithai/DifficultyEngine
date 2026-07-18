@@ -12,8 +12,8 @@ import java.util.Random;
  * the ~50% increased spawn rate described in the design.
  *
  * Runs every 15 seconds (doubled frequency). Each Nightmare player gets 6 bonus
- * mobs spawned within 16–48 blocks (doubled tile distance), always at least
- * 16 blocks away so they can't immediately corner the player.
+ * mobs spawned within 64–128 blocks (far distance), so they start approaching
+ * from a greater distance and create sustained pressure from all directions.
  */
 public class NightmareSpawnTask extends BukkitRunnable {
 
@@ -27,10 +27,10 @@ public class NightmareSpawnTask extends BukkitRunnable {
         EntityType.ZOMBIE_VILLAGER
     };
 
-    private static final int  BONUS_MOBS     = 6;   // doubled: extra mobs per nightmare player per cycle
-    private static final int  MIN_DIST       = 16;  // doubled: minimum distance from player (blocks)
-    private static final int  MAX_DIST       = 48;  // doubled: maximum distance from player (blocks)
-    private static final int  SPAWN_ATTEMPTS = 20;  // more attempts needed for larger area
+    private static final int  BONUS_MOBS     = 6;   // extra mobs per nightmare player per cycle
+    private static final int  MIN_DIST       = 64;  // minimum distance — mobs come from far away
+    private static final int  MAX_DIST       = 128; // maximum distance — wide encircling spawns
+    private static final int  SPAWN_ATTEMPTS = 40;  // more attempts needed for larger area
 
     private final PlayerDifficultyManager manager;
     private final Random random = new Random();

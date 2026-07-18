@@ -5,8 +5,12 @@ import com.yourname.difficulty.gui.CapeSlotGUIListener;
 import com.yourname.difficulty.gui.RegistryGUI;
 import com.yourname.difficulty.gui.RegistryGUIListener;
 import com.yourname.difficulty.items.ItemFactory;
+import com.yourname.difficulty.listeners.BossEventListener;
+import com.yourname.difficulty.listeners.CapeVisualTask;
 import com.yourname.difficulty.listeners.DifficultyEngine;
+import com.yourname.difficulty.listeners.GroupDifficultyListener;
 import com.yourname.difficulty.listeners.LevelProtectionListener;
+import com.yourname.difficulty.listeners.MageGearCraftListener;
 import com.yourname.difficulty.listeners.MinecartListener;
 import com.yourname.difficulty.listeners.NightmareAggroListener;
 import com.yourname.difficulty.listeners.PrayerListener;
@@ -27,9 +31,15 @@ import com.yourname.difficulty.skills.SkillManager;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.ShapelessRecipe;
 import org.bukkit.plugin.java.JavaPlugin;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class Main extends JavaPlugin {
 
@@ -40,6 +50,9 @@ public class Main extends JavaPlugin {
     private SkillManager            skillManager;
     private SkillCapeManager        skillCapeManager;
     private AdminLightCommand       adminLightCommand;
+
+    /** All crafting recipe keys registered by this plugin — used for recipe-book discovery. */
+    private final List<NamespacedKey> allRecipeKeys = new ArrayList<>();
 
     @Override
     public void onEnable() {
@@ -109,6 +122,18 @@ public class Main extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new CapeSlotGUIListener(skillCapeManager, skillManager), this);
 
+        // ── Group Nightmare difficulty (4+ NM players within 50 blocks → ×10) ─
+        getServer().getPluginManager().registerEvents(
+                new GroupDifficultyListener(difficultyManager, this), this);
+
+        // ── Boss events: double spawn (1 %), boss-fight mobs, boss cape ────────
+        getServer().getPluginManager().registerEvents(
+                new BossEventListener(this, skillCapeManager), this);
+
+        // ── Mage Gear crafting: replaces vanilla result with PDC item ──────────
+        getServer().getPluginManager().registerEvents(
+                new MageGearCraftListener(itemFactory), this);
+
         // ── Register commands ─────────────────────────────────────────────────
 
         getCommand("difficulty").setExecutor(new DifficultyCommand(difficultyManager));
@@ -150,12 +175,21 @@ public class Main extends JavaPlugin {
         // ── Crafting recipes ──────────────────────────────────────────────────
         registerCraftingRecipes();
 
+        // ── Recipe discovery on join (shows recipes in the recipe book) ───────
+        registerRecipeDiscovery();
+
         // ── Scheduled tasks ───────────────────────────────────────────────────
-        // Nightmare bonus-spawn — every 15 seconds (doubled frequency, 6 mobs, 16-48 block range)
+
+        // Nightmare bonus-spawn — every 15 seconds (6 mobs, 64-128 block range)
         new NightmareSpawnTask(difficultyManager).runTaskTimer(this, 300L, 300L);
+
+        // Cape visual particles — every 10 ticks (0.5 s)
+        new CapeVisualTask(skillCapeManager, this).runTaskTimer(this, 10L, 10L);
 
         for (Player p : getServer().getOnlinePlayers()) {
             difficultyManager.syncNightmareTag(p, difficultyManager.getDifficulty(p.getUniqueId()));
+            // Discover recipes for already-online players (reload scenario)
+            p.discoverRecipes(allRecipeKeys);
         }
 
         getLogger().info("DifficultyEngine: Ready!");
@@ -163,6 +197,9 @@ public class Main extends JavaPlugin {
         getLogger().info("  Admins  : /gear  /curecosmetic  /adminlight");
         getLogger().info("  Magic   : Right-click elemental staffs to cast spells.");
         getLogger().info("  Prayer  : Right-click bone on dirt to bury it for XP.");
+        getLogger().info("  Mage Gear: Craft with LEATHER_PIECE + PURPLE_DYE + BLAZE_POWDER");
+        getLogger().info("  Boss Cape: Defeat a Double Boss event without dying.");
+        getLogger().info("  Group NM : 4+ nightmare players within 50 blocks → x10 difficulty/rewards");
     }
 
     @Override
@@ -190,6 +227,7 @@ public class Main extends JavaPlugin {
             recipe.addIngredient(el.staffCraftIngredient);        // Element ingredient
             recipe.addIngredient(Material.STICK);                 // Handle
             getServer().addRecipe(recipe);
+            allRecipeKeys.add(key);
         }
 
         // ── Rune recipes: 4× base material → 8 runes ─────────────────────────
@@ -199,10 +237,75 @@ public class Main extends JavaPlugin {
             ShapelessRecipe recipe = new ShapelessRecipe(key, runeResult);
             recipe.addIngredient(4, el.runeCraftIngredient);      // 4× base material
             getServer().addRecipe(recipe);
+            allRecipeKeys.add(key);
         }
 
-        getLogger().info("DifficultyEngine: Registered " + (MagicElement.values().length * 2)
-                + " crafting recipes (4 staffs + 4 rune batches).");
+        // ── Mage Gear recipes: LEATHER_PIECE + PURPLE_DYE + BLAZE_POWDER ──────
+        // MageGearCraftListener intercepts PrepareItemCraftEvent to replace the
+        // vanilla leather result with the PDC-tagged, coloured Mage Gear item.
+
+        NamespacedKey hoodKey = new NamespacedKey(this, "mage_hood_recipe");
+        ShapelessRecipe hoodRecipe = new ShapelessRecipe(hoodKey, new ItemStack(Material.LEATHER_HELMET));
+        hoodRecipe.addIngredient(Material.LEATHER_HELMET);
+        hoodRecipe.addIngredient(Material.PURPLE_DYE);
+        hoodRecipe.addIngredient(Material.BLAZE_POWDER);
+        getServer().addRecipe(hoodRecipe);
+        allRecipeKeys.add(hoodKey);
+
+        NamespacedKey topKey = new NamespacedKey(this, "mage_robe_top_recipe");
+        ShapelessRecipe topRecipe = new ShapelessRecipe(topKey, new ItemStack(Material.LEATHER_CHESTPLATE));
+        topRecipe.addIngredient(Material.LEATHER_CHESTPLATE);
+        topRecipe.addIngredient(Material.PURPLE_DYE);
+        topRecipe.addIngredient(Material.BLAZE_POWDER);
+        getServer().addRecipe(topRecipe);
+        allRecipeKeys.add(topKey);
+
+        NamespacedKey bottomKey = new NamespacedKey(this, "mage_robe_bottom_recipe");
+        ShapelessRecipe bottomRecipe = new ShapelessRecipe(bottomKey, new ItemStack(Material.LEATHER_LEGGINGS));
+        bottomRecipe.addIngredient(Material.LEATHER_LEGGINGS);
+        bottomRecipe.addIngredient(Material.PURPLE_DYE);
+        bottomRecipe.addIngredient(Material.BLAZE_POWDER);
+        getServer().addRecipe(bottomRecipe);
+        allRecipeKeys.add(bottomKey);
+
+        NamespacedKey bootsKey = new NamespacedKey(this, "mage_boots_recipe");
+        ShapelessRecipe bootsRecipe = new ShapelessRecipe(bootsKey, new ItemStack(Material.LEATHER_BOOTS));
+        bootsRecipe.addIngredient(Material.LEATHER_BOOTS);
+        bootsRecipe.addIngredient(Material.PURPLE_DYE);
+        bootsRecipe.addIngredient(Material.BLAZE_POWDER);
+        getServer().addRecipe(bootsRecipe);
+        allRecipeKeys.add(bootsKey);
+
+        int totalRecipes = allRecipeKeys.size();
+        getLogger().info("DifficultyEngine: Registered " + totalRecipes
+                + " crafting recipes (4 staffs + 4 rune batches + 4 mage gear pieces).");
+        getLogger().info("  Mage Gear recipe: LEATHER_PIECE + PURPLE_DYE + BLAZE_POWDER");
+        getLogger().info("  Open crafting table → recipe book to search for them.");
+    }
+
+    // ── Recipe discovery ──────────────────────────────────────────────────────
+
+    /**
+     * Registers a PlayerJoinEvent listener that automatically "unlocks" all
+     * DifficultyEngine crafting recipes in the recipe book for joining players.
+     *
+     * This makes the items searchable in the green recipe book icon that appears
+     * in the crafting table — players can click it and see exactly what ingredients
+     * are required for every craftable item.
+     */
+    private void registerRecipeDiscovery() {
+        getServer().getPluginManager().registerEvents(new Listener() {
+            @EventHandler
+            public void onPlayerJoin(PlayerJoinEvent event) {
+                Player player = event.getPlayer();
+                // Slight delay so the player fully loads before receiving discovery packets
+                getServer().getScheduler().runTaskLater(Main.this, () -> {
+                    if (player.isOnline()) {
+                        player.discoverRecipes(allRecipeKeys);
+                    }
+                }, 10L);
+            }
+        }, this);
     }
 
     // ── Public accessors ──────────────────────────────────────────────────────

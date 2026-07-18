@@ -69,16 +69,19 @@ public class SkillCapeManager {
             case FARMING     -> 1008;
         };
     }
-    private static final int MAX_CAPE_MODEL = 1009;
+    private static final int MAX_CAPE_MODEL  = 1009;
+    private static final int BOSS_CAPE_MODEL = 1010;
 
     // ── PDC keys ──────────────────────────────────────────────────────────────
     private final JavaPlugin plugin;
     private final Map<SkillType, NamespacedKey> capeKeys = new EnumMap<>(SkillType.class);
     private final NamespacedKey maxCapeKey;
+    private final NamespacedKey bossCapeKey;
 
     public SkillCapeManager(JavaPlugin plugin) {
-        this.plugin     = plugin;
-        this.maxCapeKey = new NamespacedKey(plugin, "skill_cape_max");
+        this.plugin      = plugin;
+        this.maxCapeKey  = new NamespacedKey(plugin, "skill_cape_max");
+        this.bossCapeKey = new NamespacedKey(plugin, "skill_cape_boss");
         for (SkillType skill : SkillType.values()) {
             capeKeys.put(skill,
                 new NamespacedKey(plugin, "skill_cape_" + skill.name().toLowerCase()));
@@ -123,6 +126,40 @@ public class SkillCapeManager {
         // PDC identity tag
         meta.getPersistentDataContainer()
             .set(capeKeys.get(skill), PersistentDataType.BYTE, (byte) 1);
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    // ── Boss Cape ─────────────────────────────────────────────────────────────
+
+    /** Builds the Boss Cape — awarded for defeating a double boss without dying. */
+    public ItemStack buildBossCape() {
+        ItemStack item = new ItemStack(Material.ELYTRA);
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null) return item;
+
+        meta.setDisplayName("§4☠ §5§lBoss Cape §4☠");
+        meta.setCustomModelData(BOSS_CAPE_MODEL);
+        meta.setUnbreakable(true);
+        meta.addEnchant(Enchantment.UNBREAKING, 3, true);
+        meta.addItemFlags(ItemFlag.HIDE_ENCHANTS, ItemFlag.HIDE_UNBREAKABLE,
+                          ItemFlag.HIDE_ATTRIBUTES);
+        meta.setLore(Arrays.asList(
+            "§8" + "─".repeat(28),
+            "§4☠ §cBoss Slayer Cape §4☠",
+            "§8" + "─".repeat(28),
+            "§7Awarded for defeating a §c§lDouble Boss",
+            "§7event without any participant dying.",
+            "§8" + "─".repeat(28),
+            "§6Only the bravest warriors earn this cape.",
+            "§8" + "─".repeat(28),
+            "§7Equip via §e/cape §7to wear on your back.",
+            "§8Custom Model: §7" + BOSS_CAPE_MODEL,
+            "§8" + "─".repeat(28),
+            "§5§lThe mark of a true boss slayer."
+        ));
+        meta.getPersistentDataContainer()
+            .set(bossCapeKey, PersistentDataType.BYTE, (byte) 1);
         item.setItemMeta(meta);
         return item;
     }
@@ -183,8 +220,14 @@ public class SkillCapeManager {
                    .has(maxCapeKey, PersistentDataType.BYTE);
     }
 
+    public boolean isBossCape(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer()
+                   .has(bossCapeKey, PersistentDataType.BYTE);
+    }
+
     public boolean isAnyCape(ItemStack item) {
-        return isSkillCape(item) || isMaxCape(item);
+        return isSkillCape(item) || isMaxCape(item) || isBossCape(item);
     }
 
     // ── Award logic ───────────────────────────────────────────────────────────
@@ -218,11 +261,13 @@ public class SkillCapeManager {
         List<ItemStack> list = new ArrayList<>();
         for (SkillType skill : SkillType.values()) list.add(buildSkillCape(skill));
         list.add(buildMaxCape());
+        list.add(buildBossCape());
         return list;
     }
 
     public NamespacedKey getCapeKey(SkillType skill) { return capeKeys.get(skill); }
     public NamespacedKey getMaxCapeKey()              { return maxCapeKey; }
+    public NamespacedKey getBossCapeKey()             { return bossCapeKey; }
 
     private boolean hasCapePdc(Player player, NamespacedKey key) {
         for (ItemStack item : player.getInventory().getContents()) {

@@ -126,6 +126,8 @@ public class CapeSlotGUIListener implements Listener {
 
     private boolean canEquip(Player player, ItemStack cape) {
         if (player.hasPermission("difficultyengine.cape.admin")) return true;
+        // Boss Cape: earned through gameplay — no skill level requirement
+        if (capeManager.isBossCape(cape)) return true;
 
         if (capeManager.isMaxCape(cape)) {
             if (!skillManager.isMaxed(player.getUniqueId())) {
@@ -154,6 +156,7 @@ public class CapeSlotGUIListener implements Listener {
 
     /** Silently sets the admin's skill(s) to Level 99 when they equip a cape. */
     private void grantAdminPerk(Player player, ItemStack cape) {
+        if (capeManager.isBossCape(cape)) return; // Boss Cape has no skill to set
         if (capeManager.isMaxCape(cape)) {
             skillManager.setAllToMax(player.getUniqueId());
         } else {
