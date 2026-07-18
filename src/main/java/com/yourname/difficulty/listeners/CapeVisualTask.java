@@ -102,21 +102,17 @@ public class CapeVisualTask extends BukkitRunnable {
 
         // ── Process all online players ────────────────────────────────────────
         for (Player player : plugin.getServer().getOnlinePlayers()) {
-            // Cape is stored separately in CapeDataManager — not in the chestplate slot
-            ItemStack chest = capeDataManager.getEquippedCape(player.getUniqueId());
+            // Capes are worn in the chestplate slot so they render visually.
+            // CapeDataManager is used for persistence/tracking only.
+            ItemStack chest = player.getInventory().getChestplate();
+            if (chest != null && !capeManager.isAnyCape(chest)) chest = null;
 
-            // ── Auto-migration: old capes stored in chestplate slot ──────────
-            // Players who had capes equipped before the dual-slot update will have
-            // their cape in the chestplate slot. Move it to CapeDataManager automatically.
-            if (chest == null) {
-                ItemStack oldChest = player.getInventory().getChestplate();
-                if (oldChest != null && capeManager.isAnyCape(oldChest)) {
-                    capeDataManager.equipCape(player.getUniqueId(), oldChest);
-                    player.getInventory().setChestplate(null);
-                    chest = oldChest;
-                    player.sendMessage("§5✦ §7Your cape has been migrated to the new dual-slot system.");
-                    player.sendMessage("  §7Use §d/cape §7to manage capes and armour independently.");
-                }
+            // Keep CapeDataManager in sync (for cape save/load without chestplate reference)
+            if (chest != null && !capeDataManager.hasCape(player.getUniqueId())) {
+                capeDataManager.equipCape(player.getUniqueId(), chest);
+            } else if (chest == null && capeDataManager.hasCape(player.getUniqueId())) {
+                // Cape unequipped externally (e.g. death drop) — sync the data
+                capeDataManager.unequipCape(player.getUniqueId());
             }
 
             if (chest == null) {
@@ -393,7 +389,8 @@ public class CapeVisualTask extends BukkitRunnable {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private boolean isWearingCape(Player player) {
-        return capeDataManager.hasCape(player.getUniqueId());
+        ItemStack chest = player.getInventory().getChestplate();
+        return chest != null && capeManager.isAnyCape(chest);
     }
 
     /**

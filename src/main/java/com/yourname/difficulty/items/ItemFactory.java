@@ -84,11 +84,15 @@ public class ItemFactory {
         registry.add(buildEnchantedShard());
         for (MagicElement el : MagicElement.values()) registry.add(buildStaff(el));
         for (MagicElement el : MagicElement.values()) registry.add(buildRune(el, 8));
+        for (MagicElement el : MagicElement.values()) registry.add(buildRuneDust(el, 1));
         // Mage gear set (4 pieces)
         registry.add(buildMageGear(Material.LEATHER_HELMET,     "§5✦ Mage Hood",       "-250ms cooldown"));
         registry.add(buildMageGear(Material.LEATHER_CHESTPLATE, "§5✦ Mage Robe Top",   "-250ms cooldown"));
         registry.add(buildMageGear(Material.LEATHER_LEGGINGS,   "§5✦ Mage Robe Bottom","-250ms cooldown"));
         registry.add(buildMageGear(Material.LEATHER_BOOTS,      "§5✦ Mage Boots",      "-250ms cooldown"));
+        // Spell Book system
+        registry.add(buildArcaneTomeDisplay());
+        registry.add(buildSpellPageDisplay());
         registry.addAll(capeManager.buildAllCapes());
     }
 
@@ -363,6 +367,56 @@ public class ItemFactory {
         if (item == null || !item.hasItemMeta()) return false;
         return item.getItemMeta().getPersistentDataContainer()
                    .has(runeDustKeys.get(element), PersistentDataType.BYTE);
+    }
+
+    // ── Arcane Tome & Spell Page display items (for /registry) ───────────────
+
+    /** Registry display item for the Arcane Tome (the full spell combo book). */
+    public ItemStack buildArcaneTomeDisplay() {
+        ItemStack item = new ItemStack(Material.ENCHANTED_BOOK);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§5✦ Arcane Tome");
+            meta.setLore(List.of(
+                "§8" + "─".repeat(26),
+                "§7Your personal spell combo book.",
+                "§7Pages are unlocked by finding §dSpell Pages§7.",
+                "§8" + "─".repeat(26),
+                "§6How to use:",
+                "§7  /spellbook §8→ §7Open and read your tome.",
+                "§7  Each page teaches §done elemental combo§7.",
+                "§8" + "─".repeat(26),
+                "§7Combos only work after you §dlearn them here§7.",
+                "§8[DifficultyEngine — Arcane Tome]"
+            ));
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    /** Registry display item for a Spell Page (the unlock item). */
+    public ItemStack buildSpellPageDisplay() {
+        ItemStack item = new ItemStack(Material.WRITABLE_BOOK);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§d✧ Spell Page");
+            meta.setLore(List.of(
+                "§8" + "─".repeat(26),
+                "§7A torn page from an ancient spell tome.",
+                "§7Right-click to unlock a random combo in",
+                "§7your §5Arcane Tome§7.",
+                "§8" + "─".repeat(26),
+                "§6How to get Spell Pages:",
+                "§7  §8• §74% drop from any hostile mob",
+                "§7  §8• §7Admin: §e/spellpage [player]",
+                "§7  §8• §7Trade with other players",
+                "§8" + "─".repeat(26),
+                "§7There are §d37 pages §7total (37 combos).",
+                "§8[DifficultyEngine — Spell Page]"
+            ));
+            item.setItemMeta(meta);
+        }
+        return item;
     }
 
     public boolean isAnyRuneDust(ItemStack item) {

@@ -15,22 +15,24 @@ import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.inventory.ItemStack;
 
 /**
- * CapeSlotGUIListener — Handles the redesigned two-slot Cape Wardrobe GUI.
+ * CapeSlotGUIListener — Handles the Cape Wardrobe GUI.
  *
- * ── Armour slot (slot 11) ────────────────────────────────────────────────────
- *   • Click with any non-cape item on cursor → equips as chestplate.
- *     Returns old chestplate to cursor (player can put it in inventory later).
- *   • Click with empty cursor + slot occupied → takes chestplate to cursor.
- *   • Capes are rejected here (use the cape slot instead).
+ * ── Key rules ─────────────────────────────────────────────────────────────────
+ *  • Bottom rows (player inventory): fully interactive — items CAN be moved in
+ *    and out normally.  NO clicks are cancelled down there.
+ *  • Top row (GUI): only slot 13 (CAPE_SLOT) is interactive.  Everything else
+ *    in the top row is cancelled.
  *
- * ── Cape slot (slot 15) ──────────────────────────────────────────────────────
- *   • Click with cape on cursor → equips via CapeDataManager.
- *     Returns old cape (if any) to cursor.
- *   • Click with empty cursor + cape in slot → unequips cape, puts on cursor.
- *   • Level 99 requirement still enforced (admin bypass available).
+ * ── Cape slot (slot 13) logic ─────────────────────────────────────────────────
+ *  Click cape onto slot (cursor has cape):
+ *    → level check enforced
+ *    → old chestplate (if any) returned to player inventory
+ *    → new cape put into player's chestplate slot + tracked in CapeDataManager
  *
- * ── All other slots ──────────────────────────────────────────────────────────
- *   • Cancelled — the player's own inventory (bottom half) is still accessible.
+ *  Click empty cursor on filled slot (cape already equipped):
+ *    → cape removed from chestplate slot
+ *    → cape put on cursor (player drags it to their inventory)
+ *    → CapeDataManager cleared
  */
 public class CapeSlotGUIListener implements Listener {
 
@@ -49,69 +51,45 @@ public class CapeSlotGUIListener implements Listener {
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onInventoryClick(InventoryClickEvent event) {
         if (!CapeSlotGUI.TITLE.equals(event.getView().getTitle())) return;
-        event.setCancelled(true); // cancel by default
 
         if (!(event.getWhoClicked() instanceof Player player)) return;
-        // Only handle clicks in the top (GUI) inventory
         if (event.getClickedInventory() == null) return;
-        if (!event.getClickedInventory().equals(event.getView().getTopInventory())) return;
 
-        int slot = event.getSlot();
+        boolean isTopInventory = event.getClickedInventory()
+                .equals(event.getView().getTopInventory());
 
-        if (slot == CapeSlotGUI.ARMOR_SLOT) {
-            handleArmorSlotClick(player, event);
-        } else if (slot == CapeSlotGUI.CAPE_SLOT) {
-            handleCapeSlotClick(player, event);
+        if (!isTopInventory) {
+            // ── Player's own inventory (bottom rows) ─────────────────────────
+            // Allow all clicks freely — players should be able to pick up and
+            // move items from their own inventory while the GUI is open.
+            return; // do NOT cancel
         }
-        // All other GUI slots stay cancelled
+
+        // ── Top (GUI) inventory ───────────────────────────────────────────────
+        // Only slot 13 (CAPE_SLOT) is interactive; cancel everything else.
+        event.setCancelled(true);
+
+        if (event.getSlot() != CapeSlotGUI.CAPE_SLOT) return;
+
+        handleCapeSlot(player, event);
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.NORMAL)
     public void onInventoryDrag(InventoryDragEvent event) {
-        if (CapeSlotGUI.TITLE.equals(event.getView().getTitle())) {
-            event.setCancelled(true);
-        }
-    }
-
-    // ── Armour slot logic ─────────────────────────────────────────────────────
-
-    private void handleArmorSlotClick(Player player, InventoryClickEvent event) {
-        ItemStack cursor = event.getCursor();
-        ItemStack inSlot = event.getCurrentItem();
-
-        boolean cursorHasItem = cursor != null && !cursor.getType().isAir();
-        boolean slotHasItem   = inSlot  != null && !inSlot.getType().isAir()
-                                && !(inSlot.getType() == Material.LIGHT_GRAY_STAINED_GLASS_PANE);
-
-        if (cursorHasItem) {
-            // Reject capes in armor slot
-            if (capeManager.isAnyCape(cursor)) {
-                player.sendMessage("§c✗ §7Capes go in the §5cape slot §7(right side)!");
+        if (!CapeSlotGUI.TITLE.equals(event.getView().getTitle())) return;
+        // Cancel drags that touch top-inventory slots (glass / non-interactive)
+        for (int slot : event.getRawSlots()) {
+            if (slot < CapeSlotGUI.SIZE) { // 0-26 = top inventory
+                event.setCancelled(true);
                 return;
             }
-            // Equip cursor item as chestplate; return old chestplate to cursor
-            ItemStack old = player.getInventory().getChestplate();
-            player.getInventory().setChestplate(cursor.clone());
-            event.getView().setCursor(
-                (old != null && !old.getType().isAir()) ? old.clone() : new ItemStack(Material.AIR));
-            event.getView().getTopInventory().setItem(CapeSlotGUI.ARMOR_SLOT, cursor.clone());
-            player.sendMessage("§e⚔ §7Armour equipped!");
-
-        } else if (slotHasItem) {
-            // Take chestplate to cursor
-            ItemStack chest = player.getInventory().getChestplate();
-            if (chest != null && !chest.getType().isAir()) {
-                player.getInventory().setChestplate(null);
-                event.getView().setCursor(chest.clone());
-                event.getView().getTopInventory().setItem(CapeSlotGUI.ARMOR_SLOT, emptyArmorSlot());
-                player.sendMessage("§7Armour removed.");
-            }
         }
+        // Drags entirely in the player inventory (slots ≥ 27) are allowed.
     }
 
     // ── Cape slot logic ───────────────────────────────────────────────────────
 
-    private void handleCapeSlotClick(Player player, InventoryClickEvent event) {
+    private void handleCapeSlot(Player player, InventoryClickEvent event) {
         ItemStack cursor = event.getCursor();
         ItemStack inSlot = event.getCurrentItem();
 
@@ -119,22 +97,53 @@ public class CapeSlotGUIListener implements Listener {
         boolean slotHasCape   = inSlot  != null && capeManager.isAnyCape(inSlot);
 
         if (cursorHasCape && !slotHasCape) {
-            // Player wants to EQUIP a cape
+            // ── EQUIP a cape from cursor ──────────────────────────────────────
             if (!canEquip(player, cursor)) return;
-            // Swap into CapeDataManager
-            ItemStack old = capeDataManager.equipCape(player.getUniqueId(), cursor);
+
+            // Return old chestplate to inventory (if any)
+            ItemStack current = player.getInventory().getChestplate();
+            if (current != null && !current.getType().isAir()) {
+                player.getInventory().addItem(current);
+            }
+
+            // Grant admin perk
+            if (player.hasPermission("difficultyengine.cape.admin")) {
+                grantAdminPerk(player, cursor);
+            }
+
+            // Equip cape: put in chestplate slot (for visual) + track in CapeDataManager
+            player.getInventory().setChestplate(cursor.clone());
+            capeDataManager.equipCape(player.getUniqueId(), cursor);
+
+            // Clear cursor and update GUI slot
+            event.getView().setCursor(new ItemStack(Material.AIR));
             event.getView().getTopInventory().setItem(CapeSlotGUI.CAPE_SLOT, cursor.clone());
-            event.getView().setCursor(
-                (old != null && !old.getType().isAir()) ? old.clone() : new ItemStack(Material.AIR));
-            if (player.hasPermission("difficultyengine.cape.admin")) grantAdminPerk(player, cursor);
+
             player.sendMessage("§5✦ §7Cape equipped! §5✦");
 
         } else if (slotHasCape && (cursor == null || cursor.getType().isAir())) {
-            // Player wants to UNEQUIP the cape
-            ItemStack old = capeDataManager.unequipCape(player.getUniqueId());
-            event.getView().setCursor(old != null ? old.clone() : new ItemStack(Material.AIR));
+            // ── UNEQUIP the cape ──────────────────────────────────────────────
+            player.getInventory().setChestplate(null);
+            capeDataManager.unequipCape(player.getUniqueId());
+
+            // Put cape on cursor so player can drag it to their inventory
+            event.getView().setCursor(inSlot.clone());
             event.getView().getTopInventory().setItem(CapeSlotGUI.CAPE_SLOT, emptyCapeSlot());
-            player.sendMessage("§7Cape unequipped.");
+
+            player.sendMessage("§7Cape unequipped — drag it to your inventory.");
+
+        } else if (cursorHasCape && slotHasCape) {
+            // ── SWAP cape ─────────────────────────────────────────────────────
+            if (!canEquip(player, cursor)) return;
+            if (player.hasPermission("difficultyengine.cape.admin")) grantAdminPerk(player, cursor);
+
+            // Return current cape to cursor, equip the new one
+            ItemStack oldCape = player.getInventory().getChestplate();
+            player.getInventory().setChestplate(cursor.clone());
+            capeDataManager.equipCape(player.getUniqueId(), cursor);
+            event.getView().setCursor(oldCape != null ? oldCape.clone() : new ItemStack(Material.AIR));
+            event.getView().getTopInventory().setItem(CapeSlotGUI.CAPE_SLOT, cursor.clone());
+            player.sendMessage("§5✦ §7Cape swapped! §5✦");
         }
     }
 
@@ -175,19 +184,15 @@ public class CapeSlotGUIListener implements Listener {
         }
     }
 
-    // ── Slot placeholder builders ─────────────────────────────────────────────
-
-    private ItemStack emptyArmorSlot() {
-        ItemStack it = new ItemStack(Material.LIGHT_GRAY_STAINED_GLASS_PANE);
-        org.bukkit.inventory.meta.ItemMeta m = it.getItemMeta();
-        if (m != null) { m.setDisplayName("§7[ Armour Slot ]"); it.setItemMeta(m); }
-        return it;
-    }
+    // ── Placeholder builder ───────────────────────────────────────────────────
 
     private ItemStack emptyCapeSlot() {
         ItemStack it = new ItemStack(Material.LIGHT_GRAY_STAINED_GLASS_PANE);
         org.bukkit.inventory.meta.ItemMeta m = it.getItemMeta();
-        if (m != null) { m.setDisplayName("§7[ Cape Slot ]"); it.setItemMeta(m); }
+        if (m != null) {
+            m.setDisplayName("§7[ Cape Slot ]");
+            it.setItemMeta(m);
+        }
         return it;
     }
 }
