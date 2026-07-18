@@ -50,6 +50,7 @@ public class Main extends JavaPlugin {
     private SkillManager            skillManager;
     private SkillCapeManager        skillCapeManager;
     private AdminLightCommand       adminLightCommand;
+    private CapeVisualTask          capeVisualTask;
 
     /** All crafting recipe keys registered by this plugin — used for recipe-book discovery. */
     private final List<NamespacedKey> allRecipeKeys = new ArrayList<>();
@@ -183,8 +184,12 @@ public class Main extends JavaPlugin {
         // Nightmare bonus-spawn — every 15 seconds (6 mobs, 64-128 block range)
         new NightmareSpawnTask(difficultyManager).runTaskTimer(this, 300L, 300L);
 
-        // Cape visual particles — every 10 ticks (0.5 s)
-        new CapeVisualTask(skillCapeManager, this).runTaskTimer(this, 10L, 10L);
+        // Sweep any orphaned cape hologram stands left from a previous crash/reload
+        new CapeVisualTask(skillCapeManager, this).cleanup();
+
+        // Cape visual particles + floating hologram symbol — every 10 ticks (0.5 s)
+        this.capeVisualTask = new CapeVisualTask(skillCapeManager, this);
+        capeVisualTask.runTaskTimer(this, 10L, 10L);
 
         for (Player p : getServer().getOnlinePlayers()) {
             difficultyManager.syncNightmareTag(p, difficultyManager.getDifficulty(p.getUniqueId()));
@@ -207,6 +212,7 @@ public class Main extends JavaPlugin {
         if (difficultyManager != null) difficultyManager.saveAll();
         if (skillManager      != null) skillManager.saveAll();
         if (adminLightCommand != null) adminLightCommand.disableAll();
+        if (capeVisualTask    != null) capeVisualTask.cleanup();
         for (Player p : getServer().getOnlinePlayers()) {
             SkillBonusManager.removeDefenceHpBonus(p);
         }
