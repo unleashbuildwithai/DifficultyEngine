@@ -144,7 +144,7 @@ public class VipShopListener implements Listener {
             player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f);
             return;
         }
-        goldManager.removeBalance(player.getUniqueId(), price);
+        goldManager.spendGold(player.getUniqueId(), price);
         player.getInventory().addItem(item);
         player.sendMessage("§6✦ §7Purchased: §f" + itemName + " §7for §e"
             + GoldManager.formatGold(price) + " gp§7!");
