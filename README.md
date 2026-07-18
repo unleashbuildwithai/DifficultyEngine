@@ -4,6 +4,58 @@ A **Paper 1.21** plugin that transforms vanilla Minecraft into a deep RPG experi
 
 ---
 
+## 🆕 Latest Update — Build `a7abf1a` (Rebuild & Restart Required)
+
+> **Server admin:** Rebuild the JAR (`mvn clean package`) and replace your old `DifficultyEngine.jar` in `plugins/` before restarting.
+
+### What's New This Session
+
+#### 🪣 Rune Dust System — Full Overhaul
+- **Magic Cauldron crafting** — place a Cauldron + element ingredients in the crafting table:
+  - 🔥 `Cauldron + Lava Bucket + 4× Netherrack` → **16 Fire Rune Dust**
+  - 💧 `Cauldron + 2× Water Bucket + 4× Prismarine Shard` → **16 Water Rune Dust**
+  - 🌿 `Cauldron + Water Bucket + 4× Dirt` → **16 Earth Rune Dust**
+  - 💨 `Cauldron + Pufferfish + Water Bucket` → **16 Air Rune Dust**
+  - **Add 1 Diamond** to any of the above → **80 dust (5× bonus!)**
+- **Expanded mob loot tables** — harder mobs now drop significantly more Rune Dust:
+  - Wither → **20–30** 🔥 (guaranteed)
+  - Elder Guardian → **15–25** 💧 (guaranteed)
+  - Warden → **25–35** 🌿 (guaranteed)
+  - Evoker → **5–10** 💨 at 70%
+  - Breeze → **4–8** 💨 at 60%
+  - Magma Cubes now scale by size (large drops more than small)
+
+#### 💨 Air Spell — No More Aimbot
+- Air staff now fires a **visible bolt in your crosshair direction** like Fire/Water/Earth.
+  All combo logic (Frozen death, Inferno Blast, etc.) still works — you just aim it yourself now.
+
+#### 🎭 Cape Wardrobe — Dual Slot
+- **Wear armour AND a cape at the same time!** The `/cape` GUI now has two independent slots.
+- Cape is stored separately from the chestplate slot — no more conflicts.
+
+#### ✨ Spell × Block Interactions
+- Fire bolt → Water block = **evaporates** (steam cloud)
+- Earth bolt → Water block = **Quicksand** (Soul Sand, slows movement)
+- Air bolt → Quicksand = **SANDSTORM** (200-block radius, 15-min cap, dehydration BossBar)
+- Earth × 2 hits on same target = **SUFFOCATE** (buried in dirt for 5s)
+- Fire bolt → Slime = **Fire Slime** (sets players on fire on contact)
+- Water bolt → Slime = **15% chance** to split the slime
+
+#### ☁ Sandstorm
+- Triggered by Air bolt on Earth-created Quicksand (read the Spell Books!)
+- 200-block radius, sandy particles every 5 ticks, 0.5♥ damage/2s
+- **Hydration BossBar** (8 levels) — drain 1/2s in storm, drink Water Bottle to refill
+- First cast = 15s. Each re-cast **doubles** duration, capped at **15 minutes**
+
+#### 🐠 Fishing Cape Visual
+- Tropical Fish now **physically spawn and flop out** of the cape every 2 seconds
+- Axolotl cameo floats out every 6 seconds
+- Massively increased water particle counts
+
+---
+
+---
+
 ## 📋 Table of Contents
 
 1. [Installation](#-installation)
