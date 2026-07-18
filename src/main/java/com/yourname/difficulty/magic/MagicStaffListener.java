@@ -8,6 +8,7 @@ import com.yourname.difficulty.skills.SkillType;
 import org.bukkit.FluidCollisionMode;
 import org.bukkit.Material;
 import org.bukkit.Particle;
+import org.bukkit.Sound;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Entity;
@@ -20,13 +21,14 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.ProjectileHitEvent;
-import org.bukkit.event.inventory.CraftItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Vector;
 
@@ -34,71 +36,86 @@ import java.util.Collection;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Random;
 import java.util.UUID;
 
 /**
- * MagicStaffListener — Handles elemental staff casting with status effects.
+ * MagicStaffListener — Full elemental combo system with 9 status effects.
  *
- * ── Cooldown formula ────────────────────────────────────────────────────────
- *  Base: 3000ms
- *  Level reduction: (magicLevel/99) × 2000ms  → Lv99 = 1000ms base
- *  Mage gear: 250ms off per piece equipped     → full set = −1000ms more
- *  Minimum: 500ms regardless
+ * ── Status Effects ────────────────────────────────────────────────────────────
+ *  WET      (5–10s)  : Water hit. Enables combo transitions.
+ *  MUDDY    (15–30s) : Earth + WET → Slowness IV.
+ *  CHILLED  (2.5s)   : Air + WET → Slowness II. Short window = high level needed.
+ *  FROZEN   (5s)     : Air + CHILLED → Total freeze. Air gust = INSTANT DEATH.
+ *  STATUE   (8s)     : Fire + MUDDY → Dirt statue. Air gust = INSTANT DEATH.
+ *  SCORCHED (3s)     : First Fire hit → mild burn. Short window for follow-up.
+ *  BLAZING  (5s)     : Fire + SCORCHED → Intense fire, strong DOT.
+ *  MIND_BOMB(5s)     : 5% mage-gear chance → Nausea + Blindness.
+ *  FALLEN   (3s)     : 30% Mind Bomb chance → Crawl pose. Press SPACE to stand.
  *
- * ── Status Effects ───────────────────────────────────────────────────────────
- *  WET    (5–10s)  : Applied by Water hit. Re-applied on each water hit.
- *  MUDDY  (15–30s) : Applied when Earth hits a WET target. Slowness IV.
- *  FROZEN (5s)     : Applied when Fire hits a MUDDY target. Total immobility.
+ * ── Full Combo Table ──────────────────────────────────────────────────────────
+ *  FIRE on SCORCHED   → BLAZING (intense burn)
+ *  FIRE on WET        → Extinguish (steam, no fire)
+ *  FIRE on MUDDY      → STATUE (dirt shatter, 8s immobile, Air=death)
+ *  FIRE on CHILLED    → Thaw (small blast, remove chill)
+ *  FIRE on FROZEN     → Thaw Explosion (fire+steam, area damage)
+ *  FIRE on dry        → SCORCHED (3s)
  *
- *  Combo chain:
- *    WATER → EARTH  = MUDDY  (Slowness IV)
- *    MUDDY + FIRE   = FROZEN (5s — can't move)
- *    FROZEN + AIR   = INSTANT DEATH (shattered on ground impact)
+ *  WATER on SCORCHED  → Steam Burst (extra damage, remove scorch)
+ *  WATER on BLAZING   → Steam Explosion (AoE damage, heavy knockback)
+ *  WATER on dry       → WET
  *
- *  Other interactions:
- *    FIRE  + WET target  → extinguishes Wet (no fire), steam particles
- *    AIR   + WET target  → dries target (no knockback), steam particles
- *    EARTH + WET target  → removes Wet, applies MUDDY (Slowness IV)
- *    EARTH + dry target  → damage + dirt particles
+ *  EARTH on WET       → MUDDY (Slowness IV)
+ *  EARTH on CHILLED   → Cracked Ice (Blindness + Slowness + damage)
+ *  EARTH on STATUE    → Crumble (bonus damage, remove statue)
+ *  EARTH on dry       → Normal damage
  *
- * ── Ranges / Projectiles ─────────────────────────────────────────────────────
- *  FIRE  : SmallFireball — travels until it hits
- *  WATER : Snowball projectile — travels until it hits (same range as fire)
- *          RIGHT_CLICK_BLOCK + bucket → 5-block water river on ground
- *  EARTH : Snowball projectile — travels until it hits
- *  AIR   : Direct range-check (20 blocks), closer = more knockback × magic level
+ *  AIR on FROZEN      → INSTANT DEATH (shattered)
+ *  AIR on STATUE      → INSTANT DEATH (crumbled)
+ *  AIR on CHILLED     → FROZEN (5s)
+ *  AIR on WET         → CHILLED (2.5s, short window)
+ *  AIR on MUDDY       → Mud Launch (massive upward knockback)
+ *  AIR on BLAZING     → Inferno Blast (fire + huge knockback)
+ *  AIR on SCORCHED    → Fanned Flames (extra fire ticks)
+ *  AIR on dry         → Heavy knockback (greatly buffed)
  *
- * ── Level scaling ─────────────────────────────────────────────────────────────
- *  Damage:         floor(level/33) extra hearts
- *  Wet duration:   5s + (level/99)×5s  = 5–10s
- *  Muddy duration: 15s + (level/99)×15s = 15–30s
- *  Fire duration:  2s + (level/99)×2s  = 2–4s
- *  Air strength:   1.0 + (level/99)×2.5 × distance factor (massively buffed)
+ *  MAGE GEAR (2+ pieces) on any hit → 5% MIND BOMB
+ *  MIND BOMB → 30% chance FALLEN (crawl, press SPACE to get up)
+ *
+ * ── Cooldown formula ──────────────────────────────────────────────────────────
+ *  Base 3000ms − (level/99)×2000ms − (mage pieces)×250ms, minimum 500ms.
+ *  Higher levels cast faster → chain combos within tight status windows.
  */
 public class MagicStaffListener implements Listener {
 
-    // ── Metadata keys for status effects ─────────────────────────────────────
-    public static final String META_WET    = "magic_wet";    // value = expiry ms
-    public static final String META_MUDDY  = "magic_muddy";  // value = expiry ms
-    public static final String META_FROZEN = "magic_frozen"; // value = expiry ms
+    // ── Status effect metadata keys ───────────────────────────────────────────
+    public static final String META_WET       = "magic_wet";
+    public static final String META_MUDDY     = "magic_muddy";
+    public static final String META_CHILLED   = "magic_chilled";
+    public static final String META_FROZEN    = "magic_frozen";
+    public static final String META_STATUE    = "magic_statue";
+    public static final String META_SCORCHED  = "magic_scorched";
+    public static final String META_BLAZING   = "magic_blazing";
+    public static final String META_MIND_BOMB = "magic_mind_bomb";
+    public static final String META_FALLEN    = "magic_fallen";
 
-    private static final int  AIR_RANGE = 20;   // max range for air gust (blocks)
+    private static final int    AIR_RANGE     = 20;
+    private static final Random RAND          = new Random();
 
-    private final ItemFactory   itemFactory;
-    private final SkillManager  skillManager;
-    private final JavaPlugin    plugin;
+    private final ItemFactory  itemFactory;
+    private final SkillManager skillManager;
+    private final JavaPlugin   plugin;
 
-    /** projectile UUID → MagicElement */
-    private final Map<UUID, MagicElement> trackedProjectiles = new HashMap<>();
-    /** projectile UUID → shooter UUID */
-    private final Map<UUID, UUID> projectileShooters = new HashMap<>();
-    /** projectile UUID → magic level at cast time (for scaling effects) */
-    private final Map<UUID, Integer> projectileLevels = new HashMap<>();
-    /** player UUID → (element → last cast time ms) */
-    private final Map<UUID, Map<MagicElement, Long>> cooldowns = new HashMap<>();
+    private final Map<UUID, MagicElement>              trackedProjectiles = new HashMap<>();
+    private final Map<UUID, UUID>                      projectileShooters = new HashMap<>();
+    private final Map<UUID, Integer>                   projectileLevels   = new HashMap<>();
+    private final Map<UUID, Map<MagicElement, Long>>   cooldowns          = new HashMap<>();
+    /** tracks the repeating task keeping FALLEN players in swim pose */
+    private final Map<UUID, BukkitTask>                fallenTasks        = new HashMap<>();
 
-    private static final long MAGIC_XP_CAST = 10L;
-    private static final long MAGIC_XP_HIT  =  5L;
+    private static final long MAGIC_XP_CAST  = 10L;
+    private static final long MAGIC_XP_HIT   =  5L;
+    private static final long MAGIC_XP_COMBO = 25L;
 
     public MagicStaffListener(ItemFactory itemFactory, SkillManager skillManager,
                                JavaPlugin plugin) {
@@ -107,21 +124,23 @@ public class MagicStaffListener implements Listener {
         this.plugin       = plugin;
     }
 
-    // ── Right-click cast ──────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════════
+    //  RIGHT-CLICK CAST
+    // ══════════════════════════════════════════════════════════════════════════
 
     @EventHandler(priority = EventPriority.NORMAL)
     public void onPlayerInteract(PlayerInteractEvent event) {
         Action action = event.getAction();
         if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) return;
 
-        Player    player  = event.getPlayer();
-        ItemStack hand    = player.getInventory().getItemInMainHand();
+        Player       player  = event.getPlayer();
+        ItemStack    hand    = player.getInventory().getItemInMainHand();
         MagicElement element = itemFactory.getStaffElement(hand);
         if (element == null) return;
 
         event.setCancelled(true);
 
-        int magicLevel = skillManager.getLevel(player.getUniqueId(), SkillType.MAGIC);
+        int  magicLevel = skillManager.getLevel(player.getUniqueId(), SkillType.MAGIC);
         long cooldownMs = getCooldownMs(player, magicLevel);
 
         if (!checkAndSetCooldown(player.getUniqueId(), element, cooldownMs)) {
@@ -141,14 +160,10 @@ public class MagicStaffListener implements Listener {
         castSpell(player, element, magicLevel, action, event.getClickedBlock());
     }
 
-    // ── Cooldown formula ──────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════════
+    //  COOLDOWN FORMULA
+    // ══════════════════════════════════════════════════════════════════════════
 
-    /**
-     * Dynamic cooldown: 3000ms base, reduced by magic level and mage gear.
-     * Level: (level/99) × 2000ms reduction  → Lv99 = −2000ms
-     * Gear:  250ms per mage gear piece worn  → full set = −1000ms
-     * Minimum: 500ms.
-     */
     private long getCooldownMs(Player player, int magicLevel) {
         long cd = 3000L;
         cd -= (long) ((magicLevel / 99.0) * 2000L);
@@ -156,25 +171,26 @@ public class MagicStaffListener implements Listener {
         return Math.max(500L, cd);
     }
 
-    // ── Spell dispatch ────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════════
+    //  SPELL DISPATCH
+    // ══════════════════════════════════════════════════════════════════════════
 
     private void castSpell(Player player, MagicElement element, int magicLevel,
                            Action action, Block clickedBlock) {
-        switch (element) {
-            case FIRE  -> castFire(player, magicLevel);
-            case WATER -> castWater(player, magicLevel, action);
-            case EARTH -> castEarth(player, magicLevel);
-            case AIR   -> castAir(player, magicLevel);
-        }
+        if (element == MagicElement.FIRE)  { castFire(player, magicLevel); }
+        else if (element == MagicElement.WATER) { castWater(player, magicLevel, action); }
+        else if (element == MagicElement.EARTH) { castEarth(player, magicLevel); }
+        else if (element == MagicElement.AIR)   { castAir(player, magicLevel); }
     }
 
-    // ── FIRE ──────────────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════════
+    //  FIRE STAFF
+    // ══════════════════════════════════════════════════════════════════════════
 
     private void castFire(Player player, int magicLevel) {
         SmallFireball fb = player.getWorld().spawn(
             player.getEyeLocation().add(player.getLocation().getDirection().multiply(1.5)),
-            SmallFireball.class
-        );
+            SmallFireball.class);
         fb.setDirection(player.getLocation().getDirection().multiply(1.5));
         fb.setShooter(player);
         fb.setIsIncendiary(true);
@@ -187,15 +203,15 @@ public class MagicStaffListener implements Listener {
         player.sendActionBar("§c🔥 §7Fireball launched! §8(Lv " + magicLevel + ")");
     }
 
-    // ── WATER ─────────────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════════
+    //  WATER STAFF
+    // ══════════════════════════════════════════════════════════════════════════
 
     private void castWater(Player player, int magicLevel, Action action) {
-        // Ground cast (right-click a solid block with bucket in inventory) → river
         if (action == Action.RIGHT_CLICK_BLOCK) {
             RayTraceResult ray = player.getWorld().rayTraceBlocks(
                 player.getEyeLocation(), player.getLocation().getDirection(), 5,
-                FluidCollisionMode.NEVER, true
-            );
+                FluidCollisionMode.NEVER, true);
             if (ray != null && ray.getHitBlock() != null) {
                 if (!hasWaterBucket(player)) {
                     player.sendActionBar("§b💧 §7Need a §bWater Bucket §7to create a river!");
@@ -207,41 +223,36 @@ public class MagicStaffListener implements Listener {
             }
         }
 
-        // Combat cast → shoot water bolt projectile (travels until it hits)
         Snowball bolt = player.launchProjectile(Snowball.class);
-        bolt.setItem(new ItemStack(Material.PRISMARINE_SHARD)); // blue-tinted appearance
-        bolt.setVelocity(player.getLocation().getDirection().multiply(2.5)); // fast like fire
+        bolt.setItem(new ItemStack(Material.PRISMARINE_SHARD));
+        bolt.setVelocity(player.getLocation().getDirection().multiply(2.5));
 
         trackedProjectiles.put(bolt.getUniqueId(), MagicElement.WATER);
         projectileShooters.put(bolt.getUniqueId(), player.getUniqueId());
         projectileLevels.put(bolt.getUniqueId(), magicLevel);
 
-        // Trailing water particles
         plugin.getServer().getScheduler().runTaskTimer(plugin,
             task -> {
                 if (!bolt.isValid()) { task.cancel(); return; }
-                bolt.getWorld().spawnParticle(Particle.SPLASH,
-                    bolt.getLocation(), 3, 0.1, 0.1, 0.1, 0.0);
+                bolt.getWorld().spawnParticle(Particle.SPLASH, bolt.getLocation(), 3, 0.1, 0.1, 0.1, 0.0);
             }, 0L, 1L);
 
         player.sendActionBar("§b💧 §7Water bolt fired!");
     }
 
     private boolean hasWaterBucket(Player player) {
-        for (ItemStack i : player.getInventory().getContents()) {
+        for (ItemStack i : player.getInventory().getContents())
             if (i != null && i.getType() == Material.WATER_BUCKET) return true;
-        }
         return false;
     }
 
     private void placeWaterStream(Player player, Block hitBlock) {
-        BlockFace direction = getHorizontalFacing(player);
+        BlockFace dir = getHorizontalFacing(player);
         Block start = hitBlock.getRelative(BlockFace.UP);
         for (int i = 0; i < 5; i++) {
-            Block b = start.getRelative(direction, i);
-            if (b.getType().isAir() || b.getType() == Material.WATER) {
-                b.setType(Material.WATER);
-            } else break;
+            Block b = start.getRelative(dir, i);
+            if (b.getType().isAir() || b.getType() == Material.WATER) b.setType(Material.WATER);
+            else break;
         }
     }
 
@@ -253,10 +264,11 @@ public class MagicStaffListener implements Listener {
         return BlockFace.EAST;
     }
 
-    // ── EARTH ─────────────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════════
+    //  EARTH STAFF
+    // ══════════════════════════════════════════════════════════════════════════
 
     private void castEarth(Player player, int magicLevel) {
-        // Shoot a dirt-looking snowball projectile (same range as fire)
         Snowball bolt = player.launchProjectile(Snowball.class);
         bolt.setItem(new ItemStack(Material.DIRT));
         bolt.setVelocity(player.getLocation().getDirection().multiply(2.2));
@@ -268,139 +280,211 @@ public class MagicStaffListener implements Listener {
         player.sendActionBar("§2🌿 §7Earth bolt fired!");
     }
 
-    // ── AIR ───────────────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════════
+    //  AIR STAFF — heavily buffed + full combo matrix
+    // ══════════════════════════════════════════════════════════════════════════
 
-    /**
-     * Air gust: massively powerful distance-based knockback.
-     *
-     * ── FROZEN COMBO ─────────────────────────────────────────────────────────
-     *  If the target is FROZEN (hardened mud), gusting them causes instant death.
-     *  They are launched while frozen solid and shatter on impact with the ground.
-     *
-     * ── Knockback formula ────────────────────────────────────────────────────
-     *  knockbackBlocks = 3.0 + (AIR_RANGE − distance) × 1.4
-     *    At dist=20:  3 blocks knockback
-     *    At dist= 1: ~29 blocks knockback
-     *
-     *  velocity = knockbackBlocks × 0.22 × levelMult
-     *  levelMult = 1.0 at Lv1 → 3.5 at Lv99  (was 0.5→2.0)
-     */
     private void castAir(Player player, int magicLevel) {
         LivingEntity target = nearestEntity(player, AIR_RANGE);
-        if (target != null) {
-
-            // ── FROZEN + AIR = INSTANT DEATH ──────────────────────────────────
-            if (isFrozen(target)) {
-                removeFrozen(target);
-                // Ice-shatter particle burst
-                target.getWorld().spawnParticle(Particle.SNOWFLAKE,
-                    target.getLocation().add(0, 1, 0), 80, 0.8, 0.8, 0.8, 0.3);
-                target.getWorld().spawnParticle(Particle.CLOUD,
-                    target.getLocation().add(0, 1, 0), 40, 0.5, 0.5, 0.5, 0.15);
-                target.getWorld().spawnParticle(Particle.ITEM,
-                    target.getLocation().add(0, 1, 0), 60, 0.5, 0.5, 0.5, 0.3,
-                    new ItemStack(Material.ICE));
-                // Instant kill
-                if (target instanceof Player tp) {
-                    tp.setHealth(0);
-                    tp.sendTitle("§b❄ §c§lSHATTERED",
-                        "§7Frozen solid — you hit the ground and shattered!", 5, 40, 15);
-                } else {
-                    target.setHealth(0);
-                }
-                awardMagicXp(player, MAGIC_XP_HIT * 5);
-                player.sendActionBar(
-                    "§b❄ §c§lSHATTERED! §7Frozen target obliterated on ground impact!");
-                return;
-            }
-
-            // ── WET target → dry, no knockback ────────────────────────────────
-            if (isWet(target)) {
-                removeWet(target, true);
-                player.sendActionBar("§7💨 §7Air §bdried §7the wet target! No knockback.");
-                return;
-            }
-
-            // ── Normal gust (heavily buffed) ───────────────────────────────────
-            double dist = Math.max(0.5, target.getLocation().distance(player.getLocation()));
-            // Knockback blocks — strongly distance-scaled
-            double knockbackBlocks = 3.0 + (AIR_RANGE - dist) * 1.4;
-            // Level multiplier: 1.0 at Lv1 → 3.5 at Lv99 (was 0.5→2.0)
-            double levelMult = 1.0 + (magicLevel / 99.0) * 2.5;
-            // Velocity — heavily buffed (was 0.09, now 0.22)
-            double velocity = knockbackBlocks * 0.22 * levelMult;
-            // Strong upward launch
-            double upward = 0.4 + (magicLevel / 99.0) * 0.5 + (knockbackBlocks / (AIR_RANGE * 1.4)) * 0.35;
-
-            Vector dir = target.getLocation().subtract(player.getLocation())
-                .toVector().normalize();
-            dir.setY(upward);
-            dir = dir.multiply(velocity / dir.length()); // normalize then scale
-            target.setVelocity(dir);
-
-            double damage = 2.0 + SkillBonusManager.magicDamageBonus(magicLevel) * 3;
-            target.damage(damage, player);
-            awardMagicXp(player, MAGIC_XP_HIT);
-
-            target.getWorld().spawnParticle(Particle.CLOUD,
-                target.getLocation().add(0, 1, 0), 50, 0.8, 0.8, 0.8, 0.3);
-
-            player.sendActionBar(String.format(
-                "§7💨 §f§lGUST! §8dist: §e%.1fb §8→ §7~%.0f §8blocks §8(×%.1f level)",
-                dist, knockbackBlocks, levelMult));
-            if (target instanceof Player tp)
-                tp.sendActionBar(String.format(
-                    "§7💨 §f§lYou were blasted ~%.0f blocks!", knockbackBlocks));
-
-        } else {
+        if (target == null) {
             player.getWorld().spawnParticle(Particle.CLOUD,
                 player.getLocation().add(player.getLocation().getDirection().multiply(4)).add(0, 1, 0),
                 40, 0.6, 0.6, 0.6, 0.12);
             player.sendActionBar("§7💨 §7No target within " + AIR_RANGE + " blocks.");
+            return;
         }
+
+        // ── FROZEN + AIR = INSTANT DEATH ──────────────────────────────────────
+        if (isFrozen(target)) {
+            killFrozen(target, player, "§b❄ §c§lSHATTERED! §7Frozen solid — launched into the ground!");
+            awardMagicXp(player, MAGIC_XP_COMBO);
+            return;
+        }
+
+        // ── STATUE + AIR = INSTANT DEATH ──────────────────────────────────────
+        if (isStatue(target)) {
+            killStatue(target, player, "§6🏺 §c§lCRUMBLED! §7The statue was blasted apart!");
+            awardMagicXp(player, MAGIC_XP_COMBO);
+            return;
+        }
+
+        // ── CHILLED + AIR = FROZEN ────────────────────────────────────────────
+        if (isChilled(target)) {
+            removeChilled(target);
+            applyFrozen(target, 100); // 5 seconds
+            target.getWorld().spawnParticle(Particle.SNOWFLAKE,
+                target.getLocation().add(0, 1, 0), 50, 0.5, 0.5, 0.5, 0.1);
+            if (shooter(player) != null) player.sendActionBar(
+                "§b❄ §f§lFROZEN! §7Chilled target locked solid! §8Air gust = §c§lDEATH§8!");
+            awardMagicXp(player, MAGIC_XP_COMBO);
+            awardMagicXp(player, MAGIC_XP_HIT);
+            return;
+        }
+
+        // ── WET + AIR = CHILLED ───────────────────────────────────────────────
+        if (isWet(target)) {
+            removeWet(target, true);
+            applyChilled(target, 50); // 2.5 seconds — tight window for Frozen combo
+            player.sendActionBar("§b❄ §7Target is §bChilled§7! §8Cast Air again quickly to §bFreeeze§8!");
+            awardMagicXp(player, MAGIC_XP_HIT);
+            return;
+        }
+
+        // ── MUDDY + AIR = massive upward launch ───────────────────────────────
+        if (isMuddy(target)) {
+            removeMuddy(target);
+            Vector up = new Vector(0, 2.5 + (magicLevel / 99.0) * 2.0, 0)
+                .add(target.getLocation().subtract(player.getLocation()).toVector().normalize().multiply(0.8));
+            target.setVelocity(up);
+            double dmg = 3.0 + SkillBonusManager.magicDamageBonus(magicLevel) * 3;
+            target.damage(dmg, player);
+            target.getWorld().spawnParticle(Particle.BLOCK,
+                target.getLocation().add(0, 1, 0), 50, 0.5, 0.5, 0.5,
+                Material.MUD.createBlockData());
+            player.sendActionBar("§6🌿 §f§lMUD LAUNCH! §7Muddy target catapulted skyward!");
+            if (target instanceof Player tp)
+                tp.sendActionBar("§6🌿 §7Mud expelled you §finto the sky§7!");
+            awardMagicXp(player, MAGIC_XP_COMBO);
+            return;
+        }
+
+        // ── BLAZING + AIR = INFERNO BLAST ─────────────────────────────────────
+        if (isBlazing(target)) {
+            removeBlazing(target);
+            double dist = Math.max(0.5, target.getLocation().distance(player.getLocation()));
+            double kb   = 4.0 + (AIR_RANGE - dist) * 1.6;
+            double mult = 1.2 + (magicLevel / 99.0) * 2.8;
+            launchTarget(target, player, kb * 0.22 * mult, 0.5 + (magicLevel / 99.0) * 0.6);
+            int fire = 100 + (int)((magicLevel / 99.0) * 100);
+            target.setFireTicks(fire);
+            double dmg = 4.0 + SkillBonusManager.magicDamageBonus(magicLevel) * 4;
+            target.damage(dmg, player);
+            target.getWorld().spawnParticle(Particle.FLAME,
+                target.getLocation().add(0, 1, 0), 60, 0.6, 0.6, 0.6, 0.2);
+            target.getWorld().spawnParticle(Particle.CLOUD,
+                target.getLocation().add(0, 1, 0), 30, 0.5, 0.5, 0.5, 0.1);
+            player.sendActionBar("§c🔥 §f§lINFERNO BLAST! §7Blazing target obliterated!");
+            if (target instanceof Player tp)
+                tp.sendActionBar("§c🔥 §f§lINFERNO BLAST §7ripped through you!");
+            awardMagicXp(player, MAGIC_XP_COMBO);
+            return;
+        }
+
+        // ── SCORCHED + AIR = FANNED FLAMES ────────────────────────────────────
+        if (isScorched(target)) {
+            removeScorched(target);
+            int fire = 60 + (int)((magicLevel / 99.0) * 80);
+            target.setFireTicks(fire);
+            double dmg = 2.0 + SkillBonusManager.magicDamageBonus(magicLevel) * 2;
+            target.damage(dmg, player);
+            target.getWorld().spawnParticle(Particle.FLAME,
+                target.getLocation().add(0, 1, 0), 30, 0.4, 0.4, 0.4, 0.15);
+            player.sendActionBar("§c🔥 §7Fanned the flames! §8(" + fire/20 + "s fire)");
+            awardMagicXp(player, MAGIC_XP_COMBO);
+            return;
+        }
+
+        // ── NORMAL AIR GUST (massively buffed) ────────────────────────────────
+        double dist = Math.max(0.5, target.getLocation().distance(player.getLocation()));
+        double kb   = 3.0 + (AIR_RANGE - dist) * 1.4;
+        double mult = 1.0 + (magicLevel / 99.0) * 2.5;
+        double vel  = kb * 0.22 * mult;
+        double up   = 0.4 + (magicLevel / 99.0) * 0.5 + (kb / (AIR_RANGE * 1.4)) * 0.35;
+        launchTarget(target, player, vel, up);
+
+        double dmg = 2.0 + SkillBonusManager.magicDamageBonus(magicLevel) * 3;
+        target.damage(dmg, player);
+        awardMagicXp(player, MAGIC_XP_HIT);
+
+        target.getWorld().spawnParticle(Particle.CLOUD,
+            target.getLocation().add(0, 1, 0), 50, 0.8, 0.8, 0.8, 0.3);
+
+        player.sendActionBar(String.format(
+            "§7💨 §f§lGUST! §8dist: §e%.1fb §8→ §7~%.0f §8blocks §8(×%.1f lv)",
+            dist, kb, mult));
+        if (target instanceof Player tp)
+            tp.sendActionBar(String.format("§7💨 §f§lBlasted ~%.0f blocks!", kb));
+
+        rollMindBomb(target, player);
     }
 
-    // ── Projectile hit ────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════════
+    //  PROJECTILE HIT
+    // ══════════════════════════════════════════════════════════════════════════
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onProjectileHit(ProjectileHitEvent event) {
-        UUID projId = event.getEntity().getUniqueId();
+        UUID         projId    = event.getEntity().getUniqueId();
         MagicElement element   = trackedProjectiles.remove(projId);
         UUID         shooterId = projectileShooters.remove(projId);
-        int          magicLevel = projectileLevels.getOrDefault(projId, 1);
+        int          lvl       = projectileLevels.getOrDefault(projId, 1);
         projectileLevels.remove(projId);
         if (element == null || shooterId == null) return;
 
         Player shooter = plugin.getServer().getPlayer(shooterId);
-
         if (!(event.getHitEntity() instanceof LivingEntity target)) return;
-        if (target.getUniqueId().equals(shooterId)) return; // don't hit yourself
+        if (target.getUniqueId().equals(shooterId)) return;
 
-        switch (element) {
-            case FIRE  -> handleFireHit(target, shooter, magicLevel);
-            case WATER -> handleWaterHit(target, shooter, magicLevel);
-            case EARTH -> handleEarthHit(target, shooter, magicLevel);
-            default -> {}
-        }
+        if (element == MagicElement.FIRE)  handleFireHit(target, shooter, lvl);
+        else if (element == MagicElement.WATER) handleWaterHit(target, shooter, lvl);
+        else if (element == MagicElement.EARTH) handleEarthHit(target, shooter, lvl);
 
         if (shooter != null) awardMagicXp(shooter, MAGIC_XP_HIT);
     }
 
-    private void handleFireHit(LivingEntity target, Player shooter, int magicLevel) {
-        // ── MUDDY + FIRE = FROZEN ──────────────────────────────────────────────
-        if (isMuddy(target)) {
-            removeMuddy(target);
-            target.setFireTicks(0);
-            applyFrozen(target, 100); // 5 seconds = 100 ticks
-            // Steam + ice particles (mud hardening)
-            target.getWorld().spawnParticle(Particle.CLOUD,
-                target.getLocation().add(0, 1.5, 0), 25, 0.4, 0.4, 0.4, 0.05);
+    // ──────────────────────────────────────────────────────────────────────────
+    //  handleFireHit
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private void handleFireHit(LivingEntity target, Player shooter, int lvl) {
+
+        // SCORCHED → BLAZING
+        if (isScorched(target)) {
+            removeScorched(target);
+            applyBlazing(target, 100); // 5 seconds
+            int fire = 80 + (int)((lvl / 99.0) * 80);
+            target.setFireTicks(fire);
+            double dmg = 3.0 + SkillBonusManager.magicDamageBonus(lvl) * 3;
+            target.damage(dmg, shooter);
+            target.getWorld().spawnParticle(Particle.FLAME,
+                target.getLocation().add(0, 1, 0), 50, 0.5, 0.5, 0.5, 0.2);
             if (shooter != null) shooter.sendActionBar(
-                "§b❄ §6Mud hardened by fire — target is §b§lFROZEN§6! §7Gust for §c§lINSTANT DEATH§7!");
+                "§c🔥 §f§lBLAZING! §8(" + fire/20 + "s fire — Air to §fInferno Blast§8!)");
+            if (target instanceof Player tp)
+                tp.sendActionBar("§c🔥 §f§lBLAZING! §7Air gust = §cInferno Blast§7!");
+            rollMindBomb(target, shooter);
             return;
         }
 
-        // ── WET + FIRE = extinguish ────────────────────────────────────────────
+        // MUDDY → STATUE (dirt shattering)
+        if (isMuddy(target)) {
+            removeMuddy(target);
+            target.setFireTicks(0);
+            applyStatue(target, 160); // 8 seconds
+            // Dirt shatter burst
+            target.getWorld().spawnParticle(Particle.BLOCK,
+                target.getLocation().add(0, 0.5, 0), 80, 0.6, 0.6, 0.6,
+                Material.DIRT.createBlockData());
+            target.getWorld().spawnParticle(Particle.BLOCK,
+                target.getLocation().add(0, 1.0, 0), 50, 0.4, 0.4, 0.4,
+                Material.MUD.createBlockData());
+            target.getWorld().spawnParticle(Particle.BLOCK,
+                target.getLocation().add(0, 1.5, 0), 30, 0.3, 0.3, 0.3,
+                Material.BROWN_TERRACOTTA.createBlockData());
+            target.getWorld().playSound(target.getLocation(),
+                Sound.BLOCK_MUD_BREAK, 2.0f, 0.6f);
+            if (shooter != null) shooter.sendActionBar(
+                "§6🏺 §e§lSTATUE! §7Mud hardened — target frozen! §8Air gust = §c§lDEATH§8!");
+            if (target instanceof Player tp) {
+                tp.sendTitle("§6🏺 §e§lSTATUE", "§7Hardened mud — §cAir gust = DEATH!", 5, 80, 15);
+                tp.sendActionBar("§6🏺 §7You are §e§lSTATUE§7! §8(8s — air gust = §cinst death§8!)");
+            }
+            awardMagicXp(shooter, MAGIC_XP_COMBO - MAGIC_XP_HIT);
+            rollMindBomb(target, shooter);
+            return;
+        }
+
+        // WET → extinguish
         if (isWet(target)) {
             removeWet(target, true);
             target.setFireTicks(0);
@@ -415,185 +499,538 @@ public class MagicStaffListener implements Listener {
             return;
         }
 
-        // ── Normal fire hit ────────────────────────────────────────────────────
-        double damage = 2.0 + SkillBonusManager.magicDamageBonus(magicLevel) * 2;
-        target.damage(damage, shooter);
-        int fireTicks = 40 + (int) ((magicLevel / 99.0) * 40); // 2–4 seconds
+        // CHILLED → Thaw (small pop)
+        if (isChilled(target)) {
+            removeChilled(target);
+            target.setFireTicks(0);
+            double dmg = 1.5 + SkillBonusManager.magicDamageBonus(lvl) * 2;
+            target.damage(dmg, shooter);
+            target.getWorld().spawnParticle(Particle.CLOUD,
+                target.getLocation().add(0, 1, 0), 25, 0.4, 0.4, 0.4, 0.08);
+            target.getWorld().spawnParticle(Particle.SPLASH,
+                target.getLocation().add(0, 1, 0), 15, 0.3, 0.3, 0.3, 0.1);
+            if (shooter != null)
+                shooter.sendActionBar("§b💧 §7Thaw! Chill removed by fire — steam burst!");
+            rollMindBomb(target, shooter);
+            return;
+        }
+
+        // FROZEN → Thaw Explosion (big area steam)
+        if (isFrozen(target)) {
+            removeFrozen(target);
+            target.setFireTicks(0);
+            double dmg = 4.0 + SkillBonusManager.magicDamageBonus(lvl) * 4;
+            target.damage(dmg, shooter);
+            // Area particles
+            target.getWorld().spawnParticle(Particle.CLOUD,
+                target.getLocation().add(0, 1, 0), 60, 0.8, 0.8, 0.8, 0.15);
+            target.getWorld().spawnParticle(Particle.FLAME,
+                target.getLocation().add(0, 1, 0), 30, 0.6, 0.6, 0.6, 0.1);
+            target.getWorld().spawnParticle(Particle.SNOWFLAKE,
+                target.getLocation().add(0, 1, 0), 30, 0.5, 0.5, 0.5, 0.1);
+            target.getWorld().playSound(target.getLocation(), Sound.ENTITY_GENERIC_EXPLODE, 1.0f, 1.5f);
+            if (shooter != null)
+                shooter.sendActionBar("§c🔥 §f§lTHAW EXPLOSION! §7Frozen + Fire = massive steam burst!");
+            rollMindBomb(target, shooter);
+            awardMagicXp(shooter, MAGIC_XP_COMBO - MAGIC_XP_HIT);
+            return;
+        }
+
+        // Normal fire hit → SCORCHED
+        double dmg = 2.0 + SkillBonusManager.magicDamageBonus(lvl) * 2;
+        target.damage(dmg, shooter);
+        int fire = 40 + (int)((lvl / 99.0) * 40);
+        applyScorched(target, 60); // 3 seconds
         plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-            if (target.isValid()) target.setFireTicks(Math.max(target.getFireTicks(), fireTicks));
+            if (target.isValid()) target.setFireTicks(Math.max(target.getFireTicks(), fire));
         }, 1L);
         if (shooter != null)
-            shooter.sendActionBar("§c🔥 §7Fireball hit! §8(" + fireTicks / 20 + "s fire)");
+            shooter.sendActionBar("§c🔥 §7Fireball hit! §8Scorched §8(" + fire/20 + "s — §7hit again to §cBlaze§8!)");
+        rollMindBomb(target, shooter);
     }
 
-    private void handleWaterHit(LivingEntity target, Player shooter, int magicLevel) {
-        double damage = 2.0 + SkillBonusManager.magicDamageBonus(magicLevel) * 2;
-        target.damage(damage, shooter);
+    // ──────────────────────────────────────────────────────────────────────────
+    //  handleWaterHit
+    // ──────────────────────────────────────────────────────────────────────────
 
-        int wetTicks = 100 + (int) ((magicLevel / 99.0) * 100); // 5–10 seconds
+    private void handleWaterHit(LivingEntity target, Player shooter, int lvl) {
+
+        // BLAZING → STEAM EXPLOSION (AoE)
+        if (isBlazing(target)) {
+            removeBlazing(target);
+            target.setFireTicks(0);
+            double dmg = 5.0 + SkillBonusManager.magicDamageBonus(lvl) * 5;
+            target.damage(dmg, shooter);
+            // Knockback nearby entities
+            for (Entity e : target.getWorld().getNearbyEntities(target.getLocation(), 4, 4, 4)) {
+                if (e instanceof LivingEntity le && !e.equals(shooter)) {
+                    Vector away = e.getLocation().subtract(target.getLocation()).toVector();
+                    if (away.lengthSquared() > 0.01)
+                        e.setVelocity(away.normalize().multiply(1.8).add(new Vector(0, 0.5, 0)));
+                }
+            }
+            target.getWorld().spawnParticle(Particle.CLOUD,
+                target.getLocation().add(0, 1, 0), 100, 1.2, 1.2, 1.2, 0.2);
+            target.getWorld().spawnParticle(Particle.SPLASH,
+                target.getLocation().add(0, 1, 0), 60, 0.8, 0.8, 0.8, 0.3);
+            target.getWorld().playSound(target.getLocation(), Sound.ENTITY_GENERIC_EXPLODE, 1.0f, 1.8f);
+            if (shooter != null)
+                shooter.sendActionBar("§b💧 §f§lSTEAM EXPLOSION! §7Blazing target superheated!");
+            awardMagicXp(shooter, MAGIC_XP_COMBO - MAGIC_XP_HIT);
+            rollMindBomb(target, shooter);
+            return;
+        }
+
+        // SCORCHED → STEAM BURST
+        if (isScorched(target)) {
+            removeScorched(target);
+            target.setFireTicks(0);
+            double dmg = 3.0 + SkillBonusManager.magicDamageBonus(lvl) * 3;
+            target.damage(dmg, shooter);
+            target.getWorld().spawnParticle(Particle.CLOUD,
+                target.getLocation().add(0, 1, 0), 40, 0.5, 0.5, 0.5, 0.1);
+            target.getWorld().spawnParticle(Particle.SPLASH,
+                target.getLocation().add(0, 1, 0), 25, 0.4, 0.4, 0.4, 0.15);
+            if (shooter != null)
+                shooter.sendActionBar("§b💧 §7Steam Burst! §8Scorched + Water = superheated impact!");
+            awardMagicXp(shooter, MAGIC_XP_COMBO - MAGIC_XP_HIT);
+            rollMindBomb(target, shooter);
+            return;
+        }
+
+        // Normal water hit → WET
+        double dmg = 2.0 + SkillBonusManager.magicDamageBonus(lvl) * 2;
+        target.damage(dmg, shooter);
+        int wetTicks = 100 + (int)((lvl / 99.0) * 100);
         applyWet(target, wetTicks);
-
         target.getWorld().spawnParticle(Particle.SPLASH,
             target.getLocation().add(0, 1, 0), 40, 0.4, 0.4, 0.4, 0.2);
-
         if (shooter != null)
-            shooter.sendActionBar("§b💧 §7Water hit! Target is §bWet §7(" + wetTicks / 20 + "s)");
+            shooter.sendActionBar("§b💧 §7Water hit! §bWet §7(" + wetTicks/20 + "s — Earth=Muddy, Air=Chilled)");
         if (target instanceof Player p)
-            p.sendActionBar("§b💧 §7You are §bWet! §7Fire & Air weakened. Earth = §6Muddy§7!");
+            p.sendActionBar("§b💧 §7You are §bWet§7! §8Earth=Muddy · Air=Chilled · Fire=Extinguish");
+        rollMindBomb(target, shooter);
     }
 
-    private void handleEarthHit(LivingEntity target, Player shooter, int magicLevel) {
+    // ──────────────────────────────────────────────────────────────────────────
+    //  handleEarthHit
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private void handleEarthHit(LivingEntity target, Player shooter, int lvl) {
         target.getWorld().spawnParticle(Particle.BLOCK,
             target.getLocation().add(0, 1, 0), 30, 0.3, 0.3, 0.3,
             Material.DIRT.createBlockData());
 
+        // WET → MUDDY
         if (isWet(target)) {
-            // WET + EARTH = MUDDY
-            removeWet(target, false); // silent removal
-            int muddyTicks = 300 + (int) ((magicLevel / 99.0) * 300); // 15–30 seconds
+            removeWet(target, false);
+            int muddyTicks = 300 + (int)((lvl / 99.0) * 300);
             applyMuddy(target, muddyTicks);
             if (shooter != null)
-                shooter.sendActionBar("§2🌿 §7Wet + Earth = §6Muddy! §8(" + muddyTicks / 20 + "s) — §7Hit with §cFire §7to freeze!");
-        } else {
-            double damage = 2.0 + SkillBonusManager.magicDamageBonus(magicLevel) * 2;
-            target.damage(damage, shooter);
-            // Slight slowness from impact (normal, not muddy)
-            target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 40, 0, false, true, true));
+                shooter.sendActionBar("§6🌿 §7Wet + Earth = §6Muddy! §8(" + muddyTicks/20 + "s — §7Fire to §eStatue§8!)");
+            awardMagicXp(shooter, MAGIC_XP_COMBO - MAGIC_XP_HIT);
+            rollMindBomb(target, shooter);
+            return;
+        }
+
+        // CHILLED → CRACKED ICE (blindness + heavy slow + damage)
+        if (isChilled(target)) {
+            removeChilled(target);
+            double dmg = 3.5 + SkillBonusManager.magicDamageBonus(lvl) * 3;
+            target.damage(dmg, shooter);
+            target.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 60, 0, false, true, true));
+            target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 100, 5, false, true, true));
+            target.getWorld().spawnParticle(Particle.SNOWFLAKE,
+                target.getLocation().add(0, 1, 0), 40, 0.5, 0.5, 0.5, 0.1);
+            target.getWorld().spawnParticle(Particle.BLOCK,
+                target.getLocation().add(0, 1, 0), 30, 0.4, 0.4, 0.4,
+                Material.ICE.createBlockData());
             if (shooter != null)
-                shooter.sendActionBar("§2🌿 §7Earth hit! §8(" + (damage / 2) + " hearts)");
+                shooter.sendActionBar("§b❄ §f§lCRACKED ICE! §7Chilled + Earth = blinded + heavy slow!");
+            awardMagicXp(shooter, MAGIC_XP_COMBO - MAGIC_XP_HIT);
+            rollMindBomb(target, shooter);
+            return;
         }
-    }
 
-    // ── Status: WET ───────────────────────────────────────────────────────────
-
-    public void applyWet(LivingEntity entity, int durationTicks) {
-        long expiryMs = System.currentTimeMillis() + (long) durationTicks * 50;
-        entity.setMetadata(META_WET, new FixedMetadataValue(plugin, expiryMs));
-        // Blue drip particles
-        entity.getWorld().spawnParticle(Particle.DRIPPING_WATER,
-            entity.getLocation().add(0, entity.getHeight() + 0.3, 0),
-            8, 0.3, 0.1, 0.3, 0.0);
-    }
-
-    public boolean isWet(LivingEntity entity) {
-        if (!entity.hasMetadata(META_WET)) return false;
-        long expiry = (long) entity.getMetadata(META_WET).get(0).value();
-        if (System.currentTimeMillis() > expiry) {
-            entity.removeMetadata(META_WET, plugin);
-            return false;
+        // STATUE → Crumble (bonus damage, remove early)
+        if (isStatue(target)) {
+            removeStatue(target);
+            double dmg = 4.0 + SkillBonusManager.magicDamageBonus(lvl) * 4;
+            target.damage(dmg, shooter);
+            target.getWorld().spawnParticle(Particle.BLOCK,
+                target.getLocation().add(0, 1, 0), 60, 0.6, 0.6, 0.6,
+                Material.DIRT.createBlockData());
+            if (shooter != null)
+                shooter.sendActionBar("§6🌿 §f§lCRUMBLE! §7Earth smashed the statue!");
+            awardMagicXp(shooter, MAGIC_XP_COMBO - MAGIC_XP_HIT);
+            rollMindBomb(target, shooter);
+            return;
         }
-        return true;
+
+        // Normal earth hit
+        double dmg = 2.0 + SkillBonusManager.magicDamageBonus(lvl) * 2;
+        target.damage(dmg, shooter);
+        target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 40, 0, false, true, true));
+        if (shooter != null)
+            shooter.sendActionBar("§2🌿 §7Earth hit! §8(" + (dmg/2) + " hearts) — §7hit §bwet §7target to make §6Muddy");
+        rollMindBomb(target, shooter);
     }
 
-    /** Remove wet status. If showEffect=true, show steam particles. */
-    public void removeWet(LivingEntity entity, boolean showEffect) {
-        entity.removeMetadata(META_WET, plugin);
-        if (showEffect) {
-            entity.getWorld().spawnParticle(Particle.CLOUD,
-                entity.getLocation().add(0, 1, 0), 15, 0.3, 0.3, 0.3, 0.05);
-        }
-    }
-
-    // ── Status: MUDDY ─────────────────────────────────────────────────────────
-
-    public void applyMuddy(LivingEntity entity, int durationTicks) {
-        long expiryMs = System.currentTimeMillis() + (long) durationTicks * 50;
-        entity.setMetadata(META_MUDDY, new FixedMetadataValue(plugin, expiryMs));
-        // Slowness IV for the full duration
-        entity.addPotionEffect(new PotionEffect(
-            PotionEffectType.SLOWNESS, durationTicks, 3, false, true, true
-        ));
-        // Brown dirt particles
-        entity.getWorld().spawnParticle(Particle.BLOCK,
-            entity.getLocation().add(0, 0.5, 0), 40, 0.4, 0.4, 0.4,
-            Material.MUD.createBlockData());
-        if (entity instanceof Player p)
-            p.sendActionBar("§6🌿 §7You are §6Muddy! §8(Slowness IV — §cFire §8= §bFrozen§8)");
-    }
-
-    public boolean isMuddy(LivingEntity entity) {
-        if (!entity.hasMetadata(META_MUDDY)) return false;
-        long expiry = (long) entity.getMetadata(META_MUDDY).get(0).value();
-        if (System.currentTimeMillis() > expiry) {
-            entity.removeMetadata(META_MUDDY, plugin);
-            return false;
-        }
-        return true;
-    }
-
-    public void removeMuddy(LivingEntity entity) {
-        entity.removeMetadata(META_MUDDY, plugin);
-        entity.removePotionEffect(PotionEffectType.SLOWNESS);
-    }
-
-    // ── Status: FROZEN ────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════════
+    //  MIND BOMB + FALLEN
+    // ══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Freeze the target solid for 5 seconds (100 ticks).
-     * Triggered by: FIRE hitting a MUDDY target.
-     * Breaking condition: AIR gust while frozen = instant death.
-     *
-     * Uses powder-snow freeze vignette + Slowness 255 + Mining Fatigue 255.
+     * 5% chance to inflict MIND BOMB when 2+ mage gear pieces are worn.
+     * Mind Bomb: Nausea + Blindness 5s, 30% chance of FALLEN (crawl).
      */
-    public void applyFrozen(LivingEntity entity, int durationTicks) {
-        long expiryMs = System.currentTimeMillis() + (long) durationTicks * 50;
-        entity.setMetadata(META_FROZEN, new FixedMetadataValue(plugin, expiryMs));
+    private void rollMindBomb(LivingEntity target, Player shooter) {
+        if (shooter == null) return;
+        if (itemFactory.countMageGearPieces(shooter) < 2) return;
+        if (RAND.nextInt(100) >= 5) return; // 5% chance
+        if (isMindBombed(target)) return;   // already affected
 
-        // Powder-snow freeze visual (200+ ticks = full icy vignette)
-        entity.setFreezeTicks(200);
-
-        // Total immobility
-        entity.addPotionEffect(new PotionEffect(
-            PotionEffectType.SLOWNESS, durationTicks, 255, false, true, true));
-        entity.addPotionEffect(new PotionEffect(
-            PotionEffectType.MINING_FATIGUE, durationTicks, 255, false, true, true));
-
-        // Ice particle burst
-        entity.getWorld().spawnParticle(Particle.SNOWFLAKE,
-            entity.getLocation().add(0, 1, 0), 60, 0.5, 0.7, 0.5, 0.1);
-        entity.getWorld().spawnParticle(Particle.ITEM,
-            entity.getLocation().add(0, 1, 0), 30, 0.4, 0.4, 0.4, 0.1,
-            new ItemStack(Material.ICE));
-
-        if (entity instanceof Player p) {
-            p.sendTitle("§b❄ §lFROZEN", "§7Hardened solid — air gust = death!", 5, 60, 15);
-            p.sendActionBar("§b❄ §7You are §b§lFROZEN§7! §8(5s — §7air gust = §c§lINSTANT DEATH§8!)");
-        }
-
-        // Auto-thaw after duration if still alive and still frozen
-        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-            if (entity.isValid() && isFrozen(entity)) {
-                removeFrozen(entity);
-                if (entity instanceof Player p)
-                    p.sendActionBar("§b❄ §7The freeze wore off.");
-            }
-        }, durationTicks);
+        applyMindBomb(target, shooter);
     }
 
-    public boolean isFrozen(LivingEntity entity) {
-        if (!entity.hasMetadata(META_FROZEN)) return false;
-        long expiry = (long) entity.getMetadata(META_FROZEN).get(0).value();
-        if (System.currentTimeMillis() > expiry) {
-            entity.removeMetadata(META_FROZEN, plugin);
-            return false;
+    private void applyMindBomb(LivingEntity target, Player shooter) {
+        long expiry = System.currentTimeMillis() + 5000L;
+        target.setMetadata(META_MIND_BOMB, new FixedMetadataValue(plugin, expiry));
+
+        target.addPotionEffect(new PotionEffect(PotionEffectType.NAUSEA,    100, 1, false, true, true));
+        target.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 100, 0, false, true, true));
+
+        target.getWorld().spawnParticle(Particle.WITCH,
+            target.getLocation().add(0, 2, 0), 20, 0.5, 0.3, 0.5, 0.1);
+
+        if (target instanceof Player tp) {
+            tp.sendTitle("§5💀 §dMIND BOMB", "§7Disoriented!", 5, 40, 10);
+            tp.sendActionBar("§5💀 §7You've been §dMind Bombed§7! §8Nausea + Blind 5s");
         }
+        if (shooter != null)
+            shooter.sendActionBar("§5💀 §d§lMIND BOMB! §7Mage gear proc — target disoriented!");
+
+        // 30% chance of FALLEN (only players can crawl)
+        if (target instanceof Player tp && RAND.nextInt(100) < 30 && !isFallen(tp)) {
+            applyFallen(tp);
+        }
+    }
+
+    private boolean isMindBombed(LivingEntity e) {
+        if (!e.hasMetadata(META_MIND_BOMB)) return false;
+        long expiry = (long) e.getMetadata(META_MIND_BOMB).get(0).value();
+        if (System.currentTimeMillis() > expiry) { e.removeMetadata(META_MIND_BOMB, plugin); return false; }
         return true;
     }
 
-    public void removeFrozen(LivingEntity entity) {
-        entity.removeMetadata(META_FROZEN, plugin);
-        entity.setFreezeTicks(0);
-        entity.removePotionEffect(PotionEffectType.SLOWNESS);
-        entity.removePotionEffect(PotionEffectType.MINING_FATIGUE);
+    // ──────────────────────────────────────────────────────────────────────────
+    //  FALLEN mechanic
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private void applyFallen(Player player) {
+        player.setMetadata(META_FALLEN, new FixedMetadataValue(plugin, true));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS,     60, 255, false, false, false));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.MINING_FATIGUE, 60, 255, false, false, false));
+        player.sendTitle("§c⚠ §l§oFALLEN!", "§7Press §fSPACE §7to get up!", 5, 50, 10);
+        player.sendActionBar("§c⚠ §7You fell! Press §fSPACE §7to get up!");
+        player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_HURT, 1.0f, 0.5f);
+
+        // Maintain swimming (crawl) pose every 2 ticks while fallen
+        BukkitTask task = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
+            if (!player.isValid() || !isFallen(player)) {
+                cancelFallenTask(player.getUniqueId());
+                return;
+            }
+            player.setSwimming(true);
+        }, 0L, 2L);
+        fallenTasks.put(player.getUniqueId(), task);
+
+        // Auto-recover after 3 seconds
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            if (player.isValid() && isFallen(player)) getUpFromFallen(player, false);
+        }, 60L);
     }
 
-    // ── Crafting note (no validation — any amethyst shard works in the recipe) ──
-    // The CraftItemEvent validation was removed. The recipe uses AMETHYST_SHARD
-    // as the base material. Custom Enchanted Shards (from mob drops, with PDC)
-    // work the same as regular amethyst shards from geodes in the crafting table.
-    // Admins can use /registry to get the custom shard, or find amethyst geodes.
+    private boolean isFallen(Player player) {
+        return player.hasMetadata(META_FALLEN);
+    }
 
-    // ── Rune consumption ──────────────────────────────────────────────────────
+    /** Called when player presses SPACE while fallen — get-up animation. */
+    private void getUpFromFallen(Player player, boolean pressedSpace) {
+        player.removeMetadata(META_FALLEN, plugin);
+        cancelFallenTask(player.getUniqueId());
+        player.setSwimming(false);
+        player.removePotionEffect(PotionEffectType.SLOWNESS);
+        player.removePotionEffect(PotionEffectType.MINING_FATIGUE);
+        if (pressedSpace) {
+            player.playSound(player.getLocation(), Sound.ITEM_ARMOR_EQUIP_GENERIC, 1.0f, 1.2f);
+            player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.5f, 2.0f);
+            player.getWorld().spawnParticle(Particle.CRIT,
+                player.getLocation().add(0, 1, 0), 20, 0.4, 0.4, 0.4, 0.2);
+            player.sendTitle("§a§l✔ GOT UP!", "", 3, 15, 7);
+            player.sendActionBar("§a✔ §7You got up!");
+        } else {
+            player.sendActionBar("§7The daze wore off.");
+        }
+    }
+
+    private void cancelFallenTask(UUID uuid) {
+        BukkitTask t = fallenTasks.remove(uuid);
+        if (t != null) t.cancel();
+    }
+
+    /**
+     * Detects jump (space bar) while FALLEN by watching for upward Y movement.
+     * Slowness 255 prevents horizontal movement but NOT jumping — so to.y > from.y
+     * reliably fires when the player presses Space while crawling on the ground.
+     */
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    public void onPlayerMove(PlayerMoveEvent event) {
+        Player p = event.getPlayer();
+        if (!isFallen(p)) return;
+        if (event.getTo() == null) return;
+        // Upward Y delta > 0.05 means the player pressed Space (jump impulse)
+        if (event.getTo().getY() > event.getFrom().getY() + 0.05) {
+            getUpFromFallen(p, true);
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  STATUS: WET
+    // ══════════════════════════════════════════════════════════════════════════
+
+    public void applyWet(LivingEntity e, int ticks) {
+        e.setMetadata(META_WET, new FixedMetadataValue(plugin,
+            System.currentTimeMillis() + (long) ticks * 50));
+        e.getWorld().spawnParticle(Particle.DRIPPING_WATER,
+            e.getLocation().add(0, e.getHeight() + 0.3, 0), 8, 0.3, 0.1, 0.3, 0.0);
+    }
+
+    public boolean isWet(LivingEntity e) {
+        if (!e.hasMetadata(META_WET)) return false;
+        long ex = (long) e.getMetadata(META_WET).get(0).value();
+        if (System.currentTimeMillis() > ex) { e.removeMetadata(META_WET, plugin); return false; }
+        return true;
+    }
+
+    public void removeWet(LivingEntity e, boolean steam) {
+        e.removeMetadata(META_WET, plugin);
+        if (steam) e.getWorld().spawnParticle(Particle.CLOUD,
+            e.getLocation().add(0, 1, 0), 15, 0.3, 0.3, 0.3, 0.05);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  STATUS: MUDDY
+    // ══════════════════════════════════════════════════════════════════════════
+
+    public void applyMuddy(LivingEntity e, int ticks) {
+        e.setMetadata(META_MUDDY, new FixedMetadataValue(plugin,
+            System.currentTimeMillis() + (long) ticks * 50));
+        e.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, ticks, 3, false, true, true));
+        e.getWorld().spawnParticle(Particle.BLOCK,
+            e.getLocation().add(0, 0.5, 0), 40, 0.4, 0.4, 0.4, Material.MUD.createBlockData());
+        if (e instanceof Player p)
+            p.sendActionBar("§6🌿 §7You are §6Muddy§7! §8(Slowness IV — §cFire §8= §eStatue§8 · §7Air = §fLaunch§8)");
+    }
+
+    public boolean isMuddy(LivingEntity e) {
+        if (!e.hasMetadata(META_MUDDY)) return false;
+        long ex = (long) e.getMetadata(META_MUDDY).get(0).value();
+        if (System.currentTimeMillis() > ex) { e.removeMetadata(META_MUDDY, plugin); return false; }
+        return true;
+    }
+
+    public void removeMuddy(LivingEntity e) {
+        e.removeMetadata(META_MUDDY, plugin);
+        e.removePotionEffect(PotionEffectType.SLOWNESS);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  STATUS: CHILLED
+    // ══════════════════════════════════════════════════════════════════════════
+
+    public void applyChilled(LivingEntity e, int ticks) {
+        e.setMetadata(META_CHILLED, new FixedMetadataValue(plugin,
+            System.currentTimeMillis() + (long) ticks * 50));
+        e.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, ticks, 2, false, true, true));
+        e.getWorld().spawnParticle(Particle.SNOWFLAKE,
+            e.getLocation().add(0, e.getHeight() + 0.3, 0), 12, 0.3, 0.1, 0.3, 0.0);
+        if (e instanceof Player p)
+            p.sendActionBar("§b❄ §7You are §bChilled§7! §8(Air again = §bFrozen§8 · Earth = §fCracked Ice§8)");
+    }
+
+    public boolean isChilled(LivingEntity e) {
+        if (!e.hasMetadata(META_CHILLED)) return false;
+        long ex = (long) e.getMetadata(META_CHILLED).get(0).value();
+        if (System.currentTimeMillis() > ex) { e.removeMetadata(META_CHILLED, plugin); return false; }
+        return true;
+    }
+
+    public void removeChilled(LivingEntity e) {
+        e.removeMetadata(META_CHILLED, plugin);
+        e.removePotionEffect(PotionEffectType.SLOWNESS);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  STATUS: FROZEN
+    // ══════════════════════════════════════════════════════════════════════════
+
+    public void applyFrozen(LivingEntity e, int ticks) {
+        e.setMetadata(META_FROZEN, new FixedMetadataValue(plugin,
+            System.currentTimeMillis() + (long) ticks * 50));
+        e.setFreezeTicks(200);
+        e.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS,      ticks, 255, false, true, true));
+        e.addPotionEffect(new PotionEffect(PotionEffectType.MINING_FATIGUE, ticks, 255, false, true, true));
+        e.getWorld().spawnParticle(Particle.SNOWFLAKE,
+            e.getLocation().add(0, 1, 0), 60, 0.5, 0.7, 0.5, 0.1);
+        e.getWorld().spawnParticle(Particle.ITEM,
+            e.getLocation().add(0, 1, 0), 30, 0.4, 0.4, 0.4, 0.1, new ItemStack(Material.ICE));
+        if (e instanceof Player p) {
+            p.sendTitle("§b❄ §lFROZEN", "§7Air gust = instant death!", 5, 60, 15);
+            p.sendActionBar("§b❄ §b§lFROZEN§7! §8(5s — §7air gust = §c§lINSTANT DEATH§8!)");
+        }
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            if (e.isValid() && isFrozen(e)) removeFrozen(e);
+        }, ticks);
+    }
+
+    public boolean isFrozen(LivingEntity e) {
+        if (!e.hasMetadata(META_FROZEN)) return false;
+        long ex = (long) e.getMetadata(META_FROZEN).get(0).value();
+        if (System.currentTimeMillis() > ex) { e.removeMetadata(META_FROZEN, plugin); return false; }
+        return true;
+    }
+
+    public void removeFrozen(LivingEntity e) {
+        e.removeMetadata(META_FROZEN, plugin);
+        e.setFreezeTicks(0);
+        e.removePotionEffect(PotionEffectType.SLOWNESS);
+        e.removePotionEffect(PotionEffectType.MINING_FATIGUE);
+    }
+
+    private void killFrozen(LivingEntity target, Player shooter, String shooterMsg) {
+        removeFrozen(target);
+        target.getWorld().spawnParticle(Particle.SNOWFLAKE,
+            target.getLocation().add(0, 1, 0), 80, 0.8, 0.8, 0.8, 0.3);
+        target.getWorld().spawnParticle(Particle.CLOUD,
+            target.getLocation().add(0, 1, 0), 40, 0.5, 0.5, 0.5, 0.15);
+        target.getWorld().spawnParticle(Particle.ITEM,
+            target.getLocation().add(0, 1, 0), 60, 0.5, 0.5, 0.5, 0.3, new ItemStack(Material.ICE));
+        target.getWorld().playSound(target.getLocation(), Sound.BLOCK_GLASS_BREAK, 2.0f, 0.5f);
+        if (target instanceof Player tp) {
+            tp.setHealth(0);
+            tp.sendTitle("§b❄ §c§lSHATTERED", "§7Frozen solid — hit the ground!", 5, 40, 15);
+        } else {
+            target.setHealth(0);
+        }
+        if (shooter != null) shooter.sendActionBar(shooterMsg);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  STATUS: STATUE
+    // ══════════════════════════════════════════════════════════════════════════
+
+    public void applyStatue(LivingEntity e, int ticks) {
+        e.setMetadata(META_STATUE, new FixedMetadataValue(plugin,
+            System.currentTimeMillis() + (long) ticks * 50));
+        e.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS,      ticks, 255, false, true, true));
+        e.addPotionEffect(new PotionEffect(PotionEffectType.MINING_FATIGUE, ticks, 255, false, true, true));
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            if (e.isValid() && isStatue(e)) removeStatue(e);
+        }, ticks);
+    }
+
+    public boolean isStatue(LivingEntity e) {
+        if (!e.hasMetadata(META_STATUE)) return false;
+        long ex = (long) e.getMetadata(META_STATUE).get(0).value();
+        if (System.currentTimeMillis() > ex) { e.removeMetadata(META_STATUE, plugin); return false; }
+        return true;
+    }
+
+    public void removeStatue(LivingEntity e) {
+        e.removeMetadata(META_STATUE, plugin);
+        e.removePotionEffect(PotionEffectType.SLOWNESS);
+        e.removePotionEffect(PotionEffectType.MINING_FATIGUE);
+    }
+
+    private void killStatue(LivingEntity target, Player shooter, String shooterMsg) {
+        removeStatue(target);
+        target.getWorld().spawnParticle(Particle.BLOCK,
+            target.getLocation().add(0, 1, 0), 100, 0.8, 0.8, 0.8, Material.DIRT.createBlockData());
+        target.getWorld().spawnParticle(Particle.BLOCK,
+            target.getLocation().add(0, 1, 0), 60, 0.6, 0.6, 0.6, Material.MUD.createBlockData());
+        target.getWorld().spawnParticle(Particle.CLOUD,
+            target.getLocation().add(0, 1, 0), 40, 0.5, 0.5, 0.5, 0.15);
+        target.getWorld().playSound(target.getLocation(), Sound.BLOCK_MUD_BREAK, 2.0f, 0.4f);
+        target.getWorld().playSound(target.getLocation(), Sound.ENTITY_GENERIC_EXPLODE, 0.8f, 1.6f);
+        if (target instanceof Player tp) {
+            tp.setHealth(0);
+            tp.sendTitle("§6🏺 §c§lCRUMBLED", "§7The statue was blasted apart!", 5, 40, 15);
+        } else {
+            target.setHealth(0);
+        }
+        if (shooter != null) shooter.sendActionBar(shooterMsg);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  STATUS: SCORCHED
+    // ══════════════════════════════════════════════════════════════════════════
+
+    public void applyScorched(LivingEntity e, int ticks) {
+        e.setMetadata(META_SCORCHED, new FixedMetadataValue(plugin,
+            System.currentTimeMillis() + (long) ticks * 50));
+        e.getWorld().spawnParticle(Particle.FLAME,
+            e.getLocation().add(0, e.getHeight(), 0), 6, 0.3, 0.1, 0.3, 0.02);
+        if (e instanceof Player p)
+            p.sendActionBar("§c🔥 §7You are §cScorched§7! §8(Fire again = §cBlaze§8 · Air = §cFanned Flames§8)");
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            if (e.isValid() && isScorched(e)) e.removeMetadata(META_SCORCHED, plugin);
+        }, ticks);
+    }
+
+    public boolean isScorched(LivingEntity e) {
+        if (!e.hasMetadata(META_SCORCHED)) return false;
+        long ex = (long) e.getMetadata(META_SCORCHED).get(0).value();
+        if (System.currentTimeMillis() > ex) { e.removeMetadata(META_SCORCHED, plugin); return false; }
+        return true;
+    }
+
+    public void removeScorched(LivingEntity e) {
+        e.removeMetadata(META_SCORCHED, plugin);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  STATUS: BLAZING
+    // ══════════════════════════════════════════════════════════════════════════
+
+    public void applyBlazing(LivingEntity e, int ticks) {
+        e.setMetadata(META_BLAZING, new FixedMetadataValue(plugin,
+            System.currentTimeMillis() + (long) ticks * 50));
+        e.getWorld().spawnParticle(Particle.FLAME,
+            e.getLocation().add(0, 1, 0), 30, 0.4, 0.4, 0.4, 0.08);
+        if (e instanceof Player p) {
+            p.sendTitle("§c🔥 §lBLAZING", "§7Air gust = §cInferno Blast§7!", 5, 40, 10);
+            p.sendActionBar("§c🔥 §c§lBLAZING§7! §8(Air = §cInferno Blast§8 · Water = §fSteam Explosion§8)");
+        }
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            if (e.isValid() && isBlazing(e)) e.removeMetadata(META_BLAZING, plugin);
+        }, ticks);
+    }
+
+    public boolean isBlazing(LivingEntity e) {
+        if (!e.hasMetadata(META_BLAZING)) return false;
+        long ex = (long) e.getMetadata(META_BLAZING).get(0).value();
+        if (System.currentTimeMillis() > ex) { e.removeMetadata(META_BLAZING, plugin); return false; }
+        return true;
+    }
+
+    public void removeBlazing(LivingEntity e) {
+        e.removeMetadata(META_BLAZING, plugin);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  RUNE CONSUMPTION
+    // ══════════════════════════════════════════════════════════════════════════
 
     private boolean consumeRune(Player player, MagicElement element) {
         ItemStack[] contents = player.getInventory().getContents();
@@ -608,26 +1045,32 @@ public class MagicStaffListener implements Listener {
         return false;
     }
 
-    // ── Cooldown helpers ──────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════════
+    //  COOLDOWN HELPERS
+    // ══════════════════════════════════════════════════════════════════════════
 
-    private boolean checkAndSetCooldown(UUID id, MagicElement el, long cooldownMs) {
+    private boolean checkAndSetCooldown(UUID id, MagicElement el, long ms) {
         long now = System.currentTimeMillis();
-        Map<MagicElement, Long> map = cooldowns.computeIfAbsent(id, k -> new EnumMap<>(MagicElement.class));
+        Map<MagicElement, Long> map = cooldowns.computeIfAbsent(id,
+            k -> new EnumMap<>(MagicElement.class));
         long last = map.getOrDefault(el, 0L);
-        if (now - last < cooldownMs) return false;
+        if (now - last < ms) return false;
         map.put(el, now);
         return true;
     }
 
-    private long msUntilReady(UUID id, MagicElement el, long cooldownMs) {
+    private long msUntilReady(UUID id, MagicElement el, long ms) {
         Map<MagicElement, Long> map = cooldowns.get(id);
         if (map == null) return 0;
-        return Math.max(0, cooldownMs - (System.currentTimeMillis() - map.getOrDefault(el, 0L)));
+        return Math.max(0, ms - (System.currentTimeMillis() - map.getOrDefault(el, 0L)));
     }
 
-    // ── Magic XP ─────────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════════
+    //  MAGIC XP
+    // ══════════════════════════════════════════════════════════════════════════
 
     private void awardMagicXp(Player player, long amount) {
+        if (player == null) return;
         int old = skillManager.getLevel(player.getUniqueId(), SkillType.MAGIC);
         int nw  = skillManager.addXp(player.getUniqueId(), SkillType.MAGIC, amount);
         if (nw > old) {
@@ -639,7 +1082,19 @@ public class MagicStaffListener implements Listener {
         }
     }
 
-    // ── Nearest entity helper ─────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════════
+    //  HELPERS
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /** Launch target in the direction away from player with given velocity & upward. */
+    private void launchTarget(LivingEntity target, Player player, double velocity, double upward) {
+        Vector dir = target.getLocation().subtract(player.getLocation()).toVector().normalize();
+        dir.setY(upward);
+        target.setVelocity(dir.multiply(velocity / Math.max(0.01, dir.length())));
+    }
+
+    /** Null-safe shooter ref (always a Player here). */
+    private Player shooter(Player p) { return p; }
 
     private LivingEntity nearestEntity(Player player, double range) {
         Collection<Entity> nearby = player.getWorld().getNearbyEntities(
