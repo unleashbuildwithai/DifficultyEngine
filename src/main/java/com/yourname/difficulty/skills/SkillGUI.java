@@ -14,25 +14,23 @@ import java.util.Locale;
 import java.util.UUID;
 
 /**
- * SkillGUI — Redesigned 54-slot /mystats panel.
+ * SkillGUI — 54-slot /mystats panel.
  *
  * Layout (54 slots = 6 rows × 9 cols):
- * Row 0 (0-8):   border  |  "⚔ Combat" label @4
+ * Row 0 (0-8):   border  |  "Combat" label @4
  * Row 1 (9-17):  [MELEE@10]  [RANGED@12]  [DEFENCE@14]  [PRAYER@16]
- * Row 2 (18-26): border  |  "✦ Skills" label @22
+ * Row 2 (18-26): border  |  "Gathering" label @22
  * Row 3 (27-35): [MAGIC@28]  [WOODCUT@30]  [FISHING@32]  [FARMING@34]
  * Row 4 (36-44): border
  * Row 5 (45-53): [TOTAL@46]  ─────────  [PLAYTIME@52]
  *
- * Stack count on each skill item = current level (capped at 64).
- * Hover tooltip shows: rank, XP, progress, gear/bonus unlocks per level.
- *
- * Note: addSkillTips uses plain if-else chains (no switch arrow blocks)
- * to avoid the SkillGUI$1 synthetic inner-class crash on Java 21+.
+ * All items use amount = 1 (no misleading stack numbers).
+ * Hover tooltip shows: rank, XP, progress bar, and ONLY mechanics
+ * that are actually implemented in the plugin.
  */
 public class SkillGUI {
 
-    public static final String TITLE = "§8✦ §6My Stats §8✦";
+    public static final String TITLE = "§8[ §6My Stats §8]";
 
     private static final int SLOT_MELEE       = 10;
     private static final int SLOT_RANGED      = 12;
@@ -58,19 +56,19 @@ public class SkillGUI {
         String name  = target.getName();
         String title = viewer.equals(target)
                 ? TITLE
-                : "§8✦ §6" + name + "'s Stats §8✦";
+                : "§8[ §6" + name + "'s Stats §8]";
 
         Inventory inv = Bukkit.createInventory(null, 54, title);
 
-        // Fill every slot with glass pane
+        // Fill with glass border
         ItemStack glass = filler();
         for (int i = 0; i < 54; i++) inv.setItem(i, glass);
 
         // Section labels
-        inv.setItem(4,  label("§6⚔ §lCombat Skills",   Material.NETHERITE_SWORD));
-        inv.setItem(22, label("§d✦ §lGathering & Magic", Material.BLAZE_POWDER));
+        inv.setItem(4,  label("§c§lCombat Skills",      Material.NETHERITE_SWORD));
+        inv.setItem(22, label("§a§lGathering & Magic",  Material.BLAZE_POWDER));
 
-        // Skill items — stack amount = level
+        // Skill items — all amount 1 (no stack numbers)
         inv.setItem(SLOT_MELEE,       buildSkillItem(uuid, SkillType.MELEE));
         inv.setItem(SLOT_RANGED,      buildSkillItem(uuid, SkillType.RANGED));
         inv.setItem(SLOT_DEFENCE,     buildSkillItem(uuid, SkillType.DEFENCE));
@@ -96,155 +94,151 @@ public class SkillGUI {
         String bar    = SkillLevel.getProgressBar(xp);
         String rank   = SkillLevel.getRank(level);
 
-        // Stack count = level (1–64, visual corner number)
-        int amount = Math.max(1, Math.min(64, level));
-        ItemStack item = new ItemStack(skill.getIcon(), amount);
+        // Always amount 1 — no confusing corner numbers
+        ItemStack item = new ItemStack(skill.getIcon(), 1);
         ItemMeta  meta = item.getItemMeta();
         if (meta == null) return item;
 
-        // Name line: coloured skill name + current level
-        String maxTag = (level >= 99) ? " §6★MAX" : "";
+        String maxTag = (level >= 99) ? " §6(MAX)" : "";
         meta.setDisplayName(skill.getColorCode() + "§l" + skill.getDisplayName()
-                + " §r§8│ §aLv " + level + maxTag);
+                + " §r§7- §aLevel " + level + maxTag);
 
         List<String> lore = new ArrayList<>();
-        lore.add("§8" + "─".repeat(30));
         lore.add("§7Rank: " + rank);
-        lore.add("§8" + "─".repeat(30));
-        lore.add("§7Total XP: §f" + NF.format(xp));
-        if (level < 99) {
-            lore.add("§7XP to next level: §e" + NF.format(toNext));
-        }
+        lore.add("§7XP: §f" + NF.format(xp)
+                + (level < 99 ? "  §8(+" + NF.format(toNext) + " to next)" : ""));
         lore.add("§7Progress: " + bar);
-        lore.add("§8" + "─".repeat(30));
-
+        lore.add("§8" + "─".repeat(26));
         addSkillTips(lore, skill, level);
-
-        lore.add("§8" + "─".repeat(30));
         meta.setLore(lore);
         item.setItemMeta(meta);
         return item;
     }
 
-    // ── Skill-specific tooltips (plain if-else to avoid synthetic inner classes) ─
+    // ── Skill-specific tooltips ───────────────────────────────────────────────
+    // Only shows mechanics that are ACTUALLY implemented in the plugin.
 
     private void addSkillTips(List<String> lore, SkillType skill, int level) {
 
         if (skill == SkillType.MELEE) {
-            lore.add("§6How to train:");
-            lore.add("§8  Kill mobs with a sword or axe.");
-            lore.add("§8  Netherite sword gives 2× XP.");
-            lore.add("§8" + "─".repeat(30));
-            lore.add("§6Gear & Damage Bonuses:");
-            lore.add(check(level >= 1)  + " §7Lv §f1  §8— All melee weapons usable");
-            lore.add(check(level >= 20) + " §7Lv §f20 §8— Iron weapon bonus damage");
-            lore.add(check(level >= 40) + " §7Lv §f40 §8— Diamond weapon bonus damage");
-            lore.add(check(level >= 60) + " §7Lv §f60 §8— Netherite weapon bonus damage");
-            lore.add(check(level >= 80) + " §7Lv §f80 §8— +2 hearts melee damage");
-            lore.add(check(level >= 99) + " §7Lv §f99 §8— §6Maximum damage bonus ★");
+            lore.add("§6Train: §7Kill mobs with a sword or axe.");
+            lore.add("§7Better sword tier = more XP per kill.");
+            lore.add("§8" + "─".repeat(26));
+            lore.add("§6Bonuses (always active):");
+            lore.add("§7Bonus damage: §a+" + String.format("%.2f", level * 0.02) + " §7per hit");
+            lore.add("§7Crit chance: §a" + String.format("%.1f", level * 0.3) + "% §7(deals §c1.5x §7damage)");
+            lore.add("§8" + "─".repeat(26));
+            lore.add("§6Weapon level requirements:");
+            lore.add(check(level >= 1)  + " §7Lv  1  - Wood, Stone, Gold swords");
+            lore.add(check(level >= 20) + " §7Lv 20  - Iron sword / axe");
+            lore.add(check(level >= 40) + " §7Lv 40  - Diamond sword / axe");
+            lore.add(check(level >= 70) + " §7Lv 70  - Netherite sword / axe");
+            lore.add(check(level >= 99) + " §7Lv 99  - §6MAX: +1.98 dmg, ~30% crit");
 
         } else if (skill == SkillType.RANGED) {
-            lore.add("§6How to train:");
-            lore.add("§8  Kill mobs with a bow or crossbow.");
-            lore.add("§8  Higher-tier mobs give more XP.");
-            lore.add("§8" + "─".repeat(30));
-            lore.add("§6Gear & Range Bonuses:");
-            lore.add(check(level >= 1)  + " §7Lv §f1  §8— Bow & crossbow usable");
-            lore.add(check(level >= 25) + " §7Lv §f25 §8— +10% arrow damage");
-            lore.add(check(level >= 50) + " §7Lv §f50 §8— Crossbow burst damage");
-            lore.add(check(level >= 75) + " §7Lv §f75 §8— +25% arrow damage");
-            lore.add(check(level >= 99) + " §7Lv §f99 §8— §6Maximum ranged bonus ★");
+            lore.add("§6Train: §7Kill mobs with a bow or crossbow.");
+            lore.add("§7Better mobs (more HP) = more XP per kill.");
+            lore.add("§8" + "─".repeat(26));
+            lore.add("§6Bonuses (always active):");
+            lore.add("§7Bonus arrow damage: §a+" + String.format("%.2f", level * 0.015) + " §7per shot");
+            lore.add("§7Tipped arrow duration: §a" + String.format("%.1f", 1.0 + level / 99.0) + "x §7base");
+            lore.add("§8" + "─".repeat(26));
+            lore.add("§6Weapon level requirements:");
+            lore.add(check(level >= 1)  + " §7Lv  1  - Bow usable");
+            lore.add(check(level >= 30) + " §7Lv 30  - Crossbow usable");
+            lore.add(check(level >= 99) + " §7Lv 99  - §6MAX: +1.49 dmg, 2x arrow effects");
 
         } else if (skill == SkillType.DEFENCE) {
-            lore.add("§6How to train:");
-            lore.add("§8  Block attacks with a shield.");
-            lore.add("§8  XP awarded per successful block.");
-            lore.add("§8" + "─".repeat(30));
-            lore.add("§6Armour Tier Unlocks:");
-            lore.add(check(level >= 1)  + " §7Lv §f1  §8— Leather armour");
-            lore.add(check(level >= 15) + " §7Lv §f15 §8— Gold / Chain armour");
-            lore.add(check(level >= 30) + " §7Lv §f30 §8— Iron armour");
-            lore.add(check(level >= 50) + " §7Lv §f50 §8— Diamond armour");
-            lore.add(check(level >= 70) + " §7Lv §f70 §8— Netherite armour");
-            lore.add(check(level >= 99) + " §7Lv §f99 §8— §6Maximum defence bonus ★");
+            lore.add("§6Train: §7Block attacks with a shield.");
+            lore.add("§7XP awarded on each successful block.");
+            lore.add("§8" + "─".repeat(26));
+            lore.add("§6Bonuses (always active):");
+            lore.add("§7Damage reduction: §a" + String.format("%.1f", level * 0.2) + "% §7of all incoming hits");
+            lore.add("§7Bonus max HP: §a+" + String.format("%.1f", level / 10.0 > 5 ? 5.0 : Math.floor(level / 10.0) * 0.5)
+                    + " §7hearts (every 10 levels)");
+            lore.add("§8" + "─".repeat(26));
+            lore.add("§6Armour level requirements:");
+            lore.add(check(level >= 1)  + " §7Lv  1  - Leather armour");
+            lore.add(check(level >= 15) + " §7Lv 15  - Gold / Chainmail armour");
+            lore.add(check(level >= 30) + " §7Lv 30  - Iron armour");
+            lore.add(check(level >= 50) + " §7Lv 50  - Diamond armour");
+            lore.add(check(level >= 70) + " §7Lv 70  - Netherite armour");
+            lore.add(check(level >= 99) + " §7Lv 99  - §6MAX: ~19.8% reduction, +5 hearts");
 
         } else if (skill == SkillType.PRAYER) {
-            lore.add("§6How to train:");
-            lore.add("§8  Right-click a bone on dirt/grass.");
-            lore.add("§8  Bone = 4 XP  |  Bone Meal = 2 XP.");
-            lore.add("§8" + "─".repeat(30));
-            lore.add("§6Hit-Block Chance:");
-            lore.add(check(level >= 1)  + " §7Lv §f1  §8— 1% chance to negate a hit");
-            lore.add(check(level >= 20) + " §7Lv §f20 §8— 5% block chance");
-            lore.add(check(level >= 40) + " §7Lv §f40 §8— 10% block chance");
-            lore.add(check(level >= 60) + " §7Lv §f60 §8— 18% block chance");
-            lore.add(check(level >= 80) + " §7Lv §f80 §8— 25% block chance");
-            lore.add(check(level >= 99) + " §7Lv §f99 §8— §630% block chance ★");
+            lore.add("§6Train: §7Right-click a bone on dirt or grass.");
+            lore.add("§7Bone = 4 XP  |  Bone Meal = 2 XP");
+            lore.add("§8" + "─".repeat(26));
+            lore.add("§6Passive bonus:");
+            double blockChance = Math.pow(level / 99.0, 1.5) * 30.0;
+            lore.add("§7Hit-negate chance: §a" + String.format("%.1f", blockChance) + "%");
+            lore.add("§7Each incoming hit has this chance to be");
+            lore.add("§7completely negated (0 damage taken).");
+            lore.add("§8" + "─".repeat(26));
+            lore.add(check(level >= 1)  + " §7Lv  1  - ~0.03% negate chance");
+            lore.add(check(level >= 40) + " §7Lv 40  - ~6% negate chance");
+            lore.add(check(level >= 70) + " §7Lv 70  - ~17% negate chance");
+            lore.add(check(level >= 99) + " §7Lv 99  - §630% negate chance");
 
         } else if (skill == SkillType.MAGIC) {
-            lore.add("§6How to train:");
-            lore.add("§8  Cast with elemental staffs.");
-            lore.add("§8  10 XP/cast · 5 XP/hit · 25 XP/combo.");
-            lore.add("§8" + "─".repeat(30));
-            lore.add("§6Spell Cooldown: §e" + String.format("%.1f", magicCooldownSec(level)) + "s §8(base, no gear)");
-            lore.add("§8" + "─".repeat(30));
-            lore.add("§6Combo Unlock Guide:");
-            lore.add(check(level >= 1)  + " §7Lv §f1  §8— All 4 staffs, basic spells");
-            lore.add(check(level >= 20) + " §7Lv §f20 §8— Water+Earth = §6Muddy");
-            lore.add(check(level >= 35) + " §7Lv §f35 §8— Fire+Fire = §cBlazing");
-            lore.add(check(level >= 50) + " §7Lv §f50 §8— Water+Earth+Fire = §eStatue");
-            lore.add(check(level >= 60) + " §7Lv §f60 §8— Water+Air+Air = §bFrozen");
-            lore.add(check(level >= 75) + " §7Lv §f75 §8— Water+Fire+Air = §dTempest");
-            lore.add(check(level >= 99) + " §7Lv §f99 §8— §6Instant 4-element chains ★");
-            lore.add("§8" + "─".repeat(30));
-            lore.add("§d✦ §7Mage gear (2+ pieces):");
-            lore.add("§8  5% chance: §5Mind Bomb §8on hit");
-            lore.add("§8  Mind Bomb: nausea + blind + §cfallen");
-            lore.add("§8  Press §fSPACE §8to get up when fallen!");
+            lore.add("§6Train: §7Cast spells with elemental staffs.");
+            lore.add("§7Craft staffs using an Enchanted Shard");
+            lore.add("§7(5% drop from any mob) + element + stick.");
+            lore.add("§8" + "─".repeat(26));
+            lore.add("§6Bonuses:");
+            lore.add("§7Spell cooldown: §a" + String.format("%.1f", magicCooldownSec(level)) + "s §8(Lv1 = 3s, Lv99 = 1s)");
+            int dmgBonus = (int) Math.floor(level / 33.0);
+            lore.add("§7Extra spell damage: §a+" + dmgBonus + " §7heart"
+                    + (dmgBonus == 1 ? "" : "s") + " §8(+1 per 33 levels)");
+            lore.add("§8" + "─".repeat(26));
+            lore.add("§7Staffs: Fire, Water, Earth, Air");
+            lore.add("§7Mage Gear set (4 pieces): §a-1s §7cooldown");
+            lore.add(check(level >= 99) + " §7Lv 99  - §61s cooldown + max damage");
 
         } else if (skill == SkillType.WOODCUTTING) {
-            lore.add("§6How to train:");
-            lore.add("§8  Chop logs with any axe.");
-            lore.add("§8  Better axes give more XP.");
-            lore.add("§8" + "─".repeat(30));
-            lore.add("§6Axe Bonuses:");
-            lore.add(check(level >= 1)  + " §7Lv §f1  §8— Wooden / Stone axe");
-            lore.add(check(level >= 15) + " §7Lv §f15 §8— Iron axe bonus XP");
-            lore.add(check(level >= 35) + " §7Lv §f35 §8— Diamond axe bonus XP");
-            lore.add(check(level >= 60) + " §7Lv §f60 §8— Netherite axe bonus XP");
-            lore.add(check(level >= 99) + " §7Lv §f99 §8— §6Maximum WC XP rate ★");
+            lore.add("§6Train: §7Chop logs with any axe.");
+            lore.add("§8" + "─".repeat(26));
+            lore.add("§6Axe XP multipliers:");
+            lore.add("§7Wood / Stone / Gold: §a0.8x");
+            lore.add("§7Iron axe:            §a1.0x");
+            lore.add("§7Diamond axe:         §a1.5x");
+            lore.add("§7Netherite axe:       §a2.0x");
+            lore.add("§8" + "─".repeat(26));
+            lore.add("§6Passive bonus:");
+            double ddChance = Math.pow(level / 99.0, 1.5) * 33.0;
+            lore.add("§7Double-log drop chance: §a" + String.format("%.1f", ddChance) + "%");
+            lore.add(check(level >= 99) + " §7Lv 99  - §633% double-drop chance");
 
         } else if (skill == SkillType.FISHING) {
-            lore.add("§6How to train:");
-            lore.add("§8  Catch fish with a fishing rod.");
-            lore.add("§8  10 XP per catch.");
-            lore.add("§8" + "─".repeat(30));
-            lore.add("§6Fishing Bonuses:");
-            lore.add(check(level >= 1)  + " §7Lv §f1  §8— Basic fishing");
-            lore.add(check(level >= 30) + " §7Lv §f30 §8— Increased treasure rate");
-            lore.add(check(level >= 60) + " §7Lv §f60 §8— Rare fish bonus XP");
-            lore.add(check(level >= 99) + " §7Lv §f99 §8— §6Maximum fishing XP ★");
+            lore.add("§6Train: §7Catch fish with a fishing rod.");
+            lore.add("§7Every catch = §a10 XP§7.");
+            lore.add("§8" + "─".repeat(26));
+            lore.add("§7Train to Lv 99 to earn the");
+            lore.add("§b~ Fishing Cape§7.");
+            lore.add(check(level >= 99) + " §7Lv 99  - §6Fishing Cape awarded");
 
         } else if (skill == SkillType.FARMING) {
-            lore.add("§6How to train:");
-            lore.add("§8  Harvest fully-grown crops.");
-            lore.add("§8  Rarer crops = more XP.");
-            lore.add("§8  Glow berries & bamboo = 10 XP.");
-            lore.add("§8" + "─".repeat(30));
-            lore.add("§6Farming Bonuses:");
-            lore.add(check(level >= 1)  + " §7Lv §f1  §8— Basic crop harvesting");
-            lore.add(check(level >= 25) + " §7Lv §f25 §8— Bonus harvest drops");
-            lore.add(check(level >= 50) + " §7Lv §f50 §8— Rare crop bonus XP");
-            lore.add(check(level >= 99) + " §7Lv §f99 §8— §6Maximum farming XP ★");
+            lore.add("§6Train: §7Harvest fully-grown crops.");
+            lore.add("§8" + "─".repeat(26));
+            lore.add("§6Crop XP values:");
+            lore.add("§7Wheat / Carrot / Potato:  §a2 XP");
+            lore.add("§7Beetroot / Melon / Pumpkin: §a4 XP");
+            lore.add("§7Cocoa / Nether Wart:       §a6 XP");
+            lore.add("§7Bamboo / Glow Berries:    §a10 XP");
+            lore.add("§8" + "─".repeat(26));
+            lore.add("§6Passive bonus:");
+            double farmChance = Math.pow(level / 99.0, 1.5) * 50.0;
+            lore.add("§7Double-crop drop chance: §a" + String.format("%.1f", farmChance) + "%");
+            lore.add(check(level >= 99) + " §7Lv 99  - §650% double-crop chance");
         }
     }
 
-    /** Returns §a✔ if unlocked, §c✗ if not. */
+    /** Returns §a+ if unlocked, §c- if not. */
     private String check(boolean unlocked) {
-        return unlocked ? "§a✔" : "§c✗";
+        return unlocked ? "§a[+]" : "§7[ ]";
     }
 
-    /** Approximate spell cooldown in seconds for the given magic level (no gear). */
+    /** Spell cooldown in seconds at the given magic level (no gear bonus). */
     private double magicCooldownSec(int level) {
         long ms = 3000L - (long) ((level / 99.0) * 2000L);
         return Math.max(1000L, ms) / 1000.0;
@@ -256,29 +250,26 @@ public class SkillGUI {
         int total = skillManager.getTotalLevel(uuid);
         int max   = SkillType.values().length * 99;
 
-        // Stack count shows total level compressed to 1-64 range
-        int amount = Math.max(1, Math.min(64, total / 10 + 1));
-        ItemStack item = new ItemStack(Material.NETHER_STAR, amount);
+        ItemStack item = new ItemStack(Material.NETHER_STAR, 1);
         ItemMeta  meta = item.getItemMeta();
         if (meta == null) return item;
 
-        meta.setDisplayName("§6§l✦ Total Level ✦  §r§e" + total + " §8/ §f" + max);
+        meta.setDisplayName("§6§lTotal Level  §r§e" + total + " §8/ §f" + max);
 
         double pct    = (double) total / max;
-        int    filled = (int) Math.round(pct * 14);
-        String bar    = "§a" + "█".repeat(filled) + "§8" + "░".repeat(14 - filled);
+        int    filled = (int) Math.round(pct * 16);
+        String bar    = "§a" + "█".repeat(filled) + "§8" + "░".repeat(16 - filled);
 
         List<String> lore = new ArrayList<>();
-        lore.add("§8" + "─".repeat(30));
         lore.add("§7Overall: " + bar + " §e" + String.format("%.1f", pct * 100) + "%");
-        lore.add("§8" + "─".repeat(30));
+        lore.add("§8" + "─".repeat(26));
         for (SkillType s : SkillType.values()) {
             int lvl  = skillManager.getLevel(uuid, s);
-            String star = (lvl >= 99) ? "§6★" : "§8·";
-            lore.add(" " + star + " " + s.getColorCode() + s.getDisplayName()
-                    + " §8» §a" + lvl + (lvl >= 99 ? " §6MAX" : ""));
+            String star = (lvl >= 99) ? "§6★ " : "§8  ";
+            lore.add(star + s.getColorCode() + s.getDisplayName()
+                    + " §8- §a" + lvl + (lvl >= 99 ? " §6MAX" : ""));
         }
-        lore.add("§8" + "─".repeat(30));
+        lore.add("§8" + "─".repeat(26));
 
         meta.setLore(lore);
         item.setItemMeta(meta);
@@ -288,11 +279,11 @@ public class SkillGUI {
     // ── Playtime item ─────────────────────────────────────────────────────────
 
     private ItemStack playtimeItem(Player player) {
-        ItemStack item = new ItemStack(Material.CLOCK);
+        ItemStack item = new ItemStack(Material.CLOCK, 1);
         ItemMeta  meta = item.getItemMeta();
         if (meta == null) return item;
 
-        meta.setDisplayName("§b⏱ §lPlaytime");
+        meta.setDisplayName("§b§lPlaytime");
 
         long ticks = 0L;
         try {
@@ -306,12 +297,10 @@ public class SkillGUI {
         long minutes = (seconds % 3600) / 60;
 
         List<String> lore = new ArrayList<>();
-        lore.add("§8" + "─".repeat(30));
-        lore.add("§7Total time on the server:");
-        lore.add("§e" + hours + "h §7" + minutes + "m");
-        lore.add("§8" + "─".repeat(30));
-        lore.add("§7Keep grinding! Every hour counts.");
-        lore.add("§8" + "─".repeat(30));
+        lore.add("§7Time on server:");
+        lore.add("§e" + hours + " hours  " + minutes + " min");
+        lore.add("§8" + "─".repeat(26));
+        lore.add("§7Keep grinding for those Lv 99 capes!");
 
         meta.setLore(lore);
         item.setItemMeta(meta);
@@ -331,11 +320,11 @@ public class SkillGUI {
     }
 
     private ItemStack label(String name, Material mat) {
-        ItemStack item = new ItemStack(mat);
+        ItemStack item = new ItemStack(mat, 1);
         ItemMeta  meta = item.getItemMeta();
         if (meta != null) {
             meta.setDisplayName(name);
-            meta.setLore(List.of("§8" + "─".repeat(22)));
+            meta.setLore(List.of());
             item.setItemMeta(meta);
         }
         return item;

@@ -43,16 +43,17 @@ import java.util.Map;
 public class SkillCapeManager {
 
     // ── Skill symbols ─────────────────────────────────────────────────────────
+    // Only ASCII or basic Unicode that renders correctly in Minecraft's font.
     public static String symbol(SkillType skill) {
         return switch (skill) {
-            case MELEE       -> "⚔";
-            case RANGED      -> "➤";
-            case DEFENCE     -> "⛨";
-            case PRAYER      -> "🕊";
-            case MAGIC       -> "✦";
-            case WOODCUTTING -> "⛏";
-            case FISHING     -> "≋";
-            case FARMING     -> "✿";
+            case MELEE       -> "X";   // crossed swords style
+            case RANGED      -> ">";   // arrow
+            case DEFENCE     -> "O";   // shield
+            case PRAYER      -> "+";   // simple cross / prayer
+            case MAGIC       -> "*";   // star/magic
+            case WOODCUTTING -> "W";   // woodcut
+            case FISHING     -> "~";   // water wave
+            case FARMING     -> "F";   // farm
         };
     }
 

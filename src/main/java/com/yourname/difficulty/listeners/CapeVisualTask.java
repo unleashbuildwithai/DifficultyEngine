@@ -140,19 +140,20 @@ public class CapeVisualTask extends BukkitRunnable {
     // ── Cape symbol text ──────────────────────────────────────────────────────
 
     private String capeSymbolText(ItemStack cape) {
-        if (capeManager.isBossCape(cape)) return "§4☠ §5§lBOSS §4☠";
-        if (capeManager.isMaxCape(cape))  return "§6★ §5§lMAX §6★";
+        if (capeManager.isBossCape(cape)) return "§5[BOSS CAPE]";
+        if (capeManager.isMaxCape(cape))  return "§6[MAX CAPE]";
         SkillType skill = capeManager.getCapeSkill(cape);
-        if (skill == null) return "§7✦";
+        if (skill == null) return "";
+        // Short coloured label — only safe ASCII so it always renders
         return switch (skill) {
-            case MELEE       -> "§c⚔ §7Melee";
-            case RANGED      -> "§a➤ §7Ranged";
-            case DEFENCE     -> "§9⛨ §7Defence";
-            case PRAYER      -> "§f🕊 §7Prayer";
-            case MAGIC       -> "§d✦ §7Magic";
-            case WOODCUTTING -> "§2⛏ §7WC";
-            case FISHING     -> "§b≋ §7Fishing";
-            case FARMING     -> "§e✿ §7Farming";
+            case MELEE       -> "§c[Melee Cape]";
+            case RANGED      -> "§a[Ranged Cape]";
+            case DEFENCE     -> "§9[Defence Cape]";
+            case PRAYER      -> "§f[Prayer Cape]";
+            case MAGIC       -> "§d[Magic Cape]";
+            case WOODCUTTING -> "§2[WC Cape]";
+            case FISHING     -> "§b[Fishing Cape]";
+            case FARMING     -> "§e[Farming Cape]";
         };
     }
 
