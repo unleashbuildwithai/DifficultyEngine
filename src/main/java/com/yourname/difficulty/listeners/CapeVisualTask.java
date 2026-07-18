@@ -330,7 +330,7 @@ public class CapeVisualTask extends BukkitRunnable {
         axolotl.setGravity(false);
         axolotl.setPersistent(false);
         axolotl.setInvulnerable(true);
-        axolotl.setBaby(false);
+        axolotl.setAdult();   // ensure adult form (setBaby(bool) removed in 1.21)
         axolotl.addScoreboardTag(FISH_TAG);
 
         // Random axolotl colour variant
