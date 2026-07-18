@@ -218,14 +218,14 @@ public class Main extends JavaPlugin {
         this.tradeListener = new TradeListener(this);
         getServer().getPluginManager().registerEvents(tradeListener, this);
 
-        // ── Register commands ─────────────────────────────────────────────────
+        // ── Register commands (null-safe) ─────────────────────────────────────
 
-        getCommand("difficulty").setExecutor(new DifficultyCommand(difficultyManager));
-        getCommand("gear").setExecutor(new GearCommand());
-        getCommand("hpbar").setExecutor(new HpBarCommand(difficultyManager));
-        getCommand("sit").setExecutor(new SitCommand(sitListener));
+        registerCmd("difficulty", new DifficultyCommand(difficultyManager));
+        registerCmd("gear",       new GearCommand());
+        registerCmd("hpbar",      new HpBarCommand(difficultyManager));
+        registerCmd("sit",        new SitCommand(sitListener));
 
-        getCommand("registry").setExecutor((sender, cmd, label, args) -> {
+        registerCmd("registry", (sender, cmd, label, args) -> {
             if (!(sender instanceof Player player)) {
                 sender.sendMessage("§cOnly players can open the Item Registry.");
                 return true;
@@ -234,20 +234,19 @@ public class Main extends JavaPlugin {
             return true;
         });
 
-        getCommand("curecosmetic").setExecutor(new CureCosmeticCommand());
+        registerCmd("curecosmetic", new CureCosmeticCommand());
 
         this.adminLightCommand = new AdminLightCommand(this);
-        getCommand("adminlight").setExecutor(adminLightCommand);
+        registerCmd("adminlight", adminLightCommand);
 
-        getCommand("skills").setExecutor(
-                new SkillCommand(skillManager, skillGUI, false));
+        registerCmd("skills", new SkillCommand(skillManager, skillGUI, false));
 
         SkillCommand guiCmd = new SkillCommand(skillManager, skillGUI, true);
-        getCommand("mystats").setExecutor(guiCmd);
-        getCommand("stats").setExecutor(guiCmd);
+        registerCmd("mystats", guiCmd);
+        registerCmd("stats",   guiCmd);
 
         CapeSlotGUI capeGui = new CapeSlotGUI(skillCapeManager, capeDataManager);
-        getCommand("cape").setExecutor((sender, cmd, label, args) -> {
+        registerCmd("cape", (sender, cmd, label, args) -> {
             if (!(sender instanceof Player player)) {
                 sender.sendMessage("§cOnly players can open the Cape Wardrobe.");
                 return true;
@@ -257,7 +256,13 @@ public class Main extends JavaPlugin {
         });
 
         // ── New commands ───────────────────────────────────────────────────────
-        getCommand("gold").setExecutor((sender, cmd, label, args) -> {
+        registerCmd("mycape", (sender, cmd, label, args) -> {
+            if (!(sender instanceof Player player)) { sender.sendMessage("§cPlayers only."); return true; }
+            capeGui.open(player);
+            return true;
+        });
+
+        registerCmd("gold", (sender, cmd, label, args) -> {
             if (!(sender instanceof Player player)) {
                 sender.sendMessage("§cOnly players can use /gold.");
                 return true;
@@ -267,7 +272,7 @@ public class Main extends JavaPlugin {
             return true;
         });
 
-        getCommand("questbook").setExecutor((sender, cmd, label, args) -> {
+        registerCmd("questbook", (sender, cmd, label, args) -> {
             if (!(sender instanceof Player player)) {
                 sender.sendMessage("§cOnly players can open the Quest Book.");
                 return true;
@@ -276,11 +281,11 @@ public class Main extends JavaPlugin {
             return true;
         });
 
-        getCommand("party").setExecutor(partyListener);
-        getCommand("trade").setExecutor(tradeListener);
+        registerCmd("party", partyListener);
+        registerCmd("trade", tradeListener);
 
         // ── VIP Shop command ───────────────────────────────────────────────────
-        getCommand("vipshop").setExecutor((sender, cmd, label, args) -> {
+        registerCmd("vipshop", (sender, cmd, label, args) -> {
             if (!(sender instanceof Player player)) {
                 sender.sendMessage("§cOnly players can use /vipshop.");
                 return true;
@@ -299,7 +304,7 @@ public class Main extends JavaPlugin {
             return true;
         });
 
-        getCommand("spellbook").setExecutor((sender, cmd, label, args) -> {
+        registerCmd("spellbook", (sender, cmd, label, args) -> {
             if (!(sender instanceof Player player)) {
                 sender.sendMessage("§cOnly players can open the Arcane Tome.");
                 return true;
@@ -311,7 +316,7 @@ public class Main extends JavaPlugin {
             return true;
         });
 
-        getCommand("spellpage").setExecutor((sender, cmd, label, args) -> {
+        registerCmd("spellpage", (sender, cmd, label, args) -> {
             Player target;
             if (args.length > 0) {
                 target = getServer().getPlayerExact(args[0]);
@@ -618,4 +623,17 @@ public class Main extends JavaPlugin {
     // ── Public accessors ──────────────────────────────────────────────────────
 
     public ItemFactory getItemFactory() { return itemFactory; }
+
+    /**
+     * Null-safe command executor registration.
+     * Logs a warning if the command is missing from plugin.yml rather than NPE.
+     */
+    private void registerCmd(String name, org.bukkit.command.CommandExecutor exec) {
+        org.bukkit.command.PluginCommand cmd = getCommand(name);
+        if (cmd != null) {
+            cmd.setExecutor(exec);
+        } else {
+            getLogger().warning("Command '" + name + "' not found in plugin.yml — skipping.");
+        }
+    }
 }

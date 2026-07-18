@@ -14,22 +14,18 @@ commands:
   hpbar:
     description: Toggle the live HP display above mob heads.
     usage: /hpbar
-    aliases: [showhp, healthbar, hpdisplay]
 
   gear:
     description: Give yourself max-enchanted netherite god gear (Admin).
     usage: /gear [player]
-    aliases: [godgear, ng]
 
   sit:
     description: Toggle right-click-to-sit on slabs and stairs.
     usage: /sit [on|off]
-    aliases: [sitting]
 
   registry:
     description: Open the Item Registry GUI.
     usage: /registry
-    aliases: [itemregistry, items]
 
   curecosmetic:
     description: Remove cosmetic effects from a player (Admin).
@@ -42,12 +38,10 @@ commands:
   skills:
     description: View your skill levels.
     usage: /skills [player]
-    aliases: [skill]
 
   mystats:
     description: Open your personal stats GUI.
     usage: /mystats
-    aliases: [stats]
 
   stats:
     description: Open your personal stats GUI.
@@ -56,22 +50,22 @@ commands:
   cape:
     description: Open the Cape Wardrobe.
     usage: /cape
-    aliases: [wardrobe, capewardrobe, mycape]
+
+  mycape:
+    description: Open the Cape Wardrobe.
+    usage: /mycape
 
   gold:
     description: Check your gold coin balance.
     usage: /gold
-    aliases: [balance, bal]
 
   questbook:
     description: Open your quest journal.
     usage: /questbook
-    aliases: [quests, quest]
 
   party:
     description: Manage your adventuring party.
     usage: /party [invite|leave|kick|info]
-    aliases: [group]
 
   trade:
     description: Open a player trade session.
@@ -80,7 +74,6 @@ commands:
   spellbook:
     description: Open your Arcane Tome (learned spell combos).
     usage: /spellbook
-    aliases: [arcane, tome]
 
   spellpage:
     description: Give a Spell Page to yourself or a player (Admin).
@@ -89,7 +82,6 @@ commands:
   vipshop:
     description: Open the VIP Shop or spawn the VIP keeper (Admin).
     usage: /vipshop [spawn]
-    aliases: [vip, cosmetics]
 
 permissions:
   difficultyengine.use:
