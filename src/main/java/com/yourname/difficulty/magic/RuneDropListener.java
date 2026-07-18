@@ -39,9 +39,11 @@ public class RuneDropListener implements Listener {
 
         if (rand.nextDouble() >= getDropChance(mob.getType())) return;
 
-        int count = 1 + rand.nextInt(4); // 1–4 runes
-        ItemStack rune = itemFactory.buildRune(element, count);
-        mob.getWorld().dropItemNaturally(mob.getLocation(), rune);
+        // Drop Rune Dust (crafting material), not finished runes.
+        // 4× Rune Dust → 8 Runes at a crafting table (material matches recipe).
+        int count = 1 + rand.nextInt(4); // 1–4 dust per drop
+        ItemStack dust = itemFactory.buildRuneDust(element, count);
+        mob.getWorld().dropItemNaturally(mob.getLocation(), dust);
     }
 
     // ── Entity type → rune element ────────────────────────────────────────────

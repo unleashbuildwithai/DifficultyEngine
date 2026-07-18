@@ -52,8 +52,9 @@ public class ItemFactory {
     private final NamespacedKey turboMinecartKey;
     private final NamespacedKey enchantedShardKey;
     private final NamespacedKey mageGearKey;
-    private final Map<MagicElement, NamespacedKey> staffKeys = new EnumMap<>(MagicElement.class);
-    private final Map<MagicElement, NamespacedKey> runeKeys  = new EnumMap<>(MagicElement.class);
+    private final Map<MagicElement, NamespacedKey> staffKeys    = new EnumMap<>(MagicElement.class);
+    private final Map<MagicElement, NamespacedKey> runeKeys     = new EnumMap<>(MagicElement.class);
+    private final Map<MagicElement, NamespacedKey> runeDustKeys = new EnumMap<>(MagicElement.class);
 
     // ── Cape manager reference ────────────────────────────────────────────────
     private final SkillCapeManager capeManager;
@@ -67,8 +68,9 @@ public class ItemFactory {
         this.enchantedShardKey = new NamespacedKey(plugin, ENCHANTED_SHARD_KEY);
         this.mageGearKey       = new NamespacedKey(plugin, MAGE_GEAR_KEY);
         for (MagicElement el : MagicElement.values()) {
-            staffKeys.put(el, new NamespacedKey(plugin, el.staffKey));
-            runeKeys.put(el,  new NamespacedKey(plugin, el.runeKey));
+            staffKeys.put(el,    new NamespacedKey(plugin, el.staffKey));
+            runeKeys.put(el,     new NamespacedKey(plugin, el.runeKey));
+            runeDustKeys.put(el, new NamespacedKey(plugin, el.runeKey + "_dust"));
         }
         this.capeManager = capeManager;
         register();
@@ -315,6 +317,62 @@ public class ItemFactory {
     }
 
     /** Returns true if the item is a rune of the given element. */
+    // ── Rune Dust ─────────────────────────────────────────────────────────────
+    //
+    // Rune Dust is a custom-named/PDC-tagged version of the rune crafting
+    // ingredient. It drops from specific mobs and works directly in the
+    // existing 4x crafting recipe (material type matches, PDC is bonus only).
+    //
+    //   Fire Rune Dust  = NETHER_BRICK  (4× → 8 Fire Runes)
+    //   Water Rune Dust = ICE           (4× → 8 Water Runes)
+    //   Earth Rune Dust = CLAY_BALL     (4× → 8 Earth Runes)
+    //   Air Rune Dust   = FEATHER       (4× → 8 Air Runes)
+
+    public ItemStack buildRuneDust(MagicElement element, int count) {
+        ItemStack item = new ItemStack(element.runeCraftIngredient, Math.max(1, count));
+        ItemMeta  meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(element.color + element.name().charAt(0)
+                + element.name().substring(1).toLowerCase() + " Rune Dust");
+            meta.setLore(List.of(
+                "§8" + "─".repeat(22),
+                "§7Magical dust from " + dustMobSource(element) + "§7.",
+                "§8" + "─".repeat(22),
+                "§6Craft: §74× §7this " + "§7→ §e8× " + element.runeName,
+                "§8Use at a crafting table.",
+                "§8" + "─".repeat(22),
+                "§8[DifficultyEngine — Rune Dust]"
+            ));
+            meta.getPersistentDataContainer()
+                .set(runeDustKeys.get(element), PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    private String dustMobSource(MagicElement el) {
+        return switch (el) {
+            case FIRE  -> "§cBlazes §7& fire mobs";
+            case WATER -> "§bDrowned §7& guardians";
+            case EARTH -> "§2Zombies §7& spiders";
+            case AIR   -> "§7Phantoms §7& ghasts";
+        };
+    }
+
+    public boolean isRuneDust(ItemStack item, MagicElement element) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer()
+                   .has(runeDustKeys.get(element), PersistentDataType.BYTE);
+    }
+
+    public boolean isAnyRuneDust(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        for (MagicElement el : MagicElement.values()) {
+            if (isRuneDust(item, el)) return true;
+        }
+        return false;
+    }
+
     public boolean isRune(ItemStack item, MagicElement element) {
         if (item == null || !item.hasItemMeta()) return false;
         return item.getItemMeta().getPersistentDataContainer()
