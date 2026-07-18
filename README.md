@@ -107,24 +107,112 @@ The magic system is the most deep and rewarding part of DifficultyEngine. It rew
 
 ---
 
-### Runes — What They Are and How to Get Them
+### Rune Dust — The Crafting Material
 
-Runes are the **ammunition** for your staff. Each cast consumes exactly one rune from your inventory.
+**Rune Dust** is the crafting ingredient for all Elemental Runes. Kill specific mobs or craft it at a Magic Cauldron.
 
-**Crafting runes:**
-Open the crafting table recipe book and search for "rune". Each rune type is crafted as:
-- `4× [element material]` → `8 runes`
+```
+4× Rune Dust → 8 Runes   (at any crafting table)
+```
 
-**Mob drops:**
-Specific mobs drop runes matching their element:
-- Blazes, Magma Cubes → Fire Runes
-- Drowned, Guardians → Water Runes
-- Zombies, Husks → Earth Runes
-- Phantoms, Bats → Air Runes
+Keep a stack of Rune Dust in your inventory as a reserve. One stack of 64 dust = 128 runes = 128 casts!
 
-**Inventory management tip:** Keep a stack of 64 runes in your hotbar next to your staff. One stack = 64 casts.
+**No rune = no cast.** You'll see a message in your action bar telling you what to craft.
 
-**No rune = no cast.** If you try to cast with no rune, you'll see a message explaining what to craft.
+---
+
+### 🔥 Fire Rune Dust — Mob Loot Table
+
+| Mob | Drop Chance | Dust Amount |
+|---|---|---|
+| Blaze | 40% | 2–5 |
+| Magma Cube (Large) | 30% | 2–4 |
+| Magma Cube (Medium) | 20% | 1–2 |
+| Magma Cube (Small) | 10% | 1 |
+| Ghast | 35% | 3–6 |
+| Wither Skeleton | 25% | 1–3 |
+| Piglin Brute | 20% | 2–4 |
+| Strider | 10% | 1 |
+| **Wither** | **100%** | **20–30 🔥** |
+
+---
+
+### 💧 Water Rune Dust — Mob Loot Table
+
+| Mob | Drop Chance | Dust Amount |
+|---|---|---|
+| Drowned | 20% | 1–2 |
+| Guardian | 40% | 2–5 |
+| Squid | 8% | 1 |
+| Glow Squid | 15% | 1–2 |
+| Axolotl | 10% | 1 |
+| **Elder Guardian** | **100%** | **15–25 💧** |
+
+---
+
+### 🌿 Earth Rune Dust — Mob Loot Table
+
+| Mob | Drop Chance | Dust Amount |
+|---|---|---|
+| Zombie | 15% | 1 |
+| Husk | 20% | 1–2 |
+| Zombie Villager | 12% | 1 |
+| Spider | 12% | 1 |
+| Cave Spider | 18% | 1–2 |
+| Creeper | 20% | 2–3 |
+| Pillager | 25% | 1–2 |
+| Vindicator | 25% | 2–4 |
+| Ravager | 65% | 6–12 |
+| **Warden** | **100%** | **25–35 🌿** |
+
+---
+
+### 💨 Air Rune Dust — Mob Loot Table
+
+| Mob | Drop Chance | Dust Amount |
+|---|---|---|
+| Bat | 5% | 1 |
+| Phantom | 35% | 2–4 |
+| Vex | 30% | 2–3 |
+| Breeze | 60% | 4–8 |
+| **Evoker** | **70%** | **5–10 💨** |
+
+---
+
+### 🪣 Magic Cauldron — Bulk Crafting
+
+Use a **Cauldron** as an ingredient at the crafting table to brew large batches of Rune Dust.
+
+> ⚗️ The Cauldron acts as your "magic cauldron" — place it in the crafting grid along with the specific element ingredients. The cauldron is consumed in the process.
+
+#### Basic Recipe (no diamond) → **16 Rune Dust**
+
+| Element | Ingredients |
+|---|---|
+| 🔥 Fire | `Cauldron` + `Lava Bucket` + `4× Netherrack` |
+| 💧 Water | `Cauldron` + `2× Water Bucket` + `4× Prismarine Shard` |
+| 🌿 Earth | `Cauldron` + `Water Bucket` + `4× Dirt` |
+| 💨 Air | `Cauldron` + `Pufferfish` + `Water Bucket` |
+
+#### Premium Recipe (add 1 Diamond) → **80 Rune Dust** *(5× more!)*
+
+Same as basic, but add `1× Diamond` to the crafting grid.
+
+> 💡 **Math tip:** 80 Rune Dust → 160 Runes → 160 casts! Diamonds are valuable, but this is worth it for serious mages.
+>
+> 💡 **Note:** When using a Lava or Water Bucket in a recipe, you get back the Empty Bucket automatically. You only lose the contents (lava/water), not the bucket itself.
+
+---
+
+### Rune Dust → Runes Conversion
+
+Once you have Rune Dust, convert it at any crafting table:
+
+```
+4× [Element] Rune Dust → 8× [Element] Runes
+```
+
+This is the vanilla shapeless recipe — visible in the **recipe book** (green book in crafting table). Search for "rune".
 
 ---
 

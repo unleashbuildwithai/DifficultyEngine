@@ -14,6 +14,7 @@ import com.yourname.difficulty.listeners.DifficultyEngine;
 import com.yourname.difficulty.listeners.GroupDifficultyListener;
 import com.yourname.difficulty.listeners.LevelProtectionListener;
 import com.yourname.difficulty.listeners.MageGearCraftListener;
+import com.yourname.difficulty.listeners.MagicCauldronCraftListener;
 import com.yourname.difficulty.listeners.MinecartListener;
 import com.yourname.difficulty.listeners.NightmareAggroListener;
 import com.yourname.difficulty.listeners.PrayerListener;
@@ -168,6 +169,10 @@ public class Main extends JavaPlugin {
         // ── Mage Gear crafting: replaces vanilla result with PDC item ──────────
         getServer().getPluginManager().registerEvents(
                 new MageGearCraftListener(itemFactory), this);
+
+        // ── Magic Cauldron crafting: replaces placeholder with PDC Rune Dust ───
+        getServer().getPluginManager().registerEvents(
+                new MagicCauldronCraftListener(itemFactory), this);
 
         // ── Gold currency system ───────────────────────────────────────────────
         this.goldManager = new GoldManager(this);
@@ -415,9 +420,79 @@ public class Main extends JavaPlugin {
         getServer().addRecipe(bootsRecipe);
         allRecipeKeys.add(bootsKey);
 
+        // ── Magic Cauldron recipes → Rune Dust ────────────────────────────────
+        // BASIC  (no diamond):    CAULDRON + element ingredients          → 16 dust
+        // PREMIUM (+ 1 Diamond):  CAULDRON + element ingredients + DIAMOND → 80 dust
+        // PrepareItemCraftEvent (MagicCauldronCraftListener) replaces the placeholder
+        // GLOWSTONE_DUST result with the real PDC-tagged Rune Dust item.
+
+        // ── Fire Rune Dust ──────────────────────────────────────────────────────
+        NamespacedKey cfb = new NamespacedKey(this, "cauldron_fire_basic");
+        ShapelessRecipe cfbR = new ShapelessRecipe(cfb, new ItemStack(Material.GLOWSTONE_DUST, 16));
+        cfbR.addIngredient(Material.CAULDRON);
+        cfbR.addIngredient(Material.LAVA_BUCKET);
+        cfbR.addIngredient(4, Material.NETHERRACK);
+        getServer().addRecipe(cfbR);  allRecipeKeys.add(cfb);
+
+        NamespacedKey cfp = new NamespacedKey(this, "cauldron_fire_premium");
+        ShapelessRecipe cfpR = new ShapelessRecipe(cfp, new ItemStack(Material.GLOWSTONE_DUST, 64));
+        cfpR.addIngredient(Material.CAULDRON);
+        cfpR.addIngredient(Material.LAVA_BUCKET);
+        cfpR.addIngredient(4, Material.NETHERRACK);
+        cfpR.addIngredient(Material.DIAMOND);
+        getServer().addRecipe(cfpR);  allRecipeKeys.add(cfp);
+
+        // ── Water Rune Dust ─────────────────────────────────────────────────────
+        NamespacedKey cwb = new NamespacedKey(this, "cauldron_water_basic");
+        ShapelessRecipe cwbR = new ShapelessRecipe(cwb, new ItemStack(Material.GLOWSTONE_DUST, 16));
+        cwbR.addIngredient(Material.CAULDRON);
+        cwbR.addIngredient(2, Material.WATER_BUCKET);
+        cwbR.addIngredient(4, Material.PRISMARINE_SHARD);
+        getServer().addRecipe(cwbR);  allRecipeKeys.add(cwb);
+
+        NamespacedKey cwp = new NamespacedKey(this, "cauldron_water_premium");
+        ShapelessRecipe cwpR = new ShapelessRecipe(cwp, new ItemStack(Material.GLOWSTONE_DUST, 64));
+        cwpR.addIngredient(Material.CAULDRON);
+        cwpR.addIngredient(2, Material.WATER_BUCKET);
+        cwpR.addIngredient(4, Material.PRISMARINE_SHARD);
+        cwpR.addIngredient(Material.DIAMOND);
+        getServer().addRecipe(cwpR);  allRecipeKeys.add(cwp);
+
+        // ── Earth Rune Dust ─────────────────────────────────────────────────────
+        NamespacedKey ceb = new NamespacedKey(this, "cauldron_earth_basic");
+        ShapelessRecipe cebR = new ShapelessRecipe(ceb, new ItemStack(Material.GLOWSTONE_DUST, 16));
+        cebR.addIngredient(Material.CAULDRON);
+        cebR.addIngredient(Material.WATER_BUCKET);
+        cebR.addIngredient(4, Material.DIRT);
+        getServer().addRecipe(cebR);  allRecipeKeys.add(ceb);
+
+        NamespacedKey cep = new NamespacedKey(this, "cauldron_earth_premium");
+        ShapelessRecipe cepR = new ShapelessRecipe(cep, new ItemStack(Material.GLOWSTONE_DUST, 64));
+        cepR.addIngredient(Material.CAULDRON);
+        cepR.addIngredient(Material.WATER_BUCKET);
+        cepR.addIngredient(4, Material.DIRT);
+        cepR.addIngredient(Material.DIAMOND);
+        getServer().addRecipe(cepR);  allRecipeKeys.add(cep);
+
+        // ── Air Rune Dust ───────────────────────────────────────────────────────
+        NamespacedKey cab = new NamespacedKey(this, "cauldron_air_basic");
+        ShapelessRecipe cabR = new ShapelessRecipe(cab, new ItemStack(Material.GLOWSTONE_DUST, 16));
+        cabR.addIngredient(Material.CAULDRON);
+        cabR.addIngredient(Material.PUFFERFISH);
+        cabR.addIngredient(Material.WATER_BUCKET);
+        getServer().addRecipe(cabR);  allRecipeKeys.add(cab);
+
+        NamespacedKey cap_ = new NamespacedKey(this, "cauldron_air_premium");
+        ShapelessRecipe capR = new ShapelessRecipe(cap_, new ItemStack(Material.GLOWSTONE_DUST, 64));
+        capR.addIngredient(Material.CAULDRON);
+        capR.addIngredient(Material.PUFFERFISH);
+        capR.addIngredient(Material.WATER_BUCKET);
+        capR.addIngredient(Material.DIAMOND);
+        getServer().addRecipe(capR);  allRecipeKeys.add(cap_);
+
         int totalRecipes = allRecipeKeys.size();
         getLogger().info("DifficultyEngine: Registered " + totalRecipes
-                + " crafting recipes (4 staffs + 4 rune batches + 4 mage gear pieces).");
+                + " crafting recipes (4 staffs + 4 rune batches + 4 mage gear pieces + 8 magic cauldron).");
         getLogger().info("  Mage Gear recipe: LEATHER_PIECE + PURPLE_DYE + BLAZE_POWDER");
         getLogger().info("  Open crafting table → recipe book to search for them.");
     }
