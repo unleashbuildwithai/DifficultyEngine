@@ -22,6 +22,8 @@ import com.yourname.difficulty.listeners.SoulfurPotionListener;
 import com.yourname.difficulty.magic.MagicElement;
 import com.yourname.difficulty.magic.MagicStaffListener;
 import com.yourname.difficulty.magic.RuneDropListener;
+import com.yourname.difficulty.magic.SandstormManager;
+import com.yourname.difficulty.skills.CapeDataManager;
 import com.yourname.difficulty.magic.SpellBookListener;
 import com.yourname.difficulty.magic.SpellBookManager;
 import com.yourname.difficulty.party.PartyHudTask;
@@ -64,6 +66,9 @@ public class Main extends JavaPlugin {
     private SkillCapeManager        skillCapeManager;
     private AdminLightCommand       adminLightCommand;
     private CapeVisualTask          capeVisualTask;
+    private CapeDataManager         capeDataManager;
+    private SandstormManager        sandstormManager;
+    private MagicStaffListener      magicStaffListener;
     // ── New systems ────────────────────────────────────────────────────────────
     private SpellBookManager spellBookManager;
     private GoldManager    goldManager;
@@ -85,6 +90,9 @@ public class Main extends JavaPlugin {
         this.difficultyManager = new PlayerDifficultyManager(this);
         this.skillManager      = new SkillManager(this);
         this.skillCapeManager  = new SkillCapeManager(this);
+        // Cape data stored separately from the chestplate slot (wear both!)
+        this.capeDataManager   = new CapeDataManager(this);
+        getServer().getPluginManager().registerEvents(capeDataManager, this);
 
         // ── Item & GUI layer ──────────────────────────────────────────────────
         this.itemFactory = new ItemFactory(this, skillCapeManager);
@@ -134,16 +142,20 @@ public class Main extends JavaPlugin {
                 new PrayerListener(skillManager), this);
 
         // Magic staffs: casting, rune consumption, crafting validation
-        getServer().getPluginManager().registerEvents(
-                new MagicStaffListener(itemFactory, skillManager, this), this);
+        this.magicStaffListener = new MagicStaffListener(itemFactory, skillManager, this);
+        getServer().getPluginManager().registerEvents(magicStaffListener, this);
+        // Sandstorm: triggered by Air bolt on Earth-on-Water quicksand
+        this.sandstormManager = new SandstormManager(this);
+        magicStaffListener.setSandstormManager(sandstormManager);
+        getServer().getPluginManager().registerEvents(sandstormManager, this);
 
         // Level protection: OSRS combat-level PvP bracket + passive aura scan
         getServer().getPluginManager().registerEvents(
                 new LevelProtectionListener(skillManager, this), this);
 
-        // Cape wardrobe GUI
+        // Cape wardrobe GUI (two-slot: armour + cape independently)
         getServer().getPluginManager().registerEvents(
-                new CapeSlotGUIListener(skillCapeManager, skillManager), this);
+                new CapeSlotGUIListener(skillCapeManager, skillManager, capeDataManager), this);
 
         // ── Group Nightmare difficulty (4+ NM players within 50 blocks → ×10) ─
         getServer().getPluginManager().registerEvents(
@@ -216,7 +228,7 @@ public class Main extends JavaPlugin {
         getCommand("mystats").setExecutor(guiCmd);
         getCommand("stats").setExecutor(guiCmd);
 
-        CapeSlotGUI capeGui = new CapeSlotGUI(skillCapeManager);
+        CapeSlotGUI capeGui = new CapeSlotGUI(skillCapeManager, capeDataManager);
         getCommand("cape").setExecutor((sender, cmd, label, args) -> {
             if (!(sender instanceof Player player)) {
                 sender.sendMessage("§cOnly players can open the Cape Wardrobe.");
@@ -299,10 +311,10 @@ public class Main extends JavaPlugin {
         partyHudTask.runTaskTimer(this, 20L, 20L);
 
         // Sweep any orphaned cape hologram stands left from a previous crash/reload
-        new CapeVisualTask(skillCapeManager, this).cleanup();
+        new CapeVisualTask(skillCapeManager, capeDataManager, this).cleanup();
 
         // Cape visual particles + floating hologram symbol — every 10 ticks (0.5 s)
-        this.capeVisualTask = new CapeVisualTask(skillCapeManager, this);
+        this.capeVisualTask = new CapeVisualTask(skillCapeManager, capeDataManager, this);
         capeVisualTask.runTaskTimer(this, 10L, 10L);
 
         for (Player p : getServer().getOnlinePlayers()) {
@@ -328,6 +340,8 @@ public class Main extends JavaPlugin {
         if (skillManager      != null) skillManager.saveAll();
         if (adminLightCommand != null) adminLightCommand.disableAll();
         if (capeVisualTask    != null) capeVisualTask.cleanup();
+        if (capeDataManager   != null) capeDataManager.saveAll();
+        if (sandstormManager  != null) sandstormManager.shutdown();
         if (partyHudTask      != null) partyHudTask.cleanup();
         if (spellBookManager  != null) spellBookManager.save();
         if (goldManager       != null) goldManager.saveAll();

@@ -1,5 +1,6 @@
 package com.yourname.difficulty.gui;
 
+import com.yourname.difficulty.skills.CapeDataManager;
 import com.yourname.difficulty.skills.SkillCapeManager;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -11,30 +12,37 @@ import org.bukkit.inventory.meta.ItemMeta;
 import java.util.List;
 
 /**
- * CapeSlotGUI — A 27-slot "Cape Wardrobe" GUI accessed via /cape.
+ * CapeSlotGUI — A 27-slot "Cape Wardrobe" GUI accessed via /mycape.
  *
- * Layout:
- *   Row 0: glass border + header label in centre
- *   Row 1: glass, glass, [info], glass, [CAPE SLOT], glass, [info], glass, glass
+ * Layout (3 rows × 9):
+ *   Row 0: glass border with header label at slot 4
+ *   Row 1: [g][armor_lbl][ARMOR=11][g][SEP][g][CAPE=15][cape_lbl][g]
  *   Row 2: glass border
  *
- * The CAPE SLOT (slot 13) mirrors the player's elytra/chest slot.
- *   • If the player has a cape equipped → shown in slot 13
- *   • If empty → a placeholder "drag cape here" glass is shown
+ * ── TWO independent slots ────────────────────────────────────────────────────
+ *  ARMOR SLOT (slot 11) mirrors the player's chestplate armour.
+ *    Click with item in cursor  → equips item as chestplate (old one returned)
+ *    Click with empty cursor    → takes chestplate to cursor
  *
- * All click logic is handled by {@link CapeSlotGUIListener}.
+ *  CAPE SLOT (slot 15) reads from CapeDataManager (NOT the chestplate slot).
+ *    Players can now wear BOTH a chestplate and a skill cape simultaneously.
+ *    The cape's visual (particles + back label) is still shown by CapeVisualTask.
  */
 public class CapeSlotGUI {
 
-    public static final String TITLE       = "§8✦ §5Cape Wardrobe §8✦";
-    public static final int    SIZE        = 27;
-    /** The inventory slot that acts as the cape equip slot. */
-    public static final int    CAPE_SLOT   = 13;
+    public static final String TITLE      = "§8✦ §5Cape Wardrobe §8✦";
+    public static final int    SIZE       = 27;
+    /** Slot for the player's chestplate armour (independent of the cape). */
+    public static final int    ARMOR_SLOT = 11;
+    /** Slot for the equipped skill cape (stored in CapeDataManager). */
+    public static final int    CAPE_SLOT  = 15;
 
     private final SkillCapeManager capeManager;
+    private final CapeDataManager  capeDataManager;
 
-    public CapeSlotGUI(SkillCapeManager capeManager) {
-        this.capeManager = capeManager;
+    public CapeSlotGUI(SkillCapeManager capeManager, CapeDataManager capeDataManager) {
+        this.capeManager     = capeManager;
+        this.capeDataManager = capeDataManager;
     }
 
     public void open(Player player) {
@@ -47,17 +55,23 @@ public class CapeSlotGUI {
         // Header label (slot 4)
         inv.setItem(4, label());
 
-        // Info items (slots 11 and 15)
-        inv.setItem(11, infoItem());
-        inv.setItem(15, infoItem());
-
-        // Cape slot — show current elytra if it's a cape, else empty marker
+        // Armor slot — show current chestplate or empty marker
         ItemStack chestplate = player.getInventory().getChestplate();
-        if (chestplate != null && capeManager.isAnyCape(chestplate)) {
-            inv.setItem(CAPE_SLOT, chestplate.clone());
-        } else {
-            inv.setItem(CAPE_SLOT, emptySlot());
-        }
+        inv.setItem(ARMOR_SLOT, (chestplate != null && !chestplate.getType().isAir())
+            ? chestplate.clone() : emptyArmorSlot());
+
+        // Separator
+        inv.setItem(13, separator());
+
+        // Cape slot — show cape from CapeDataManager or empty marker
+        ItemStack cape = capeDataManager.getEquippedCape(player.getUniqueId());
+        inv.setItem(CAPE_SLOT, (cape != null) ? cape.clone() : emptyCapeSlot());
+
+        // Labels flanking each slot
+        inv.setItem(10, armorInfoItem());
+        inv.setItem(12, armorInfoItem());
+        inv.setItem(14, capeInfoItem());
+        inv.setItem(16, capeInfoItem());
 
         player.openInventory(inv);
     }
@@ -65,52 +79,68 @@ public class CapeSlotGUI {
     // ── Item builders ─────────────────────────────────────────────────────────
 
     private ItemStack filler() {
-        ItemStack glass = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
-        ItemMeta meta = glass.getItemMeta();
-        if (meta != null) { meta.setDisplayName("§8"); glass.setItemMeta(meta); }
-        return glass;
+        ItemStack g = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
+        ItemMeta m = g.getItemMeta();
+        if (m != null) { m.setDisplayName("§8"); g.setItemMeta(m); }
+        return g;
     }
 
     private ItemStack label() {
-        ItemStack item = new ItemStack(Material.FEATHER);
-        ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName("§5✦ §dCape Wardrobe §5✦");
-            meta.setLore(List.of(
-                "§7Place a skill cape in the",
-                "§7centre slot to equip it.",
-                "§8" + "─".repeat(22),
-                "§7Capes are §bElytra §7— they appear",
-                "§7on your §bback §7like a real cape.",
-                "§8Use a resource pack for",
-                "§8custom cape textures."
+        ItemStack it = new ItemStack(Material.FEATHER);
+        ItemMeta m = it.getItemMeta();
+        if (m != null) {
+            m.setDisplayName("§5✦ §dCape Wardrobe §5✦");
+            m.setLore(List.of(
+                "§7Wear §barmour §7AND a §5cape §7at the same time!",
+                "§8" + "─".repeat(28),
+                "§e◀ Armour slot  §8|  §5Cape slot ▶",
+                "§8Each slot is independent."
             ));
-            item.setItemMeta(meta);
+            it.setItemMeta(m);
         }
-        return item;
+        return it;
     }
 
-    private ItemStack emptySlot() {
-        ItemStack item = new ItemStack(Material.LIGHT_GRAY_STAINED_GLASS_PANE);
-        ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName("§7[ Cape Slot ]");
-            meta.setLore(List.of(
-                "§8Drag a skill cape here",
-                "§8to equip it on your back."
-            ));
-            item.setItemMeta(meta);
-        }
-        return item;
+    private ItemStack separator() {
+        ItemStack it = new ItemStack(Material.WHITE_STAINED_GLASS_PANE);
+        ItemMeta m = it.getItemMeta();
+        if (m != null) { m.setDisplayName("§8│"); it.setItemMeta(m); }
+        return it;
     }
 
-    private ItemStack infoItem() {
-        ItemStack item = new ItemStack(Material.PURPLE_STAINED_GLASS_PANE);
-        ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName("§5→ Cape Slot ←");
-            item.setItemMeta(meta);
+    private ItemStack emptyArmorSlot() {
+        ItemStack it = new ItemStack(Material.LIGHT_GRAY_STAINED_GLASS_PANE);
+        ItemMeta m = it.getItemMeta();
+        if (m != null) {
+            m.setDisplayName("§7[ Armour Slot ]");
+            m.setLore(List.of("§8Click to place a chestplate here.", "§8Any chestplate is accepted."));
+            it.setItemMeta(m);
         }
-        return item;
+        return it;
+    }
+
+    private ItemStack emptyCapeSlot() {
+        ItemStack it = new ItemStack(Material.LIGHT_GRAY_STAINED_GLASS_PANE);
+        ItemMeta m = it.getItemMeta();
+        if (m != null) {
+            m.setDisplayName("§7[ Cape Slot ]");
+            m.setLore(List.of("§8Drag a skill cape here to equip it.", "§8Requires Level 99 in the cape's skill."));
+            it.setItemMeta(m);
+        }
+        return it;
+    }
+
+    private ItemStack armorInfoItem() {
+        ItemStack it = new ItemStack(Material.IRON_CHESTPLATE);
+        ItemMeta m = it.getItemMeta();
+        if (m != null) { m.setDisplayName("§e→ Armour Slot ←"); it.setItemMeta(m); }
+        return it;
+    }
+
+    private ItemStack capeInfoItem() {
+        ItemStack it = new ItemStack(Material.PURPLE_STAINED_GLASS_PANE);
+        ItemMeta m = it.getItemMeta();
+        if (m != null) { m.setDisplayName("§5→ Cape Slot ←"); it.setItemMeta(m); }
+        return it;
     }
 }

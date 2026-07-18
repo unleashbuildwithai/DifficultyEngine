@@ -1,5 +1,6 @@
 package com.yourname.difficulty.gui;
 
+import com.yourname.difficulty.skills.CapeDataManager;
 import com.yourname.difficulty.skills.SkillCapeManager;
 import com.yourname.difficulty.skills.SkillLevel;
 import com.yourname.difficulty.skills.SkillManager;
@@ -10,58 +11,59 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.inventory.ItemStack;
 
 /**
- * CapeSlotGUIListener — Handles interaction with the /cape wardrobe GUI.
+ * CapeSlotGUIListener — Handles the redesigned two-slot Cape Wardrobe GUI.
  *
- * Logic:
- *   • Only slot 13 (CAPE_SLOT) is interactive.
- *   • Placing a cape in the slot → equips to the player's elytra/chest slot.
- *   • Taking a cape from the slot → removes from elytra slot, put on cursor.
- *   • Level 99 requirement enforced (admin bypass).
- *   • All other clicks are cancelled.
- *   • On GUI close, the GUI cape slot is synced back to inventory if needed.
+ * ── Armour slot (slot 11) ────────────────────────────────────────────────────
+ *   • Click with any non-cape item on cursor → equips as chestplate.
+ *     Returns old chestplate to cursor (player can put it in inventory later).
+ *   • Click with empty cursor + slot occupied → takes chestplate to cursor.
+ *   • Capes are rejected here (use the cape slot instead).
+ *
+ * ── Cape slot (slot 15) ──────────────────────────────────────────────────────
+ *   • Click with cape on cursor → equips via CapeDataManager.
+ *     Returns old cape (if any) to cursor.
+ *   • Click with empty cursor + cape in slot → unequips cape, puts on cursor.
+ *   • Level 99 requirement still enforced (admin bypass available).
+ *
+ * ── All other slots ──────────────────────────────────────────────────────────
+ *   • Cancelled — the player's own inventory (bottom half) is still accessible.
  */
 public class CapeSlotGUIListener implements Listener {
 
     private final SkillCapeManager capeManager;
     private final SkillManager     skillManager;
+    private final CapeDataManager  capeDataManager;
 
-    public CapeSlotGUIListener(SkillCapeManager capeManager, SkillManager skillManager) {
-        this.capeManager  = capeManager;
-        this.skillManager = skillManager;
+    public CapeSlotGUIListener(SkillCapeManager capeManager,
+                                SkillManager skillManager,
+                                CapeDataManager capeDataManager) {
+        this.capeManager     = capeManager;
+        this.skillManager    = skillManager;
+        this.capeDataManager = capeDataManager;
     }
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onInventoryClick(InventoryClickEvent event) {
         if (!CapeSlotGUI.TITLE.equals(event.getView().getTitle())) return;
-        event.setCancelled(true); // cancel everything by default
+        event.setCancelled(true); // cancel by default
 
         if (!(event.getWhoClicked() instanceof Player player)) return;
-        // Only allow interaction with the top inventory (the GUI)
+        // Only handle clicks in the top (GUI) inventory
         if (event.getClickedInventory() == null) return;
         if (!event.getClickedInventory().equals(event.getView().getTopInventory())) return;
-        // Only the cape slot is interactive
-        if (event.getSlot() != CapeSlotGUI.CAPE_SLOT) return;
 
-        ItemStack cursor  = event.getCursor();
-        ItemStack inSlot  = event.getCurrentItem();
+        int slot = event.getSlot();
 
-        boolean cursorHasCape = cursor != null && capeManager.isAnyCape(cursor);
-        boolean slotHasCape   = inSlot != null  && capeManager.isAnyCape(inSlot);
-
-        if (cursorHasCape && !slotHasCape) {
-            // Player wants to EQUIP a cape from cursor
-            if (!canEquip(player, cursor)) return; // sends its own error message
-            equipCape(player, cursor, event);
-        } else if (slotHasCape && (cursor == null || cursor.getType().isAir())) {
-            // Player wants to UNEQUIP the cape
-            unequipCape(player, inSlot, event);
+        if (slot == CapeSlotGUI.ARMOR_SLOT) {
+            handleArmorSlotClick(player, event);
+        } else if (slot == CapeSlotGUI.CAPE_SLOT) {
+            handleCapeSlotClick(player, event);
         }
-        // Any other click (cape-on-cape swap, non-cape item, etc.) stays cancelled
+        // All other GUI slots stay cancelled
     }
 
     @EventHandler
@@ -71,82 +73,91 @@ public class CapeSlotGUIListener implements Listener {
         }
     }
 
-    // ── Equip ─────────────────────────────────────────────────────────────────
+    // ── Armour slot logic ─────────────────────────────────────────────────────
 
-    private void equipCape(Player player, ItemStack cape, InventoryClickEvent event) {
-        // If there's already a chestplate/elytra, return it to inventory
-        ItemStack current = player.getInventory().getChestplate();
-        if (current != null && !current.getType().isAir()) {
-            player.getInventory().addItem(current);
+    private void handleArmorSlotClick(Player player, InventoryClickEvent event) {
+        ItemStack cursor = event.getCursor();
+        ItemStack inSlot = event.getCurrentItem();
+
+        boolean cursorHasItem = cursor != null && !cursor.getType().isAir();
+        boolean slotHasItem   = inSlot  != null && !inSlot.getType().isAir()
+                                && !(inSlot.getType() == Material.LIGHT_GRAY_STAINED_GLASS_PANE);
+
+        if (cursorHasItem) {
+            // Reject capes in armor slot
+            if (capeManager.isAnyCape(cursor)) {
+                player.sendMessage("§c✗ §7Capes go in the §5cape slot §7(right side)!");
+                return;
+            }
+            // Equip cursor item as chestplate; return old chestplate to cursor
+            ItemStack old = player.getInventory().getChestplate();
+            player.getInventory().setChestplate(cursor.clone());
+            event.getView().setCursor(
+                (old != null && !old.getType().isAir()) ? old.clone() : new ItemStack(Material.AIR));
+            event.getView().getTopInventory().setItem(CapeSlotGUI.ARMOR_SLOT, cursor.clone());
+            player.sendMessage("§e⚔ §7Armour equipped!");
+
+        } else if (slotHasItem) {
+            // Take chestplate to cursor
+            ItemStack chest = player.getInventory().getChestplate();
+            if (chest != null && !chest.getType().isAir()) {
+                player.getInventory().setChestplate(null);
+                event.getView().setCursor(chest.clone());
+                event.getView().getTopInventory().setItem(CapeSlotGUI.ARMOR_SLOT, emptyArmorSlot());
+                player.sendMessage("§7Armour removed.");
+            }
         }
-
-        // Apply admin perk
-        if (player.hasPermission("difficultyengine.cape.admin")) {
-            grantAdminPerk(player, cape);
-        }
-
-        // Equip the cape (put into chest/elytra slot)
-        player.getInventory().setChestplate(cape.clone());
-
-        // Clear cursor
-        event.getView().setCursor(new ItemStack(Material.AIR));
-
-        // Update the GUI slot to show the cape
-        event.getView().getTopInventory().setItem(CapeSlotGUI.CAPE_SLOT, cape.clone());
-
-        player.sendMessage("§5✦ §7Cape equipped! §5✦");
     }
 
-    // ── Unequip ───────────────────────────────────────────────────────────────
+    // ── Cape slot logic ───────────────────────────────────────────────────────
 
-    private void unequipCape(Player player, ItemStack cape, InventoryClickEvent event) {
-        // Remove from elytra slot
-        player.getInventory().setChestplate(null);
+    private void handleCapeSlotClick(Player player, InventoryClickEvent event) {
+        ItemStack cursor = event.getCursor();
+        ItemStack inSlot = event.getCurrentItem();
 
-        // Put on cursor so player can move it
-        event.getView().setCursor(cape.clone());
+        boolean cursorHasCape = cursor != null && capeManager.isAnyCape(cursor);
+        boolean slotHasCape   = inSlot  != null && capeManager.isAnyCape(inSlot);
 
-        // Replace GUI slot with empty marker
-        CapeSlotGUI gui = new CapeSlotGUI(capeManager);
-        // We rebuild the empty slot item inline
-        org.bukkit.inventory.meta.ItemMeta meta;
-        ItemStack empty = new ItemStack(Material.LIGHT_GRAY_STAINED_GLASS_PANE);
-        meta = empty.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName("§7[ Cape Slot ]");
-            meta.setLore(java.util.List.of("§8Drag a skill cape here", "§8to equip it on your back."));
-            empty.setItemMeta(meta);
+        if (cursorHasCape && !slotHasCape) {
+            // Player wants to EQUIP a cape
+            if (!canEquip(player, cursor)) return;
+            // Swap into CapeDataManager
+            ItemStack old = capeDataManager.equipCape(player.getUniqueId(), cursor);
+            event.getView().getTopInventory().setItem(CapeSlotGUI.CAPE_SLOT, cursor.clone());
+            event.getView().setCursor(
+                (old != null && !old.getType().isAir()) ? old.clone() : new ItemStack(Material.AIR));
+            if (player.hasPermission("difficultyengine.cape.admin")) grantAdminPerk(player, cursor);
+            player.sendMessage("§5✦ §7Cape equipped! §5✦");
+
+        } else if (slotHasCape && (cursor == null || cursor.getType().isAir())) {
+            // Player wants to UNEQUIP the cape
+            ItemStack old = capeDataManager.unequipCape(player.getUniqueId());
+            event.getView().setCursor(old != null ? old.clone() : new ItemStack(Material.AIR));
+            event.getView().getTopInventory().setItem(CapeSlotGUI.CAPE_SLOT, emptyCapeSlot());
+            player.sendMessage("§7Cape unequipped.");
         }
-        event.getView().getTopInventory().setItem(CapeSlotGUI.CAPE_SLOT, empty);
-
-        player.sendMessage("§7Cape unequipped.");
     }
 
     // ── Level check ───────────────────────────────────────────────────────────
 
     private boolean canEquip(Player player, ItemStack cape) {
         if (player.hasPermission("difficultyengine.cape.admin")) return true;
-        // Boss Cape: earned through gameplay — no skill level requirement
         if (capeManager.isBossCape(cape)) return true;
-
         if (capeManager.isMaxCape(cape)) {
             if (!skillManager.isMaxed(player.getUniqueId())) {
-                player.sendMessage("§c✗ §7You need §aLevel 99 §7in §fevery skill §7to wear the §5★ Max Cape§7.");
-                player.sendMessage("  §7Use §e/mystats §7to check your progress.");
+                player.sendMessage("§c✗ §7Need §aLevel 99 §7in §fevery skill §7for the §5★ Max Cape§7.");
                 return false;
             }
-        } else {
-            SkillType skill = capeManager.getCapeSkill(cape);
-            if (skill != null) {
-                int lvl = skillManager.getLevel(player.getUniqueId(), skill);
-                if (lvl < SkillLevel.MAX_LEVEL) {
-                    player.sendMessage("§c✗ §7You need §aLevel 99 §7in §"
-                            + skill.getColorCode().charAt(1)
-                            + SkillCapeManager.symbol(skill) + " " + skill.getDisplayName()
-                            + " §7to wear this cape.");
-                    player.sendMessage("  §7Your level: §e" + lvl + " §8/ §a99");
-                    return false;
-                }
+            return true;
+        }
+        SkillType skill = capeManager.getCapeSkill(cape);
+        if (skill != null) {
+            int lvl = skillManager.getLevel(player.getUniqueId(), skill);
+            if (lvl < SkillLevel.MAX_LEVEL) {
+                player.sendMessage("§c✗ §7Need §aLevel 99 §7in §"
+                    + skill.getColorCode().charAt(1) + skill.getDisplayName()
+                    + " §7for this cape. §8(You: §e" + lvl + "§8/§a99§8)");
+                return false;
             }
         }
         return true;
@@ -154,17 +165,29 @@ public class CapeSlotGUIListener implements Listener {
 
     // ── Admin perk ────────────────────────────────────────────────────────────
 
-    /** Silently sets the admin's skill(s) to Level 99 when they equip a cape. */
     private void grantAdminPerk(Player player, ItemStack cape) {
-        if (capeManager.isBossCape(cape)) return; // Boss Cape has no skill to set
+        if (capeManager.isBossCape(cape)) return;
         if (capeManager.isMaxCape(cape)) {
             skillManager.setAllToMax(player.getUniqueId());
         } else {
             SkillType skill = capeManager.getCapeSkill(cape);
-            if (skill != null) {
-                skillManager.setToMax(player.getUniqueId(), skill);
-            }
+            if (skill != null) skillManager.setToMax(player.getUniqueId(), skill);
         }
-        // No announcement — stats are set silently every time.
+    }
+
+    // ── Slot placeholder builders ─────────────────────────────────────────────
+
+    private ItemStack emptyArmorSlot() {
+        ItemStack it = new ItemStack(Material.LIGHT_GRAY_STAINED_GLASS_PANE);
+        org.bukkit.inventory.meta.ItemMeta m = it.getItemMeta();
+        if (m != null) { m.setDisplayName("§7[ Armour Slot ]"); it.setItemMeta(m); }
+        return it;
+    }
+
+    private ItemStack emptyCapeSlot() {
+        ItemStack it = new ItemStack(Material.LIGHT_GRAY_STAINED_GLASS_PANE);
+        org.bukkit.inventory.meta.ItemMeta m = it.getItemMeta();
+        if (m != null) { m.setDisplayName("§7[ Cape Slot ]"); it.setItemMeta(m); }
+        return it;
     }
 }

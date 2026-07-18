@@ -1,0 +1,36 @@
+# ── SeparatePlug Configuration ────────────────────────────────────────────────
+
+# Resource Pack
+# Paste the DIRECT download URL for your texture pack here.
+# Example (GitHub raw): https://raw.githubusercontent.com/yourname/spirit-pack/main/pack.zip
+# Example (Dropbox):    https://dl.dropboxusercontent.com/s/abc123/spiritpack.zip
+#
+# sha1: (optional) SHA-1 hash of the zip file — helps clients cache it.
+#       Leave blank to skip hash check.
+#
+# Once set, the pack is sent automatically to every player who joins.
+# Players who accept will see the ghost-sword models for all spirit staves
+# (CustomModelData 2001-2004) and the Ghost Sword blade (CMD 1001).
+
+resource-pack:
+  url: ""
+  sha1: ""
+
+# ── Spirit drop chances ───────────────────────────────────────────────────────
+# Percentage chance (0-100) that a spirit staff drops on player death.
+spirit-drop-chance: 5
+
+# Percentage chance (0-100) that the killer receives a copy of the victim's staff.
+spirit-kill-chance: 5
+
+# ── Ghost Sword stun duration (ticks) ─────────────────────────────────────────
+# Normal stun:  60 ticks = 3 seconds
+# Charged stun: 90 ticks = 4.5 seconds (when combat bar is full)
+stun-ticks-normal:  60
+stun-ticks-charged: 90
+
+# ── Combat hit-bar ────────────────────────────────────────────────────────────
+# Number of hits required to fill the combat bar.
+combat-bar-max-hits: 10
+# Seconds of inactivity before the bar resets.
+combat-bar-idle-seconds: 30

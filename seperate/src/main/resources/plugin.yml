@@ -1,0 +1,30 @@
+name: SeparatePlug
+version: 1.0
+main: com.separateplug.Main
+api-version: "1.21"
+description: Spirit PvP — elemental spirit staves, ghost sword, combat hit-bar, stun sword.
+authors: [YourName]
+
+# ── Resource Pack ─────────────────────────────────────────────────────────────
+# Paste your direct-download resource-pack URL in config.yml under resource-pack.url
+# Players who accept the pack will see the custom ghost-sword models.
+# Texture pack CustomModelData IDs used:
+#   IRON_SWORD  CustomModelData 1001  → Ghost Sword (grey ghost body blade)
+#   BLAZE_ROD   CustomModelData 2001  → Fire Spirit Staff
+#   PRISMARINE_SHARD CustomModelData 2002 → Water Spirit Staff
+#   STICK       CustomModelData 2003  → Earth Spirit Staff
+#   FEATHER     CustomModelData 2004  → Air Spirit Staff
+
+commands:
+  spiritinfo:
+    description: Show your bound spirit type.
+    usage: /spiritinfo
+  givestunblade:
+    description: "[Admin] Give a Stun Sword to a player."
+    usage: /givestunblade [player]
+    permission: separateplug.admin
+
+permissions:
+  separateplug.admin:
+    description: Admin commands for SeparatePlug.
+    default: op

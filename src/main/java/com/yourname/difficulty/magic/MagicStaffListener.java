@@ -6,6 +6,7 @@ import com.yourname.difficulty.skills.SkillLevel;
 import com.yourname.difficulty.skills.SkillManager;
 import com.yourname.difficulty.skills.SkillType;
 import org.bukkit.FluidCollisionMode;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
@@ -32,11 +33,15 @@ import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Vector;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -112,6 +117,12 @@ public class MagicStaffListener implements Listener {
     private final Map<UUID, Map<MagicElement, Long>>   cooldowns          = new HashMap<>();
     /** tracks the repeating task keeping FALLEN players in swim pose */
     private final Map<UUID, BukkitTask>                fallenTasks        = new HashMap<>();
+    /** World blocks converted from water → quicksand (soul sand) by Earth-on-Water combo. */
+    private final Set<Location>                        quicksandBlocks    = new HashSet<>();
+    /** SandstormManager reference — injected after construction via setSandstormManager(). */
+    private       SandstormManager                    sandstormManager   = null;
+    /** Metadata key tracking successive earth hits on a target (for suffocate combo). */
+    public  static final String META_EARTH_HITS = "magic_earth_hits";
 
     private static final long MAGIC_XP_CAST  = 10L;
     private static final long MAGIC_XP_HIT   =  5L;
@@ -305,30 +316,47 @@ public class MagicStaffListener implements Listener {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  AIR STAFF — heavily buffed + full combo matrix
+    //  AIR STAFF — skill-based projectile (aim with crosshair, not aimbot!)
     // ══════════════════════════════════════════════════════════════════════════
 
     private void castAir(Player player, int magicLevel) {
-        LivingEntity target = nearestEntity(player, AIR_RANGE);
-        if (target == null) {
-            player.getWorld().spawnParticle(Particle.CLOUD,
-                player.getLocation().add(player.getLocation().getDirection().multiply(4)).add(0, 1, 0),
-                40, 0.6, 0.6, 0.6, 0.12);
-            player.sendActionBar("§7💨 §7No target within " + AIR_RANGE + " blocks.");
-            return;
-        }
+        // Fire a feather-snowball in the exact direction the player is looking.
+        // No auto-targeting — player aims manually, just like Fire / Water / Earth.
+        Snowball bolt = player.launchProjectile(Snowball.class);
+        bolt.setItem(new ItemStack(Material.FEATHER));
+        bolt.setVelocity(player.getLocation().getDirection().multiply(2.8));
 
+        trackedProjectiles.put(bolt.getUniqueId(), MagicElement.AIR);
+        projectileShooters.put(bolt.getUniqueId(), player.getUniqueId());
+        projectileLevels.put(bolt.getUniqueId(), magicLevel);
+
+        // Trailing CLOUD + ENCHANT particles so the bolt is visible in flight
+        plugin.getServer().getScheduler().runTaskTimer(plugin, task -> {
+            if (!bolt.isValid()) { task.cancel(); return; }
+            bolt.getWorld().spawnParticle(Particle.CLOUD,   bolt.getLocation(), 5, 0.10, 0.10, 0.10, 0.06);
+            bolt.getWorld().spawnParticle(Particle.ENCHANT, bolt.getLocation(), 3, 0.10, 0.10, 0.10, 0.12);
+        }, 0L, 1L);
+
+        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_PHANTOM_FLAP, 1.0f, 1.8f);
+        player.sendActionBar("§7[Air] §7Air bolt fired! §8(Lv " + magicLevel + ")");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  handleAirHit — combo logic applied when the air bolt hits an entity
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private void handleAirHit(LivingEntity target, Player shooter, int lvl) {
         // ── FROZEN + AIR = INSTANT DEATH ──────────────────────────────────────
         if (isFrozen(target)) {
-            killFrozen(target, player, "§b❄ §c§lSHATTERED! §7Frozen solid — launched into the ground!");
-            awardMagicXp(player, MAGIC_XP_COMBO);
+            killFrozen(target, shooter, "§b❄ §c§lSHATTERED! §7Frozen solid — launched into the ground!");
+            if (shooter != null) awardMagicXp(shooter, MAGIC_XP_COMBO);
             return;
         }
 
         // ── STATUE + AIR = INSTANT DEATH ──────────────────────────────────────
         if (isStatue(target)) {
-            killStatue(target, player, "§6🏺 §c§lCRUMBLED! §7The statue was blasted apart!");
-            awardMagicXp(player, MAGIC_XP_COMBO);
+            killStatue(target, shooter, "§6🏺 §c§lCRUMBLED! §7The statue was blasted apart!");
+            if (shooter != null) awardMagicXp(shooter, MAGIC_XP_COMBO);
             return;
         }
 
@@ -338,10 +366,9 @@ public class MagicStaffListener implements Listener {
             applyFrozen(target, 100); // 5 seconds
             target.getWorld().spawnParticle(Particle.SNOWFLAKE,
                 target.getLocation().add(0, 1, 0), 50, 0.5, 0.5, 0.5, 0.1);
-            if (shooter(player) != null) player.sendActionBar(
+            if (shooter != null) shooter.sendActionBar(
                 "§b❄ §f§lFROZEN! §7Chilled target locked solid! §8Air gust = §c§lDEATH§8!");
-            awardMagicXp(player, MAGIC_XP_COMBO);
-            awardMagicXp(player, MAGIC_XP_HIT);
+            if (shooter != null) { awardMagicXp(shooter, MAGIC_XP_COMBO); awardMagicXp(shooter, MAGIC_XP_HIT); }
             return;
         }
 
@@ -349,108 +376,89 @@ public class MagicStaffListener implements Listener {
         if (isWet(target)) {
             removeWet(target, true);
             applyChilled(target, 50); // 2.5 seconds — tight window for Frozen combo
-            player.sendActionBar("§b❄ §7Target is §bChilled§7! §8Cast Air again quickly to §bFreeeze§8!");
-            awardMagicXp(player, MAGIC_XP_HIT);
+            if (shooter != null) {
+                shooter.sendActionBar("§b❄ §7Target is §bChilled§7! §8Cast Air again quickly to §bFreeze§8!");
+                awardMagicXp(shooter, MAGIC_XP_HIT);
+            }
             return;
         }
 
         // ── MUDDY + AIR = massive upward launch ───────────────────────────────
         if (isMuddy(target)) {
             removeMuddy(target);
-            Vector up = new Vector(0, 2.5 + (magicLevel / 99.0) * 2.0, 0)
-                .add(target.getLocation().subtract(player.getLocation()).toVector().normalize().multiply(0.8));
+            Vector up = new Vector(0, 2.5 + (lvl / 99.0) * 2.0, 0)
+                .add(shooter != null
+                    ? target.getLocation().subtract(shooter.getLocation()).toVector().normalize().multiply(0.8)
+                    : new Vector(0, 0, 0));
             target.setVelocity(up);
-            double dmg = 3.0 + SkillBonusManager.magicDamageBonus(magicLevel) * 3;
-            target.damage(dmg, player);
+            double dmg = 3.0 + SkillBonusManager.magicDamageBonus(lvl) * 3;
+            target.damage(dmg, shooter);
             target.getWorld().spawnParticle(Particle.BLOCK,
-                target.getLocation().add(0, 1, 0), 50, 0.5, 0.5, 0.5,
-                Material.MUD.createBlockData());
-            player.sendActionBar("§6🌿 §f§lMUD LAUNCH! §7Muddy target catapulted skyward!");
-            if (target instanceof Player tp)
-                tp.sendActionBar("§6🌿 §7Mud expelled you §finto the sky§7!");
-            awardMagicXp(player, MAGIC_XP_COMBO);
+                target.getLocation().add(0, 1, 0), 50, 0.5, 0.5, 0.5, Material.MUD.createBlockData());
+            if (shooter != null) shooter.sendActionBar("§6🌿 §f§lMUD LAUNCH! §7Muddy target catapulted skyward!");
+            if (target instanceof Player tp) tp.sendActionBar("§6🌿 §7Mud expelled you §finto the sky§7!");
+            if (shooter != null) awardMagicXp(shooter, MAGIC_XP_COMBO);
             return;
         }
 
         // ── BLAZING + AIR = INFERNO BLAST ─────────────────────────────────────
         if (isBlazing(target)) {
             removeBlazing(target);
-            double dist = Math.max(0.5, target.getLocation().distance(player.getLocation()));
+            double dist = shooter != null ? Math.max(0.5, target.getLocation().distance(shooter.getLocation())) : AIR_RANGE / 2.0;
             double kb   = 4.0 + (AIR_RANGE - dist) * 1.6;
-            double mult = 1.2 + (magicLevel / 99.0) * 2.8;
-            launchTarget(target, player, kb * 0.22 * mult, 0.5 + (magicLevel / 99.0) * 0.6);
-            int fire = 100 + (int)((magicLevel / 99.0) * 100);
+            double mult = 1.2 + (lvl / 99.0) * 2.8;
+            launchTarget(target, shooter, kb * 0.22 * mult, 0.5 + (lvl / 99.0) * 0.6);
+            int fire = 100 + (int)((lvl / 99.0) * 100);
             target.setFireTicks(fire);
-            double dmg = 4.0 + SkillBonusManager.magicDamageBonus(magicLevel) * 4;
-            target.damage(dmg, player);
-            target.getWorld().spawnParticle(Particle.FLAME,
-                target.getLocation().add(0, 1, 0), 60, 0.6, 0.6, 0.6, 0.2);
-            target.getWorld().spawnParticle(Particle.CLOUD,
-                target.getLocation().add(0, 1, 0), 30, 0.5, 0.5, 0.5, 0.1);
-            player.sendActionBar("§c🔥 §f§lINFERNO BLAST! §7Blazing target obliterated!");
-            if (target instanceof Player tp)
-                tp.sendActionBar("§c🔥 §f§lINFERNO BLAST §7ripped through you!");
-            awardMagicXp(player, MAGIC_XP_COMBO);
+            double dmg = 4.0 + SkillBonusManager.magicDamageBonus(lvl) * 4;
+            target.damage(dmg, shooter);
+            target.getWorld().spawnParticle(Particle.FLAME,  target.getLocation().add(0, 1, 0), 60, 0.6, 0.6, 0.6, 0.2);
+            target.getWorld().spawnParticle(Particle.CLOUD,  target.getLocation().add(0, 1, 0), 30, 0.5, 0.5, 0.5, 0.1);
+            if (shooter != null) shooter.sendActionBar("§c🔥 §f§lINFERNO BLAST! §7Blazing target obliterated!");
+            if (target instanceof Player tp) tp.sendActionBar("§c🔥 §f§lINFERNO BLAST §7ripped through you!");
+            if (shooter != null) awardMagicXp(shooter, MAGIC_XP_COMBO);
             return;
         }
 
         // ── SCORCHED + AIR = FANNED FLAMES ────────────────────────────────────
         if (isScorched(target)) {
             removeScorched(target);
-            int fire = 60 + (int)((magicLevel / 99.0) * 80);
+            int fire = 60 + (int)((lvl / 99.0) * 80);
             target.setFireTicks(fire);
-            double dmg = 2.0 + SkillBonusManager.magicDamageBonus(magicLevel) * 2;
-            target.damage(dmg, player);
-            target.getWorld().spawnParticle(Particle.FLAME,
-                target.getLocation().add(0, 1, 0), 30, 0.4, 0.4, 0.4, 0.15);
-            player.sendActionBar("§c🔥 §7Fanned the flames! §8(" + fire/20 + "s fire)");
-            awardMagicXp(player, MAGIC_XP_COMBO);
+            double dmg = 2.0 + SkillBonusManager.magicDamageBonus(lvl) * 2;
+            target.damage(dmg, shooter);
+            target.getWorld().spawnParticle(Particle.FLAME, target.getLocation().add(0, 1, 0), 30, 0.4, 0.4, 0.4, 0.15);
+            if (shooter != null) shooter.sendActionBar("§c🔥 §7Fanned the flames! §8(" + fire/20 + "s fire)");
+            if (shooter != null) awardMagicXp(shooter, MAGIC_XP_COMBO);
             return;
         }
 
-        // ── NORMAL AIR GUST (massively buffed) ────────────────────────────────
-        double dist = Math.max(0.5, target.getLocation().distance(player.getLocation()));
+        // ── NORMAL AIR GUST ───────────────────────────────────────────────────
+        double dist = shooter != null ? Math.max(0.5, target.getLocation().distance(shooter.getLocation())) : 5.0;
         double kb   = 3.0 + (AIR_RANGE - dist) * 1.4;
-        double mult = 1.0 + (magicLevel / 99.0) * 2.5;
+        double mult = 1.0 + (lvl / 99.0) * 2.5;
         double vel  = kb * 0.22 * mult;
-        double up   = 0.4 + (magicLevel / 99.0) * 0.5 + (kb / (AIR_RANGE * 1.4)) * 0.35;
+        double up   = 0.4 + (lvl / 99.0) * 0.5 + (kb / (AIR_RANGE * 1.4)) * 0.35;
 
-        // Visual beam of CLOUD particles from player to target before launch
-        spawnAirBeam(player, target);
+        launchTarget(target, shooter, vel, up);
+        double dmg = 2.0 + SkillBonusManager.magicDamageBonus(lvl) * 3;
+        target.damage(dmg, shooter);
+        if (shooter != null) awardMagicXp(shooter, MAGIC_XP_HIT);
 
-        launchTarget(target, player, vel, up);
-        double dmg = 2.0 + SkillBonusManager.magicDamageBonus(magicLevel) * 3;
-        target.damage(dmg, player);
-        awardMagicXp(player, MAGIC_XP_HIT);
-
-        // Impact burst at target location
-        target.getWorld().spawnParticle(Particle.CLOUD,    target.getLocation().add(0, 1, 0), 50, 0.8, 0.8, 0.8, 0.3);
-        target.getWorld().spawnParticle(Particle.ENCHANT,  target.getLocation().add(0, 1, 0), 20, 0.5, 0.5, 0.5, 0.15);
+        target.getWorld().spawnParticle(Particle.CLOUD,   target.getLocation().add(0, 1, 0), 50, 0.8, 0.8, 0.8, 0.3);
+        target.getWorld().spawnParticle(Particle.ENCHANT, target.getLocation().add(0, 1, 0), 20, 0.5, 0.5, 0.5, 0.15);
         target.getWorld().playSound(target.getLocation(), Sound.ENTITY_PHANTOM_FLAP, 1.2f, 0.8f);
 
-        player.sendActionBar(String.format(
-            "§7[Air] §f§lGUST! §8dist: §e%.1fb §8-> §7~%.0f §8blocks §8(x%.1f lv)",
-            dist, kb, mult));
+        if (shooter != null) shooter.sendActionBar(String.format(
+            "§7[Air] §f§lGUST! §8dist: §e%.1fb §8-> §7~%.0f §8blocks §8(x%.1f lv)", dist, kb, mult));
         if (target instanceof Player tp)
             tp.sendActionBar(String.format("§7[Air] §f§lBlasted ~%.0f blocks!", kb));
 
-        rollMindBomb(target, player);
+        rollMindBomb(target, shooter);
     }
 
-    /** Spawns a chain of CLOUD particles from player's hand to the target — the air beam. */
-    private void spawnAirBeam(Player player, LivingEntity target) {
-        var from = player.getEyeLocation();
-        var to   = target.getEyeLocation();
-        var dir  = to.toVector().subtract(from.toVector());
-        double len = dir.length();
-        if (len < 0.1) return;
-        dir.normalize();
-        for (double d = 0; d < len; d += 0.5) {
-            var pt = from.clone().add(dir.clone().multiply(d));
-            player.getWorld().spawnParticle(Particle.CLOUD,   pt, 1, 0, 0, 0, 0);
-            player.getWorld().spawnParticle(Particle.ENCHANT, pt, 1, 0, 0, 0, 0);
-        }
-    }
+    /** Setter — call from Main after constructing both managers. */
+    public void setSandstormManager(SandstormManager sm) { this.sandstormManager = sm; }
 
     // ══════════════════════════════════════════════════════════════════════════
     //  PROJECTILE HIT
@@ -466,14 +474,83 @@ public class MagicStaffListener implements Listener {
         if (element == null || shooterId == null) return;
 
         Player shooter = plugin.getServer().getPlayer(shooterId);
+
+        // ── Block hit interactions (fire evap, earth→quicksand, air→sandstorm) ─
+        if (event.getHitBlock() != null) {
+            handleBlockHit(event.getHitBlock(), event.getHitBlockFace(), element, shooter, lvl);
+        }
+
+        // ── Entity hit ────────────────────────────────────────────────────────
         if (!(event.getHitEntity() instanceof LivingEntity target)) return;
         if (target.getUniqueId().equals(shooterId)) return;
 
         if (element == MagicElement.FIRE)  handleFireHit(target, shooter, lvl);
         else if (element == MagicElement.WATER) handleWaterHit(target, shooter, lvl);
         else if (element == MagicElement.EARTH) handleEarthHit(target, shooter, lvl);
+        else if (element == MagicElement.AIR)   handleAirHit(target, shooter, lvl);
 
         if (shooter != null) awardMagicXp(shooter, MAGIC_XP_HIT);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  BLOCK HIT INTERACTIONS
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private void handleBlockHit(Block block, BlockFace face, MagicElement element,
+                                 Player shooter, int lvl) {
+        Material type = block.getType();
+
+        if (element == MagicElement.FIRE) {
+            // Fire + Water block → evaporate (steam)
+            if (type == Material.WATER) {
+                block.setType(Material.AIR);
+                block.getWorld().spawnParticle(Particle.CLOUD,
+                    block.getLocation().add(0.5, 0.5, 0.5), 20, 0.3, 0.3, 0.3, 0.05);
+                block.getWorld().spawnParticle(Particle.SMOKE,
+                    block.getLocation().add(0.5, 0.5, 0.5), 10, 0.2, 0.2, 0.2, 0.02);
+                block.getWorld().playSound(block.getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 1.0f, 1.5f);
+                if (shooter != null) shooter.sendActionBar("§c🔥 §7Fire evaporated the water!");
+            }
+
+        } else if (element == MagicElement.EARTH) {
+            // Earth + Water block → quicksand (soul sand)
+            if (type == Material.WATER) {
+                block.setType(Material.SOUL_SAND);
+                quicksandBlocks.add(block.getLocation().toBlockLocation());
+                block.getWorld().spawnParticle(Particle.BLOCK,
+                    block.getLocation().add(0.5, 1.0, 0.5), 25, 0.4, 0.3, 0.4,
+                    Material.SOUL_SAND.createBlockData());
+                block.getWorld().playSound(block.getLocation(), Sound.BLOCK_SAND_PLACE, 1.0f, 0.7f);
+                if (shooter != null)
+                    shooter.sendActionBar("§2🌿 §7Water became §8Quicksand§7! §8Air bolt on it = §6☁ Sandstorm§7!");
+            }
+            // Earth hitting any other solid block → place a dirt block on its face
+            else if (face != null) {
+                Block adjacent = block.getRelative(face);
+                if (adjacent.getType().isAir()) {
+                    adjacent.setType(Material.DIRT);
+                    adjacent.getWorld().spawnParticle(Particle.BLOCK,
+                        adjacent.getLocation().add(0.5, 0.5, 0.5), 12, 0.3, 0.3, 0.3,
+                        Material.DIRT.createBlockData());
+                    // Auto-remove after 30 s (600 ticks)
+                    final Block b = adjacent;
+                    plugin.getServer().getScheduler().runTaskLater(plugin,
+                        () -> { if (b.getType() == Material.DIRT) b.setType(Material.AIR); }, 600L);
+                }
+            }
+
+        } else if (element == MagicElement.AIR) {
+            // Air bolt + Quicksand block → trigger sandstorm
+            if (type == Material.SOUL_SAND
+                    && quicksandBlocks.contains(block.getLocation().toBlockLocation())) {
+                quicksandBlocks.remove(block.getLocation().toBlockLocation());
+                if (sandstormManager != null) {
+                    sandstormManager.triggerSandstorm(block.getLocation(), shooter);
+                    if (shooter != null)
+                        shooter.sendActionBar("§6☁ §f§lSANDSTORM TRIGGERED! §7The quicksand erupts!");
+                }
+            }
+        }
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -481,6 +558,21 @@ public class MagicStaffListener implements Listener {
     // ──────────────────────────────────────────────────────────────────────────
 
     private void handleFireHit(LivingEntity target, Player shooter, int lvl) {
+
+        // ── Fire slime check ─────────────────────────────────────────────────
+        if (target instanceof org.bukkit.entity.Slime slime) {
+            // Convert to fire slime
+            slime.setMetadata("magic_fire_slime",
+                new FixedMetadataValue(plugin, System.currentTimeMillis() + 30_000L));
+            slime.setFireTicks(Integer.MAX_VALUE); // keep it on fire visually
+            slime.getWorld().spawnParticle(Particle.FLAME,
+                slime.getLocation().add(0, 1, 0), 20, 0.4, 0.4, 0.4, 0.05);
+            slime.getWorld().spawnParticle(Particle.SMOKE,
+                slime.getLocation().add(0, 1, 0), 8, 0.3, 0.3, 0.3, 0.03);
+            if (shooter != null)
+                shooter.sendActionBar("§c🔥 §7Fire slime! §8It sets players on §cfire §8on contact!");
+            return;
+        }
 
         // SCORCHED → BLAZING
         if (isScorched(target)) {
@@ -597,7 +689,50 @@ public class MagicStaffListener implements Listener {
     //  handleWaterHit
     // ──────────────────────────────────────────────────────────────────────────
 
+    // ──────────────────────────────────────────────────────────────────────────
+    //  Fire slime on-contact damage handler
+    // ──────────────────────────────────────────────────────────────────────────
+
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    public void onFireSlimeContact(org.bukkit.event.entity.EntityDamageByEntityEvent event) {
+        if (!(event.getDamager() instanceof org.bukkit.entity.Slime slime)) return;
+        if (!slime.hasMetadata("magic_fire_slime")) return;
+        long expiry = (long) slime.getMetadata("magic_fire_slime").get(0).value();
+        if (System.currentTimeMillis() > expiry) {
+            slime.removeMetadata("magic_fire_slime", plugin);
+            slime.setFireTicks(0);
+            return;
+        }
+        if (event.getEntity() instanceof LivingEntity hit) {
+            hit.setFireTicks(80); // 4 seconds on fire
+            hit.getWorld().spawnParticle(Particle.FLAME,
+                hit.getLocation().add(0, 1, 0), 15, 0.3, 0.3, 0.3, 0.05);
+            if (hit instanceof Player hp)
+                hp.sendActionBar("§c🔥 §7The fire slime set you §con fire§7!");
+        }
+    }
+
     private void handleWaterHit(LivingEntity target, Player shooter, int lvl) {
+
+        // ── Water slime check — 15 % chance to split ─────────────────────────
+        if (target instanceof org.bukkit.entity.Slime slime) {
+            if (RAND.nextInt(100) < 15) {
+                int extra = RAND.nextInt(2) + 1;
+                for (int i = 0; i < extra; i++) {
+                    org.bukkit.entity.Slime baby = (org.bukkit.entity.Slime)
+                        slime.getWorld().spawnEntity(slime.getLocation(),
+                            org.bukkit.entity.EntityType.SLIME);
+                    baby.setSize(Math.max(1, slime.getSize() - 1));
+                    baby.setVelocity(new Vector(
+                        (RAND.nextDouble() - 0.5) * 0.6, 0.35,
+                        (RAND.nextDouble() - 0.5) * 0.6));
+                }
+                slime.getWorld().spawnParticle(Particle.SPLASH,
+                    slime.getLocation().add(0, 1, 0), 30, 0.4, 0.4, 0.4, 0.1);
+                if (shooter != null)
+                    shooter.sendActionBar("§b💧 §7Water split the slime! §8(+" + extra + " slime!)");
+            }
+        }
 
         // BLAZING → STEAM EXPLOSION (AoE)
         if (isBlazing(target)) {
@@ -664,6 +799,31 @@ public class MagicStaffListener implements Listener {
         target.getWorld().spawnParticle(Particle.BLOCK,
             target.getLocation().add(0, 1, 0), 30, 0.3, 0.3, 0.3,
             Material.DIRT.createBlockData());
+
+        // ── Place a dirt block at entity's feet on every earth hit ───────────
+        Block feetBlock = target.getLocation().getBlock();
+        if (feetBlock.getType().isAir()) {
+            feetBlock.setType(Material.DIRT);
+            final Block fb = feetBlock;
+            plugin.getServer().getScheduler().runTaskLater(plugin,
+                () -> { if (fb.getType() == Material.DIRT) fb.setType(Material.AIR); }, 100L);
+        }
+
+        // ── Track earth hits; 2nd hit → suffocate ───────────────────────────
+        int hits = 1;
+        if (target.hasMetadata(META_EARTH_HITS)) {
+            hits = (int) target.getMetadata(META_EARTH_HITS).get(0).value() + 1;
+        }
+        if (hits >= 2) {
+            target.removeMetadata(META_EARTH_HITS, plugin);
+            suffocateTarget(target, shooter, lvl);
+            if (shooter != null) awardMagicXp(shooter, MAGIC_XP_COMBO);
+            return;
+        }
+        target.setMetadata(META_EARTH_HITS, new FixedMetadataValue(plugin, hits));
+        // Clear the counter after 10 s if they don't get hit again
+        plugin.getServer().getScheduler().runTaskLater(plugin, () ->
+            target.removeMetadata(META_EARTH_HITS, plugin), 200L);
 
         // WET → MUDDY
         if (isWet(target)) {
@@ -1129,6 +1289,35 @@ public class MagicStaffListener implements Listener {
     // ══════════════════════════════════════════════════════════════════════════
     //  HELPERS
     // ══════════════════════════════════════════════════════════════════════════
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  SUFFOCATE — buries target under 3 dirt blocks for 5 s
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private void suffocateTarget(LivingEntity target, Player shooter, int lvl) {
+        org.bukkit.Location loc = target.getLocation();
+        List<Block> placed = new ArrayList<>();
+        for (int y = 0; y <= 2; y++) {
+            Block b = loc.getBlock().getRelative(0, y, 0);
+            if (b.getType().isAir() || b.getType() == Material.WATER) {
+                b.setType(Material.DIRT);
+                placed.add(b);
+            }
+        }
+        target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS,      100, 255, false, true, true));
+        target.addPotionEffect(new PotionEffect(PotionEffectType.MINING_FATIGUE, 100, 255, false, true, true));
+        target.getWorld().spawnParticle(Particle.BLOCK,
+            loc.add(0, 1, 0), 80, 0.4, 0.6, 0.4, Material.DIRT.createBlockData());
+        target.getWorld().playSound(loc, Sound.BLOCK_GRAVEL_PLACE, 2.0f, 0.5f);
+        if (shooter != null) shooter.sendActionBar("§2🌿 §f§lSUFFOCATED! §7Target buried in earth!");
+        if (target instanceof Player tp) {
+            tp.sendTitle("§2🌿 §l§oBURIED!", "§7Dig out — or suffocate!", 5, 60, 15);
+            tp.sendActionBar("§2🌿 §7You are §aBuried in Earth§7!");
+        }
+        // Remove blocks after 5 s (100 ticks)
+        plugin.getServer().getScheduler().runTaskLater(plugin, () ->
+            placed.forEach(b -> { if (b.getType() == Material.DIRT) b.setType(Material.AIR); }), 100L);
+    }
 
     /** Launch target in the direction away from player with given velocity & upward. */
     private void launchTarget(LivingEntity target, Player player, double velocity, double upward) {

@@ -1,5 +1,6 @@
 package com.yourname.difficulty.listeners;
 
+import com.yourname.difficulty.skills.CapeDataManager;
 import com.yourname.difficulty.skills.SkillCapeManager;
 import com.yourname.difficulty.skills.SkillType;
 import org.bukkit.Location;
@@ -72,14 +73,16 @@ public class CapeVisualTask extends BukkitRunnable {
     private static final double BACK_HEIGHT = 0.80;
 
     private final SkillCapeManager        capeManager;
+    private final CapeDataManager         capeDataManager;
     private final JavaPlugin              plugin;
     /** Live map of player UUID → their current cape hologram stand. */
     private final Map<UUID, ArmorStand>   holograms = new HashMap<>();
     private int                           tick      = 0;
 
-    public CapeVisualTask(SkillCapeManager capeManager, JavaPlugin plugin) {
-        this.capeManager = capeManager;
-        this.plugin      = plugin;
+    public CapeVisualTask(SkillCapeManager capeManager, CapeDataManager capeDataManager, JavaPlugin plugin) {
+        this.capeManager     = capeManager;
+        this.capeDataManager = capeDataManager;
+        this.plugin          = plugin;
     }
 
     @Override
@@ -99,9 +102,10 @@ public class CapeVisualTask extends BukkitRunnable {
 
         // ── Process all online players ────────────────────────────────────────
         for (Player player : plugin.getServer().getOnlinePlayers()) {
-            ItemStack chest = player.getInventory().getChestplate();
+            // Cape is stored separately in CapeDataManager — not in the chestplate slot
+            ItemStack chest = capeDataManager.getEquippedCape(player.getUniqueId());
 
-            if (chest == null || !capeManager.isAnyCape(chest)) {
+            if (chest == null) {
                 // Remove hologram if cape was just unequipped
                 ArmorStand old = holograms.remove(player.getUniqueId());
                 if (old != null && !old.isDead()) old.remove();
@@ -375,8 +379,7 @@ public class CapeVisualTask extends BukkitRunnable {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private boolean isWearingCape(Player player) {
-        ItemStack chest = player.getInventory().getChestplate();
-        return chest != null && capeManager.isAnyCape(chest);
+        return capeDataManager.hasCape(player.getUniqueId());
     }
 
     /**
