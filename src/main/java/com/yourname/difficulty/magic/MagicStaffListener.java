@@ -193,14 +193,23 @@ public class MagicStaffListener implements Listener {
             SmallFireball.class);
         fb.setDirection(player.getLocation().getDirection().multiply(1.5));
         fb.setShooter(player);
-        fb.setIsIncendiary(true);
-        fb.setYield(0.3f);
+        fb.setIsIncendiary(false); // we handle ignite manually on hit
+        fb.setYield(0.0f);        // no block damage
 
         trackedProjectiles.put(fb.getUniqueId(), MagicElement.FIRE);
         projectileShooters.put(fb.getUniqueId(), player.getUniqueId());
         projectileLevels.put(fb.getUniqueId(), magicLevel);
 
-        player.sendActionBar("§c🔥 §7Fireball launched! §8(Lv " + magicLevel + ")");
+        // Rich FLAME + LAVA particle trail follows the fireball
+        plugin.getServer().getScheduler().runTaskTimer(plugin, task -> {
+            if (!fb.isValid()) { task.cancel(); return; }
+            fb.getWorld().spawnParticle(Particle.FLAME,  fb.getLocation(), 8, 0.12, 0.12, 0.12, 0.02);
+            fb.getWorld().spawnParticle(Particle.LAVA,   fb.getLocation(), 2, 0.05, 0.05, 0.05, 0.0);
+            fb.getWorld().spawnParticle(Particle.SMOKE,  fb.getLocation(), 3, 0.1,  0.1,  0.1,  0.01);
+        }, 0L, 1L);
+
+        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_BLAZE_SHOOT, 1.0f, 1.3f);
+        player.sendActionBar("§c[Fire] §7Fireball launched! §8(Lv " + magicLevel + ")");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -231,13 +240,16 @@ public class MagicStaffListener implements Listener {
         projectileShooters.put(bolt.getUniqueId(), player.getUniqueId());
         projectileLevels.put(bolt.getUniqueId(), magicLevel);
 
-        plugin.getServer().getScheduler().runTaskTimer(plugin,
-            task -> {
-                if (!bolt.isValid()) { task.cancel(); return; }
-                bolt.getWorld().spawnParticle(Particle.SPLASH, bolt.getLocation(), 3, 0.1, 0.1, 0.1, 0.0);
-            }, 0L, 1L);
+        // Dense WATER trail — dripping water + bubble column
+        plugin.getServer().getScheduler().runTaskTimer(plugin, task -> {
+            if (!bolt.isValid()) { task.cancel(); return; }
+            bolt.getWorld().spawnParticle(Particle.DRIPPING_WATER, bolt.getLocation(), 8, 0.12, 0.12, 0.12, 0.0);
+            bolt.getWorld().spawnParticle(Particle.SPLASH,         bolt.getLocation(), 5, 0.08, 0.08, 0.08, 0.02);
+            bolt.getWorld().spawnParticle(Particle.BUBBLE_POP,     bolt.getLocation(), 3, 0.05, 0.05, 0.05, 0.05);
+        }, 0L, 1L);
 
-        player.sendActionBar("§b💧 §7Water bolt fired!");
+        player.getWorld().playSound(player.getLocation(), Sound.ITEM_BUCKET_FILL, 0.9f, 1.5f);
+        player.sendActionBar("§b[Water] §7Water bolt fired!");
     }
 
     private boolean hasWaterBucket(Player player) {
@@ -277,7 +289,19 @@ public class MagicStaffListener implements Listener {
         projectileShooters.put(bolt.getUniqueId(), player.getUniqueId());
         projectileLevels.put(bolt.getUniqueId(), magicLevel);
 
-        player.sendActionBar("§2🌿 §7Earth bolt fired!");
+        // DIRT + GRAVEL block-particle trail streams behind the shot
+        plugin.getServer().getScheduler().runTaskTimer(plugin, task -> {
+            if (!bolt.isValid()) { task.cancel(); return; }
+            bolt.getWorld().spawnParticle(Particle.BLOCK, bolt.getLocation(), 9,
+                0.12, 0.12, 0.12, Material.DIRT.createBlockData());
+            bolt.getWorld().spawnParticle(Particle.BLOCK, bolt.getLocation(), 5,
+                0.08, 0.08, 0.08, Material.GRAVEL.createBlockData());
+            bolt.getWorld().spawnParticle(Particle.SMOKE, bolt.getLocation(), 2,
+                0.06, 0.06, 0.06, 0.005);
+        }, 0L, 1L);
+
+        player.getWorld().playSound(player.getLocation(), Sound.BLOCK_GRAVEL_PLACE, 1.2f, 0.6f);
+        player.sendActionBar("§2[Earth] §7Earth bolt fired!");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -390,22 +414,42 @@ public class MagicStaffListener implements Listener {
         double mult = 1.0 + (magicLevel / 99.0) * 2.5;
         double vel  = kb * 0.22 * mult;
         double up   = 0.4 + (magicLevel / 99.0) * 0.5 + (kb / (AIR_RANGE * 1.4)) * 0.35;
-        launchTarget(target, player, vel, up);
 
+        // Visual beam of CLOUD particles from player to target before launch
+        spawnAirBeam(player, target);
+
+        launchTarget(target, player, vel, up);
         double dmg = 2.0 + SkillBonusManager.magicDamageBonus(magicLevel) * 3;
         target.damage(dmg, player);
         awardMagicXp(player, MAGIC_XP_HIT);
 
-        target.getWorld().spawnParticle(Particle.CLOUD,
-            target.getLocation().add(0, 1, 0), 50, 0.8, 0.8, 0.8, 0.3);
+        // Impact burst at target location
+        target.getWorld().spawnParticle(Particle.CLOUD,    target.getLocation().add(0, 1, 0), 50, 0.8, 0.8, 0.8, 0.3);
+        target.getWorld().spawnParticle(Particle.ENCHANT,  target.getLocation().add(0, 1, 0), 20, 0.5, 0.5, 0.5, 0.15);
+        target.getWorld().playSound(target.getLocation(), Sound.ENTITY_PHANTOM_FLAP, 1.2f, 0.8f);
 
         player.sendActionBar(String.format(
-            "§7💨 §f§lGUST! §8dist: §e%.1fb §8→ §7~%.0f §8blocks §8(×%.1f lv)",
+            "§7[Air] §f§lGUST! §8dist: §e%.1fb §8-> §7~%.0f §8blocks §8(x%.1f lv)",
             dist, kb, mult));
         if (target instanceof Player tp)
-            tp.sendActionBar(String.format("§7💨 §f§lBlasted ~%.0f blocks!", kb));
+            tp.sendActionBar(String.format("§7[Air] §f§lBlasted ~%.0f blocks!", kb));
 
         rollMindBomb(target, player);
+    }
+
+    /** Spawns a chain of CLOUD particles from player's hand to the target — the air beam. */
+    private void spawnAirBeam(Player player, LivingEntity target) {
+        var from = player.getEyeLocation();
+        var to   = target.getEyeLocation();
+        var dir  = to.toVector().subtract(from.toVector());
+        double len = dir.length();
+        if (len < 0.1) return;
+        dir.normalize();
+        for (double d = 0; d < len; d += 0.5) {
+            var pt = from.clone().add(dir.clone().multiply(d));
+            player.getWorld().spawnParticle(Particle.CLOUD,   pt, 1, 0, 0, 0, 0);
+            player.getWorld().spawnParticle(Particle.ENCHANT, pt, 1, 0, 0, 0, 0);
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════════

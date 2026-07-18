@@ -1,5 +1,8 @@
 package com.yourname.difficulty;
 
+import com.yourname.difficulty.currency.GoldDropListener;
+import com.yourname.difficulty.currency.GoldManager;
+import com.yourname.difficulty.currency.GoldValueListener;
 import com.yourname.difficulty.gui.CapeSlotGUI;
 import com.yourname.difficulty.gui.CapeSlotGUIListener;
 import com.yourname.difficulty.gui.RegistryGUI;
@@ -18,6 +21,13 @@ import com.yourname.difficulty.listeners.SitListener;
 import com.yourname.difficulty.listeners.SoulfurPotionListener;
 import com.yourname.difficulty.magic.MagicElement;
 import com.yourname.difficulty.magic.MagicStaffListener;
+import com.yourname.difficulty.magic.RuneDropListener;
+import com.yourname.difficulty.party.PartyHudTask;
+import com.yourname.difficulty.party.PartyListener;
+import com.yourname.difficulty.party.PartyManager;
+import com.yourname.difficulty.quests.QuestGUI;
+import com.yourname.difficulty.quests.QuestKillListener;
+import com.yourname.difficulty.quests.QuestManager;
 import com.yourname.difficulty.skills.CapeEquipListener;
 import com.yourname.difficulty.skills.ItemLevelListener;
 import com.yourname.difficulty.skills.SkillBonusManager;
@@ -28,6 +38,7 @@ import com.yourname.difficulty.skills.SkillGUI;
 import com.yourname.difficulty.skills.SkillGUIListener;
 import com.yourname.difficulty.skills.SkillListener;
 import com.yourname.difficulty.skills.SkillManager;
+import com.yourname.difficulty.trade.TradeListener;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
@@ -51,6 +62,14 @@ public class Main extends JavaPlugin {
     private SkillCapeManager        skillCapeManager;
     private AdminLightCommand       adminLightCommand;
     private CapeVisualTask          capeVisualTask;
+    // ── New systems ────────────────────────────────────────────────────────────
+    private GoldManager    goldManager;
+    private QuestManager   questManager;
+    private PartyManager   partyManager;
+    private PartyHudTask   partyHudTask;
+    private PartyListener  partyListener;
+    private QuestGUI       questGUI;
+    private TradeListener  tradeListener;
 
     /** All crafting recipe keys registered by this plugin — used for recipe-book discovery. */
     private final List<NamespacedKey> allRecipeKeys = new ArrayList<>();
@@ -135,6 +154,32 @@ public class Main extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new MageGearCraftListener(itemFactory), this);
 
+        // ── Gold currency system ───────────────────────────────────────────────
+        this.goldManager = new GoldManager(this);
+        getServer().getPluginManager().registerEvents(
+                new GoldDropListener(goldManager, difficultyManager, this), this);
+        getServer().getPluginManager().registerEvents(new GoldValueListener(), this);
+
+        // ── Rune mob drops (Air, Fire, Water, Earth from specific mobs) ────────
+        getServer().getPluginManager().registerEvents(
+                new RuneDropListener(itemFactory), this);
+
+        // ── Quest system ───────────────────────────────────────────────────────
+        this.questManager = new QuestManager(this, goldManager, skillManager, itemFactory);
+        this.questGUI     = new QuestGUI(questManager);
+        getServer().getPluginManager().registerEvents(questGUI, this);
+        getServer().getPluginManager().registerEvents(
+                new QuestKillListener(questManager), this);
+
+        // ── Party system ───────────────────────────────────────────────────────
+        this.partyManager  = new PartyManager();
+        this.partyListener = new PartyListener(partyManager, difficultyManager, this);
+        getServer().getPluginManager().registerEvents(partyListener, this);
+
+        // ── Trade Stone ────────────────────────────────────────────────────────
+        this.tradeListener = new TradeListener(this);
+        getServer().getPluginManager().registerEvents(tradeListener, this);
+
         // ── Register commands ─────────────────────────────────────────────────
 
         getCommand("difficulty").setExecutor(new DifficultyCommand(difficultyManager));
@@ -173,6 +218,29 @@ public class Main extends JavaPlugin {
             return true;
         });
 
+        // ── New commands ───────────────────────────────────────────────────────
+        getCommand("gold").setExecutor((sender, cmd, label, args) -> {
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage("§cOnly players can use /gold.");
+                return true;
+            }
+            long bal = goldManager.getBalance(player.getUniqueId());
+            player.sendMessage("§6Your balance: §e" + GoldManager.formatGold(bal) + " gp");
+            return true;
+        });
+
+        getCommand("questbook").setExecutor((sender, cmd, label, args) -> {
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage("§cOnly players can open the Quest Book.");
+                return true;
+            }
+            questGUI.open(player);
+            return true;
+        });
+
+        getCommand("party").setExecutor(partyListener);
+        getCommand("trade").setExecutor(tradeListener);
+
         // ── Crafting recipes ──────────────────────────────────────────────────
         registerCraftingRecipes();
 
@@ -183,6 +251,10 @@ public class Main extends JavaPlugin {
 
         // Nightmare bonus-spawn — every 15 seconds (6 mobs, 64-128 block range)
         new NightmareSpawnTask(difficultyManager).runTaskTimer(this, 300L, 300L);
+
+        // Party HUD — update scoreboard sidebar every second
+        this.partyHudTask = new PartyHudTask(partyManager, difficultyManager, this);
+        partyHudTask.runTaskTimer(this, 20L, 20L);
 
         // Sweep any orphaned cape hologram stands left from a previous crash/reload
         new CapeVisualTask(skillCapeManager, this).cleanup();
@@ -213,6 +285,9 @@ public class Main extends JavaPlugin {
         if (skillManager      != null) skillManager.saveAll();
         if (adminLightCommand != null) adminLightCommand.disableAll();
         if (capeVisualTask    != null) capeVisualTask.cleanup();
+        if (partyHudTask      != null) partyHudTask.cleanup();
+        if (goldManager       != null) goldManager.saveAll();
+        if (questManager      != null) questManager.saveAll();
         for (Player p : getServer().getOnlinePlayers()) {
             SkillBonusManager.removeDefenceHpBonus(p);
         }

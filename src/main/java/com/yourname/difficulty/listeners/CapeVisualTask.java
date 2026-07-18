@@ -107,8 +107,8 @@ public class CapeVisualTask extends BukkitRunnable {
     // ── Hologram management ───────────────────────────────────────────────────
 
     private void updateHologram(Player player, ItemStack cape) {
-        // Position: 2.4 blocks above feet = just above the player's name-tag
-        Location hologramPos = player.getLocation().clone().add(0, 2.4, 0);
+        // Position: 2.0 blocks above feet = just above the player's name-tag
+        Location hologramPos = player.getLocation().clone().add(0, 2.0, 0);
 
         ArmorStand stand = holograms.get(player.getUniqueId());
 
@@ -166,16 +166,24 @@ public class CapeVisualTask extends BukkitRunnable {
     }
 
     private void spawnCapeParticles(Player player, ItemStack cape) {
-        var loc = player.getLocation().add(0, 1.0, 0);
+        // Base location: mid-torso (cape position on back)
+        var loc  = player.getLocation().add(0, 1.0, 0);
+        // Slightly above for upward trail
+        var locH = player.getLocation().add(0, 1.5, 0);
 
         if (capeManager.isBossCape(cape)) {
+            // Soul fire streams upward from the cape
             player.getWorld().spawnParticle(
-                    Particle.SOUL_FIRE_FLAME, loc, 6, 0.35, 0.45, 0.35, 0.02);
+                    Particle.SOUL_FIRE_FLAME, loc,  10, 0.3, 0.2, 0.3, 0.04);
+            player.getWorld().spawnParticle(
+                    Particle.SOUL,            locH,  5, 0.2, 0.1, 0.2, 0.03);
             return;
         }
         if (capeManager.isMaxCape(cape)) {
             player.getWorld().spawnParticle(
-                    Particle.FIREWORK, loc, 8, 0.4, 0.5, 0.4, 0.05);
+                    Particle.FIREWORK, loc,  12, 0.35, 0.25, 0.35, 0.06);
+            player.getWorld().spawnParticle(
+                    Particle.END_ROD,  locH,  5, 0.2,  0.15, 0.2,  0.02);
             return;
         }
 
@@ -183,30 +191,46 @@ public class CapeVisualTask extends BukkitRunnable {
         if (skill == null) return;
 
         switch (skill) {
-            case MELEE ->
-                    player.getWorld().spawnParticle(
-                            Particle.CRIT, loc, 5, 0.3, 0.4, 0.3, 0.05);
-            case RANGED ->
-                    player.getWorld().spawnParticle(
-                            Particle.ENCHANTED_HIT, loc, 5, 0.3, 0.4, 0.3, 0.05);
-            case DEFENCE ->
-                    player.getWorld().spawnParticle(
-                            Particle.END_ROD, loc, 4, 0.3, 0.4, 0.3, 0.01);
-            case PRAYER ->
-                    player.getWorld().spawnParticle(
-                            Particle.ENCHANT, loc, 6, 0.4, 0.5, 0.4, 0.1);
-            case MAGIC ->
-                    player.getWorld().spawnParticle(
-                            Particle.WITCH, loc, 5, 0.3, 0.4, 0.3, 0.02);
-            case WOODCUTTING ->
-                    player.getWorld().spawnParticle(
-                            Particle.HAPPY_VILLAGER, loc, 4, 0.35, 0.4, 0.35, 0.0);
-            case FISHING ->
-                    player.getWorld().spawnParticle(
-                            Particle.FALLING_WATER, loc, 5, 0.3, 0.4, 0.3, 0.0);
-            case FARMING ->
-                    player.getWorld().spawnParticle(
-                            Particle.COMPOSTER, loc, 4, 0.35, 0.4, 0.35, 0.0);
+            case MELEE -> {
+                // Red sparks burst outward from cape
+                player.getWorld().spawnParticle(Particle.CRIT,         loc,  9, 0.3, 0.25, 0.3, 0.06);
+                player.getWorld().spawnParticle(Particle.ENCHANTED_HIT, locH, 4, 0.2, 0.1,  0.2, 0.03);
+            }
+            case RANGED -> {
+                // Green enchanted sparks drift upward
+                player.getWorld().spawnParticle(Particle.ENCHANTED_HIT, loc,  9, 0.3, 0.2, 0.3, 0.05);
+                player.getWorld().spawnParticle(Particle.CRIT,          locH, 3, 0.2, 0.1, 0.2, 0.02);
+            }
+            case DEFENCE -> {
+                // Blue-white rods slowly drift up
+                player.getWorld().spawnParticle(Particle.END_ROD,  loc,  7, 0.3, 0.2, 0.3, 0.015);
+                player.getWorld().spawnParticle(Particle.ENCHANT, locH, 4, 0.25,0.1, 0.25,0.08);
+            }
+            case PRAYER -> {
+                // Golden floating letters rise from the cape
+                player.getWorld().spawnParticle(Particle.ENCHANT,       loc,  11, 0.35, 0.25, 0.35, 0.12);
+                player.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, locH,  3, 0.2,  0.1,  0.2,  0.0);
+            }
+            case MAGIC -> {
+                // Purple witch particles swirl
+                player.getWorld().spawnParticle(Particle.WITCH,  loc,  9, 0.3, 0.25, 0.3, 0.025);
+                player.getWorld().spawnParticle(Particle.ENCHANT, locH, 5, 0.2, 0.1,  0.2, 0.1);
+            }
+            case WOODCUTTING -> {
+                // Happy particles and leaf-like floaters
+                player.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, loc,  7, 0.35, 0.2,  0.35, 0.0);
+                player.getWorld().spawnParticle(Particle.COMPOSTER,      locH, 4, 0.25, 0.15, 0.25, 0.0);
+            }
+            case FISHING -> {
+                // Water drips fall from the cape
+                player.getWorld().spawnParticle(Particle.FALLING_WATER, loc,  9, 0.3,  0.2, 0.3,  0.0);
+                player.getWorld().spawnParticle(Particle.SPLASH,        locH, 4, 0.2,  0.1, 0.2,  0.02);
+            }
+            case FARMING -> {
+                // Crop/composter particles drift upward
+                player.getWorld().spawnParticle(Particle.COMPOSTER,      loc,  7, 0.35, 0.2,  0.35, 0.0);
+                player.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, locH, 3, 0.2,  0.15, 0.2,  0.0);
+            }
         }
     }
 

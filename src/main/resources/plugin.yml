@@ -82,6 +82,34 @@ commands:
     permission: difficultyengine.use
     permission-message: You do not have permission to use this command.
 
+  gold:
+    description: Check your current gold balance.
+    usage: /gold
+    aliases: [balance, bal, gp]
+    permission: difficultyengine.use
+    permission-message: You do not have permission to use this command.
+
+  questbook:
+    description: Open the Quest Book to view and claim quest rewards.
+    usage: /questbook
+    aliases: [quests, quest]
+    permission: difficultyengine.use
+    permission-message: You do not have permission to use this command.
+
+  party:
+    description: Manage your party. Use the Party Stone to invite nearby players.
+    usage: /party <accept|leave|list>
+    aliases: [p]
+    permission: difficultyengine.use
+    permission-message: You do not have permission to use this command.
+
+  trade:
+    description: Accept a trade request sent by another player via the Trade Stone.
+    usage: /trade accept
+    aliases: [tr]
+    permission: difficultyengine.use
+    permission-message: You do not have permission to use this command.
+
 permissions:
   difficultyengine.use:
     description: Allows players to set difficulty, use /hpbar, /sit, /registry, /skills, and /mystats.
