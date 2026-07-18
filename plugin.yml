@@ -10,47 +10,90 @@ commands:
     description: View or change your personal difficulty level.
     usage: /difficulty [peaceful|easy|medium|hard|nightmare]
     aliases: [diff, setdifficulty]
-    permission: difficultyengine.use
-    permission-message: You do not have permission to use this command.
 
   hpbar:
-    description: Toggle the live HP display (❤ current / max) above mob heads when you hit them.
+    description: Toggle the live HP display above mob heads.
     usage: /hpbar
     aliases: [showhp, healthbar, hpdisplay]
-    permission: difficultyengine.use
-    permission-message: You do not have permission to use this command.
 
   gear:
-    description: Give yourself or another player max-enchanted netherite god gear (includes 10x speed boots).
+    description: Give yourself max-enchanted netherite god gear (Admin).
     usage: /gear [player]
     aliases: [godgear, ng]
-    permission: difficultyengine.gear
-    permission-message: §cThis command is for admins only.
 
   sit:
-    description: Toggle right-click-to-sit on slabs and stairs. Sneak to stand up.
+    description: Toggle right-click-to-sit on slabs and stairs.
     usage: /sit [on|off]
     aliases: [sitting]
-    permission: difficultyengine.use
-    permission-message: You do not have permission to use this command.
 
   registry:
-    description: Open the Item Registry GUI to browse and receive all custom DifficultyEngine items.
+    description: Open the Item Registry GUI.
     usage: /registry
     aliases: [itemregistry, items]
-    permission: difficultyengine.registry
-    permission-message: §cThis command is for admins only.
+
+  curecosmetic:
+    description: Remove cosmetic effects from a player (Admin).
+    usage: /curecosmetic [player]
+
+  adminlight:
+    description: Toggle personal admin light (Admin).
+    usage: /adminlight
+
+  skills:
+    description: View your skill levels.
+    usage: /skills [player]
+    aliases: [skill]
+
+  mystats:
+    description: Open your personal stats GUI.
+    usage: /mystats
+    aliases: [stats]
+
+  stats:
+    description: Open your personal stats GUI.
+    usage: /stats
+
+  cape:
+    description: Open the Cape Wardrobe.
+    usage: /cape
+    aliases: [wardrobe, capewardrobe, mycape]
+
+  gold:
+    description: Check your gold coin balance.
+    usage: /gold
+    aliases: [balance, bal]
+
+  questbook:
+    description: Open your quest journal.
+    usage: /questbook
+    aliases: [quests, quest]
+
+  party:
+    description: Manage your adventuring party.
+    usage: /party [invite|leave|kick|info]
+    aliases: [group]
+
+  trade:
+    description: Open a player trade session.
+    usage: /trade [player]
+
+  spellbook:
+    description: Open your Arcane Tome (learned spell combos).
+    usage: /spellbook
+    aliases: [arcane, tome]
+
+  spellpage:
+    description: Give a Spell Page to yourself or a player (Admin).
+    usage: /spellpage [player]
 
   vipshop:
-    description: Open the VIP Shop (right-click the keeper) or spawn the keeper villager (Admin).
+    description: Open the VIP Shop or spawn the VIP keeper (Admin).
     usage: /vipshop [spawn]
     aliases: [vip, cosmetics]
-    permission: difficultyengine.use
-    permission-message: You do not have permission to use this command.
 
 permissions:
   difficultyengine.use:
-    description: Allows players to set difficulty, use /hpbar, /sit, and open the Item Registry.
+    description: Allows use of standard player commands.
     default: true
 
   difficultyengine.gear:
@@ -62,9 +105,13 @@ permissions:
     default: op
 
   difficultyengine.registry:
-    description: Allows use of /registry (Item Registry GUI). Admin-only.
+    description: Allows use of /registry.
     default: op
 
   difficultyengine.turbocart:
-    description: Allows obtaining the Turbo Minecart from the Item Registry (VIP/Admin perk).
+    description: Allows obtaining the Turbo Minecart from the Item Registry.
+    default: op
+
+  difficultyengine.cape.admin:
+    description: Bypasses cape level requirements and unlocks admin perks.
     default: op
