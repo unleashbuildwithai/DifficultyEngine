@@ -46,10 +46,16 @@ import java.util.UUID;
  *  Minimum: 500ms regardless
  *
  * ── Status Effects ───────────────────────────────────────────────────────────
- *  WET   (5–10s)  : Applied by Water hit. Re-applied on each water hit.
- *  MUDDY (15–30s) : Applied when Earth hits a WET target. Slowness IV.
+ *  WET    (5–10s)  : Applied by Water hit. Re-applied on each water hit.
+ *  MUDDY  (15–30s) : Applied when Earth hits a WET target. Slowness IV.
+ *  FROZEN (5s)     : Applied when Fire hits a MUDDY target. Total immobility.
  *
- *  Interactions:
+ *  Combo chain:
+ *    WATER → EARTH  = MUDDY  (Slowness IV)
+ *    MUDDY + FIRE   = FROZEN (5s — can't move)
+ *    FROZEN + AIR   = INSTANT DEATH (shattered on ground impact)
+ *
+ *  Other interactions:
  *    FIRE  + WET target  → extinguishes Wet (no fire), steam particles
  *    AIR   + WET target  → dries target (no knockback), steam particles
  *    EARTH + WET target  → removes Wet, applies MUDDY (Slowness IV)
@@ -60,22 +66,23 @@ import java.util.UUID;
  *  WATER : Snowball projectile — travels until it hits (same range as fire)
  *          RIGHT_CLICK_BLOCK + bucket → 5-block water river on ground
  *  EARTH : Snowball projectile — travels until it hits
- *  AIR   : Direct range-check (7 blocks), closer = more knockback × magic level
+ *  AIR   : Direct range-check (20 blocks), closer = more knockback × magic level
  *
  * ── Level scaling ─────────────────────────────────────────────────────────────
- *  Damage:      floor(level/33) extra hearts
+ *  Damage:         floor(level/33) extra hearts
  *  Wet duration:   5s + (level/99)×5s  = 5–10s
  *  Muddy duration: 15s + (level/99)×15s = 15–30s
  *  Fire duration:  2s + (level/99)×2s  = 2–4s
- *  Air strength:   0.5 + (level/99)×1.5 × distance factor
+ *  Air strength:   1.0 + (level/99)×2.5 × distance factor (massively buffed)
  */
 public class MagicStaffListener implements Listener {
 
     // ── Metadata keys for status effects ─────────────────────────────────────
-    public static final String META_WET   = "magic_wet";    // value = expiry ms
-    public static final String META_MUDDY = "magic_muddy";  // value = expiry ms
+    public static final String META_WET    = "magic_wet";    // value = expiry ms
+    public static final String META_MUDDY  = "magic_muddy";  // value = expiry ms
+    public static final String META_FROZEN = "magic_frozen"; // value = expiry ms
 
-    private static final int  AIR_RANGE    = 15;    // max range for air gust (blocks)
+    private static final int  AIR_RANGE = 20;   // max range for air gust (blocks)
 
     private final ItemFactory   itemFactory;
     private final SkillManager  skillManager;
@@ -264,34 +271,66 @@ public class MagicStaffListener implements Listener {
     // ── AIR ───────────────────────────────────────────────────────────────────
 
     /**
-     * Air gust: linear distance-based knockback.
+     * Air gust: massively powerful distance-based knockback.
      *
-     * knockbackBlocks = 2 + (AIR_RANGE − distance)
-     *   At dist=15: 2 blocks knockback
-     *   At dist=14: 3 blocks knockback
-     *   At dist= 1: 16 blocks knockback
+     * ── FROZEN COMBO ─────────────────────────────────────────────────────────
+     *  If the target is FROZEN (hardened mud), gusting them causes instant death.
+     *  They are launched while frozen solid and shatter on impact with the ground.
      *
-     * velocity ≈ knockbackBlocks × 0.09  (Minecraft horizontal friction ≈ 0.91/tick)
-     * Level multiplier: 0.5× at Lv1, 2.0× at Lv99
+     * ── Knockback formula ────────────────────────────────────────────────────
+     *  knockbackBlocks = 3.0 + (AIR_RANGE − distance) × 1.4
+     *    At dist=20:  3 blocks knockback
+     *    At dist= 1: ~29 blocks knockback
+     *
+     *  velocity = knockbackBlocks × 0.22 × levelMult
+     *  levelMult = 1.0 at Lv1 → 3.5 at Lv99  (was 0.5→2.0)
      */
     private void castAir(Player player, int magicLevel) {
         LivingEntity target = nearestEntity(player, AIR_RANGE);
         if (target != null) {
+
+            // ── FROZEN + AIR = INSTANT DEATH ──────────────────────────────────
+            if (isFrozen(target)) {
+                removeFrozen(target);
+                // Ice-shatter particle burst
+                target.getWorld().spawnParticle(Particle.SNOWFLAKE,
+                    target.getLocation().add(0, 1, 0), 80, 0.8, 0.8, 0.8, 0.3);
+                target.getWorld().spawnParticle(Particle.CLOUD,
+                    target.getLocation().add(0, 1, 0), 40, 0.5, 0.5, 0.5, 0.15);
+                target.getWorld().spawnParticle(Particle.ITEM,
+                    target.getLocation().add(0, 1, 0), 60, 0.5, 0.5, 0.5, 0.3,
+                    new ItemStack(Material.ICE));
+                // Instant kill
+                if (target instanceof Player tp) {
+                    tp.setHealth(0);
+                    tp.sendTitle("§b❄ §c§lSHATTERED",
+                        "§7Frozen solid — you hit the ground and shattered!", 5, 40, 15);
+                } else {
+                    target.setHealth(0);
+                }
+                awardMagicXp(player, MAGIC_XP_HIT * 5);
+                player.sendActionBar(
+                    "§b❄ §c§lSHATTERED! §7Frozen target obliterated on ground impact!");
+                return;
+            }
+
+            // ── WET target → dry, no knockback ────────────────────────────────
             if (isWet(target)) {
                 removeWet(target, true);
                 player.sendActionBar("§7💨 §7Air §bdried §7the wet target! No knockback.");
                 return;
             }
 
+            // ── Normal gust (heavily buffed) ───────────────────────────────────
             double dist = Math.max(0.5, target.getLocation().distance(player.getLocation()));
-            // knockback blocks = 2 at max range, rising by 1 per block closer
-            double knockbackBlocks = 2.0 + (AIR_RANGE - dist);
-            // Level multiplier: 0.5 at Lv1 → 2.0 at Lv99
-            double levelMult = 0.5 + (magicLevel / 99.0) * 1.5;
-            // Convert blocks to velocity (Minecraft ~11 blocks per 1.0 horizontal velocity)
-            double velocity = knockbackBlocks * 0.09 * levelMult;
-            // Upward component increases with level and knockback force
-            double upward = 0.25 + (magicLevel / 99.0) * 0.25 + (knockbackBlocks / AIR_RANGE) * 0.15;
+            // Knockback blocks — strongly distance-scaled
+            double knockbackBlocks = 3.0 + (AIR_RANGE - dist) * 1.4;
+            // Level multiplier: 1.0 at Lv1 → 3.5 at Lv99 (was 0.5→2.0)
+            double levelMult = 1.0 + (magicLevel / 99.0) * 2.5;
+            // Velocity — heavily buffed (was 0.09, now 0.22)
+            double velocity = knockbackBlocks * 0.22 * levelMult;
+            // Strong upward launch
+            double upward = 0.4 + (magicLevel / 99.0) * 0.5 + (knockbackBlocks / (AIR_RANGE * 1.4)) * 0.35;
 
             Vector dir = target.getLocation().subtract(player.getLocation())
                 .toVector().normalize();
@@ -299,18 +338,20 @@ public class MagicStaffListener implements Listener {
             dir = dir.multiply(velocity / dir.length()); // normalize then scale
             target.setVelocity(dir);
 
-            double damage = 1.0 + SkillBonusManager.magicDamageBonus(magicLevel) * 2;
+            double damage = 2.0 + SkillBonusManager.magicDamageBonus(magicLevel) * 3;
             target.damage(damage, player);
             awardMagicXp(player, MAGIC_XP_HIT);
 
             target.getWorld().spawnParticle(Particle.CLOUD,
-                target.getLocation().add(0, 1, 0), 30, 0.6, 0.6, 0.6, 0.2);
+                target.getLocation().add(0, 1, 0), 50, 0.8, 0.8, 0.8, 0.3);
 
             player.sendActionBar(String.format(
-                "§7💨 §7Gust! §8dist: §e%.1fb §8→ §7~%.0f §8blocks §8(×%.1f level)",
+                "§7💨 §f§lGUST! §8dist: §e%.1fb §8→ §7~%.0f §8blocks §8(×%.1f level)",
                 dist, knockbackBlocks, levelMult));
             if (target instanceof Player tp)
-                tp.sendActionBar(String.format("§7💨 §7Air gust launched you ~%.0f blocks!", knockbackBlocks));
+                tp.sendActionBar(String.format(
+                    "§7💨 §f§lYou were blasted ~%.0f blocks!", knockbackBlocks));
+
         } else {
             player.getWorld().spawnParticle(Particle.CLOUD,
                 player.getLocation().add(player.getLocation().getDirection().multiply(4)).add(0, 1, 0),
@@ -324,7 +365,7 @@ public class MagicStaffListener implements Listener {
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onProjectileHit(ProjectileHitEvent event) {
         UUID projId = event.getEntity().getUniqueId();
-        MagicElement element  = trackedProjectiles.remove(projId);
+        MagicElement element   = trackedProjectiles.remove(projId);
         UUID         shooterId = projectileShooters.remove(projId);
         int          magicLevel = projectileLevels.getOrDefault(projId, 1);
         projectileLevels.remove(projId);
@@ -346,24 +387,43 @@ public class MagicStaffListener implements Listener {
     }
 
     private void handleFireHit(LivingEntity target, Player shooter, int magicLevel) {
+        // ── MUDDY + FIRE = FROZEN ──────────────────────────────────────────────
+        if (isMuddy(target)) {
+            removeMuddy(target);
+            target.setFireTicks(0);
+            applyFrozen(target, 100); // 5 seconds = 100 ticks
+            // Steam + ice particles (mud hardening)
+            target.getWorld().spawnParticle(Particle.CLOUD,
+                target.getLocation().add(0, 1.5, 0), 25, 0.4, 0.4, 0.4, 0.05);
+            if (shooter != null) shooter.sendActionBar(
+                "§b❄ §6Mud hardened by fire — target is §b§lFROZEN§6! §7Gust for §c§lINSTANT DEATH§7!");
+            return;
+        }
+
+        // ── WET + FIRE = extinguish ────────────────────────────────────────────
         if (isWet(target)) {
-            // WET extinguishes fire
             removeWet(target, true);
             target.setFireTicks(0);
-            plugin.getServer().getScheduler().runTaskLater(plugin, () -> target.setFireTicks(0), 1L);
+            plugin.getServer().getScheduler().runTaskLater(plugin,
+                () -> target.setFireTicks(0), 1L);
             target.getWorld().spawnParticle(Particle.CLOUD,
                 target.getLocation().add(0, 1.5, 0), 20, 0.4, 0.4, 0.4, 0.05);
-            if (target instanceof Player p) p.sendActionBar("§b💧 §7Water §fextinguished §7the fireball!");
-            if (shooter != null) shooter.sendActionBar("§b💧 §7Target was §bwet §7— fire extinguished!");
-        } else {
-            double damage = 2.0 + SkillBonusManager.magicDamageBonus(magicLevel) * 2;
-            target.damage(damage, shooter);
-            int fireTicks = 40 + (int) ((magicLevel / 99.0) * 40); // 2–4 seconds
-            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-                if (target.isValid()) target.setFireTicks(Math.max(target.getFireTicks(), fireTicks));
-            }, 1L);
-            if (shooter != null) shooter.sendActionBar("§c🔥 §7Fireball hit! §8(" + fireTicks / 20 + "s fire)");
+            if (target instanceof Player p)
+                p.sendActionBar("§b💧 §7Water §fextinguished §7the fireball!");
+            if (shooter != null)
+                shooter.sendActionBar("§b💧 §7Target was §bwet §7— fire extinguished!");
+            return;
         }
+
+        // ── Normal fire hit ────────────────────────────────────────────────────
+        double damage = 2.0 + SkillBonusManager.magicDamageBonus(magicLevel) * 2;
+        target.damage(damage, shooter);
+        int fireTicks = 40 + (int) ((magicLevel / 99.0) * 40); // 2–4 seconds
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            if (target.isValid()) target.setFireTicks(Math.max(target.getFireTicks(), fireTicks));
+        }, 1L);
+        if (shooter != null)
+            shooter.sendActionBar("§c🔥 §7Fireball hit! §8(" + fireTicks / 20 + "s fire)");
     }
 
     private void handleWaterHit(LivingEntity target, Player shooter, int magicLevel) {
@@ -376,7 +436,8 @@ public class MagicStaffListener implements Listener {
         target.getWorld().spawnParticle(Particle.SPLASH,
             target.getLocation().add(0, 1, 0), 40, 0.4, 0.4, 0.4, 0.2);
 
-        if (shooter != null) shooter.sendActionBar("§b💧 §7Water hit! Target is §bWet §7(" + wetTicks/20 + "s)");
+        if (shooter != null)
+            shooter.sendActionBar("§b💧 §7Water hit! Target is §bWet §7(" + wetTicks / 20 + "s)");
         if (target instanceof Player p)
             p.sendActionBar("§b💧 §7You are §bWet! §7Fire & Air weakened. Earth = §6Muddy§7!");
     }
@@ -391,13 +452,15 @@ public class MagicStaffListener implements Listener {
             removeWet(target, false); // silent removal
             int muddyTicks = 300 + (int) ((magicLevel / 99.0) * 300); // 15–30 seconds
             applyMuddy(target, muddyTicks);
-            if (shooter != null) shooter.sendActionBar("§2🌿 §7Wet + Earth = §6Muddy! §8(" + muddyTicks/20 + "s)");
+            if (shooter != null)
+                shooter.sendActionBar("§2🌿 §7Wet + Earth = §6Muddy! §8(" + muddyTicks / 20 + "s) — §7Hit with §cFire §7to freeze!");
         } else {
             double damage = 2.0 + SkillBonusManager.magicDamageBonus(magicLevel) * 2;
             target.damage(damage, shooter);
             // Slight slowness from impact (normal, not muddy)
             target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 40, 0, false, true, true));
-            if (shooter != null) shooter.sendActionBar("§2🌿 §7Earth hit! §8(" + (damage/2) + " hearts)");
+            if (shooter != null)
+                shooter.sendActionBar("§2🌿 §7Earth hit! §8(" + (damage / 2) + " hearts)");
         }
     }
 
@@ -445,7 +508,7 @@ public class MagicStaffListener implements Listener {
             entity.getLocation().add(0, 0.5, 0), 40, 0.4, 0.4, 0.4,
             Material.MUD.createBlockData());
         if (entity instanceof Player p)
-            p.sendActionBar("§6🌿 §7You are §6Muddy! §8(Slowness IV for " + (durationTicks/20) + "s)");
+            p.sendActionBar("§6🌿 §7You are §6Muddy! §8(Slowness IV — §cFire §8= §bFrozen§8)");
     }
 
     public boolean isMuddy(LivingEntity entity) {
@@ -456,6 +519,72 @@ public class MagicStaffListener implements Listener {
             return false;
         }
         return true;
+    }
+
+    public void removeMuddy(LivingEntity entity) {
+        entity.removeMetadata(META_MUDDY, plugin);
+        entity.removePotionEffect(PotionEffectType.SLOWNESS);
+    }
+
+    // ── Status: FROZEN ────────────────────────────────────────────────────────
+
+    /**
+     * Freeze the target solid for 5 seconds (100 ticks).
+     * Triggered by: FIRE hitting a MUDDY target.
+     * Breaking condition: AIR gust while frozen = instant death.
+     *
+     * Uses powder-snow freeze vignette + Slowness 255 + Mining Fatigue 255.
+     */
+    public void applyFrozen(LivingEntity entity, int durationTicks) {
+        long expiryMs = System.currentTimeMillis() + (long) durationTicks * 50;
+        entity.setMetadata(META_FROZEN, new FixedMetadataValue(plugin, expiryMs));
+
+        // Powder-snow freeze visual (200+ ticks = full icy vignette)
+        entity.setFreezeTicks(200);
+
+        // Total immobility
+        entity.addPotionEffect(new PotionEffect(
+            PotionEffectType.SLOWNESS, durationTicks, 255, false, true, true));
+        entity.addPotionEffect(new PotionEffect(
+            PotionEffectType.MINING_FATIGUE, durationTicks, 255, false, true, true));
+
+        // Ice particle burst
+        entity.getWorld().spawnParticle(Particle.SNOWFLAKE,
+            entity.getLocation().add(0, 1, 0), 60, 0.5, 0.7, 0.5, 0.1);
+        entity.getWorld().spawnParticle(Particle.ITEM,
+            entity.getLocation().add(0, 1, 0), 30, 0.4, 0.4, 0.4, 0.1,
+            new ItemStack(Material.ICE));
+
+        if (entity instanceof Player p) {
+            p.sendTitle("§b❄ §lFROZEN", "§7Hardened solid — air gust = death!", 5, 60, 15);
+            p.sendActionBar("§b❄ §7You are §b§lFROZEN§7! §8(5s — §7air gust = §c§lINSTANT DEATH§8!)");
+        }
+
+        // Auto-thaw after duration if still alive and still frozen
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            if (entity.isValid() && isFrozen(entity)) {
+                removeFrozen(entity);
+                if (entity instanceof Player p)
+                    p.sendActionBar("§b❄ §7The freeze wore off.");
+            }
+        }, durationTicks);
+    }
+
+    public boolean isFrozen(LivingEntity entity) {
+        if (!entity.hasMetadata(META_FROZEN)) return false;
+        long expiry = (long) entity.getMetadata(META_FROZEN).get(0).value();
+        if (System.currentTimeMillis() > expiry) {
+            entity.removeMetadata(META_FROZEN, plugin);
+            return false;
+        }
+        return true;
+    }
+
+    public void removeFrozen(LivingEntity entity) {
+        entity.removeMetadata(META_FROZEN, plugin);
+        entity.setFreezeTicks(0);
+        entity.removePotionEffect(PotionEffectType.SLOWNESS);
+        entity.removePotionEffect(PotionEffectType.MINING_FATIGUE);
     }
 
     // ── Crafting note (no validation — any amethyst shard works in the recipe) ──
