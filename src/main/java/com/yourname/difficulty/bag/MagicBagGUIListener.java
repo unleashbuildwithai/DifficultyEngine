@@ -191,26 +191,32 @@ public class MagicBagGUIListener implements Listener {
         }
     }
 
-    // ── Auto-collect from chests (shift-click in any container) ───────────────
+    // ── Auto-collect / auto-bag for any chest interaction ─────────────────────
 
     /**
-     * When a player shift-clicks a magic item from a chest while holding their
-     * Magic Bag, the item is routed directly into the correct bag section instead
-     * of the player's main inventory.  The bag GUI need not be open.
+     * Intercepts shift-clicks that involve a magic item and a container, in
+     * BOTH directions — so players can't accidentally lose magic items in chests.
+     *
+     * Direction A (chest → player inventory):
+     *   Shift-clicking a magic item FROM a chest redirects it into the bag.
+     *
+     * Direction B (player inventory → chest):
+     *   Shift-clicking a magic item FROM the player inventory while a chest is
+     *   open redirects it into the bag instead of the chest.
+     *
+     * In both cases the bag GUI does not need to be open.  The player must be
+     * carrying a Magic Bag somewhere in their inventory.
      */
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onChestShiftClick(InventoryClickEvent event) {
         // Skip if the bag GUI itself is open (handled by onBagClick above)
         if (MagicBagGUI.TITLE.equals(event.getView().getTitle())) return;
         if (!(event.getWhoClicked() instanceof Player player)) return;
-
-        // Only shift-clicks from the top (container) inventory
         if (event.getClickedInventory() == null) return;
-        if (!event.getClickedInventory().equals(event.getView().getTopInventory())) return;
         if (event.getClick() != ClickType.SHIFT_LEFT
                 && event.getClick() != ClickType.SHIFT_RIGHT) return;
 
-        // Must be a container type
+        // Must involve a container as the top inventory
         InventoryType topType = event.getView().getTopInventory().getType();
         if (topType != InventoryType.CHEST
                 && topType != InventoryType.BARREL
@@ -222,9 +228,10 @@ public class MagicBagGUIListener implements Listener {
         if (clicked == null || clicked.getType().isAir()) return;
 
         int section = bagManager.classifyItem(clicked);
-        if (section < 0) return;        // not a magic item
-        if (!playerHasBag(player)) return; // player doesn't carry a bag
+        if (section < 0) return;           // not a magic item — let vanilla handle it
+        if (!playerHasBag(player)) return; // player not carrying a bag
 
+        // Both directions — from chest or from player inventory
         event.setCancelled(true);
         ItemStack toAdd = clicked.clone();
         if (bagManager.addToBag(player.getUniqueId(), toAdd)) {
@@ -233,7 +240,7 @@ public class MagicBagGUIListener implements Listener {
                     + MagicBagManager.sectionLabel(section) + "§8)");
         } else {
             event.setCancelled(false);
-            player.sendMessage("§c✗ §7Magic Bag section full — item went to inventory.");
+            player.sendMessage("§c✗ §7Magic Bag section full — item went normally.");
         }
     }
 
