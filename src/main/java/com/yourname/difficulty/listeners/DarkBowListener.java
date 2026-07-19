@@ -20,8 +20,10 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.EntityShootBowEvent;
 import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.util.Vector;
@@ -73,9 +75,11 @@ public class DarkBowListener implements Listener {
     private final JavaPlugin   plugin;
 
     /** Homing arrow UUID → target entity UUID */
-    private final Map<UUID, UUID> homingTargets  = new HashMap<>();
+    private final Map<UUID, UUID> homingTargets   = new HashMap<>();
     /** Players and their last special-shot timestamp */
     private final Map<UUID, Long> specialCooldown = new HashMap<>();
+    /** Per-player left-click quick-shot cooldown (400 ms) */
+    private final Map<UUID, Long> leftClickCooldown = new HashMap<>();
     /** Dark-bow arrows that are from dragon arrows (for bonus particle trail) */
     private final Set<UUID>       dragonArrows    = new HashSet<>();
 
@@ -86,13 +90,83 @@ public class DarkBowListener implements Listener {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  SPECIAL SHOT — SNEAK + RIGHT-CLICK WITH DARK BOW
+    //  LEFT-CLICK — instant single arrow (no Dragon Arrow consumed)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    @EventHandler(priority = EventPriority.NORMAL)
+    public void onLeftClick(PlayerInteractEvent event) {
+        Action action = event.getAction();
+        if (action != Action.LEFT_CLICK_AIR && action != Action.LEFT_CLICK_BLOCK) return;
+        if (event.getHand() != EquipmentSlot.HAND) return;
+
+        Player player = event.getPlayer();
+        if (!itemFactory.isDarkBow(player.getInventory().getItemInMainHand())) return;
+
+        event.setCancelled(true); // prevent block-attack animation
+
+        int rangedLevel = skillManager.getLevel(player.getUniqueId(), SkillType.RANGED);
+        if (rangedLevel < 70) {
+            player.sendActionBar("§4[Dark Bow] §cRequires Ranged Level 70!");
+            return;
+        }
+
+        // 400 ms anti-spam cooldown
+        long now = System.currentTimeMillis();
+        Long lastShot = leftClickCooldown.get(player.getUniqueId());
+        if (lastShot != null && now - lastShot < 400L) return;
+        leftClickCooldown.put(player.getUniqueId(), now);
+
+        // Fire an instant normal arrow
+        Vector dir = player.getLocation().getDirection().clone();
+        Arrow quickArrow = player.getWorld().spawnArrow(
+            player.getEyeLocation().add(dir.clone().normalize().multiply(0.4)),
+            dir.multiply(2.8), 1.0f, 1.5f);
+        quickArrow.setShooter(player);
+        quickArrow.setPickupStatus(AbstractArrow.PickupStatus.DISALLOWED);
+        quickArrow.setPersistent(false);
+        quickArrow.setDamage(6.0); // flat arrow damage
+
+        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_ARROW_SHOOT, 0.9f, 1.3f);
+        player.sendActionBar("§4[Dark Bow] §f→ §7Quick Shot");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  RIGHT-CLICK DRAW + RELEASE — uses Dragon Arrow if available
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * When a player draws and releases the Dark Bow normally, this intercepts
+     * the fired arrow.  If they have Dragon Arrows in their inventory, one is
+     * consumed and the arrow gains the DRAGON_TAG for purple visual effects
+     * and a 15% damage bonus.
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onBowShoot(EntityShootBowEvent event) {
+        if (!(event.getEntity() instanceof Player player)) return;
+        ItemStack bow = event.getBow();
+        if (bow == null || !itemFactory.isDarkBow(bow)) return;
+        if (!(event.getProjectile() instanceof Arrow arrow)) return;
+
+        if (countDragonArrows(player) >= 1) {
+            consumeDragonArrows(player, 1);
+            arrow.addScoreboardTag(DRAGON_TAG);
+            arrow.setGlowing(true);
+            arrow.setDamage(arrow.getDamage() * 1.15); // +15 % Dragon Arrow bonus
+            player.sendActionBar("§4[Dark Bow] §5✦ Dragon Arrow §8(+15% dmg)");
+        } else {
+            player.sendActionBar("§4[Dark Bow] §7Normal shot §8(no Dragon Arrows)");
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  SNEAK + RIGHT-CLICK — special 2-arrow homing shot (Dragon Arrows req)
     // ══════════════════════════════════════════════════════════════════════════
 
     @EventHandler(priority = EventPriority.NORMAL)
     public void onInteract(PlayerInteractEvent event) {
         Action action = event.getAction();
         if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) return;
+        if (event.getHand() != EquipmentSlot.HAND) return;
 
         Player player = event.getPlayer();
         if (!player.isSneaking()) return; // Special = sneak + right-click
