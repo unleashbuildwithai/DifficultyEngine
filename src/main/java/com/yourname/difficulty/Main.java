@@ -1,4 +1,4 @@
-package com.yourname.difficulty;
+ package com.yourname.difficulty;
 
 import com.yourname.difficulty.bag.MagicBagGUI;
 import com.yourname.difficulty.bag.MagicBagGUIListener;
@@ -22,6 +22,11 @@ import com.yourname.difficulty.listeners.LevelProtectionListener;
 import com.yourname.difficulty.items.MageGearTier;
 import com.yourname.difficulty.listeners.MageGearCraftListener;
 import com.yourname.difficulty.listeners.MageGearEquipListener;
+import com.yourname.difficulty.listeners.MeleeGearCraftListener;
+import com.yourname.difficulty.listeners.MeleeGearEquipListener;
+import com.yourname.difficulty.listeners.RangedGearCraftListener;
+import com.yourname.difficulty.listeners.RangedGearEquipListener;
+import com.yourname.difficulty.listeners.RangedSpeedListener;
 import com.yourname.difficulty.listeners.MagicCauldronCraftListener;
 import com.yourname.difficulty.vip.VipShopListener;
 import com.yourname.difficulty.listeners.MinecartListener;
@@ -192,6 +197,28 @@ public class Main extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new MagicCauldronCraftListener(itemFactory), this);
 
+        // ── Melee Gear crafting: replaces vanilla result with PDC item ──────────
+        getServer().getPluginManager().registerEvents(
+                new MeleeGearCraftListener(itemFactory), this);
+
+        // ── Melee Gear equip: enforces Melee level requirements ─────────────────
+        getServer().getPluginManager().registerEvents(
+                new MeleeGearEquipListener(itemFactory, skillManager), this);
+
+        // ── Ranged Gear crafting: replaces vanilla result with PDC item ─────────
+        getServer().getPluginManager().registerEvents(
+                new RangedGearCraftListener(itemFactory), this);
+
+        // ── Ranged Gear equip: enforces Ranged level requirements ───────────────
+        getServer().getPluginManager().registerEvents(
+                new RangedGearEquipListener(itemFactory, skillManager), this);
+
+        // ── Ranged Speed: scales arrow velocity + damage with Ranged level/gear ─
+        // Level 1 → ~70% velocity (slow, sluggish arrows)
+        // Level 99 + Dragon gear → ~168% velocity (fast, devastating arrows)
+        getServer().getPluginManager().registerEvents(
+                new RangedSpeedListener(itemFactory, skillManager), this);
+
         // ── Gold currency system ───────────────────────────────────────────────
         this.goldManager = new GoldManager(this);
         getServer().getPluginManager().registerEvents(
@@ -331,6 +358,13 @@ public class Main extends JavaPlugin {
         registerCmd("spellbook", (sender, cmd, label, args) -> {
             if (!(sender instanceof Player player)) {
                 sender.sendMessage("§cOnly players can open the Arcane Tome.");
+                return true;
+            }
+            // Admin-only shortcut — regular players craft an Arcane Tome to open theirs
+            if (!player.hasPermission("difficultyengine.cape.admin")) {
+                player.sendMessage("§c✗ §7/spellbook is admin-only.");
+                player.sendMessage("§7Craft an §5Arcane Tome §8(Book + Amethyst Shard + Purple Dye)");
+                player.sendMessage("§7to read your spell pages.");
                 return true;
             }
             int count = spellBookManager.getUnlockedCount(player.getUniqueId());
@@ -656,10 +690,124 @@ public class Main extends JavaPlugin {
         capR.addIngredient(Material.DIAMOND);
         getServer().addRecipe(capR);  allRecipeKeys.add(cap_);
 
+        // ── Melee Gear recipes — 4 tiers × 4 pieces = 16 recipes ─────────────
+        // MeleeGearCraftListener intercepts PrepareItemCraftEvent to swap in the
+        // PDC-tagged result. Vanilla armour pieces + a rare ingredient = DE melee gear.
+        for (String[] entry : new String[][]{
+            {"IRON_HELMET",        "melee_iron_helmet"},
+            {"IRON_CHESTPLATE",    "melee_iron_chestplate"},
+            {"IRON_LEGGINGS",      "melee_iron_leggings"},
+            {"IRON_BOOTS",         "melee_iron_boots"}
+        }) {
+            Material mat = Material.valueOf(entry[0]);
+            NamespacedKey k = new NamespacedKey(this, entry[1]);
+            ShapelessRecipe r = new ShapelessRecipe(k, new ItemStack(mat));
+            r.addIngredient(mat); r.addIngredient(Material.IRON_INGOT);
+            getServer().addRecipe(r); allRecipeKeys.add(k);
+        }
+        for (String[] entry : new String[][]{
+            {"DIAMOND_HELMET",     "melee_diamond_helmet"},
+            {"DIAMOND_CHESTPLATE", "melee_diamond_chestplate"},
+            {"DIAMOND_LEGGINGS",   "melee_diamond_leggings"},
+            {"DIAMOND_BOOTS",      "melee_diamond_boots"}
+        }) {
+            Material mat = Material.valueOf(entry[0]);
+            NamespacedKey k = new NamespacedKey(this, entry[1]);
+            ShapelessRecipe r = new ShapelessRecipe(k, new ItemStack(mat));
+            r.addIngredient(mat); r.addIngredient(Material.DIAMOND);
+            getServer().addRecipe(r); allRecipeKeys.add(k);
+        }
+        for (String[] entry : new String[][]{
+            {"NETHERITE_HELMET",     "melee_netherite_helmet"},
+            {"NETHERITE_CHESTPLATE", "melee_netherite_chestplate"},
+            {"NETHERITE_LEGGINGS",   "melee_netherite_leggings"},
+            {"NETHERITE_BOOTS",      "melee_netherite_boots"}
+        }) {
+            Material mat = Material.valueOf(entry[0]);
+            NamespacedKey k = new NamespacedKey(this, entry[1]);
+            ShapelessRecipe r = new ShapelessRecipe(k, new ItemStack(mat));
+            r.addIngredient(mat); r.addIngredient(Material.NETHERITE_INGOT);
+            getServer().addRecipe(r); allRecipeKeys.add(k);
+        }
+        for (String[] entry : new String[][]{
+            {"NETHERITE_HELMET",     "melee_dragon_helmet"},
+            {"NETHERITE_CHESTPLATE", "melee_dragon_chestplate"},
+            {"NETHERITE_LEGGINGS",   "melee_dragon_leggings"},
+            {"NETHERITE_BOOTS",      "melee_dragon_boots"}
+        }) {
+            Material mat = Material.valueOf(entry[0]);
+            NamespacedKey k = new NamespacedKey(this, entry[1]);
+            ShapelessRecipe r = new ShapelessRecipe(k, new ItemStack(mat));
+            r.addIngredient(mat); r.addIngredient(Material.NETHER_STAR); r.addIngredient(Material.DRAGON_BREATH);
+            getServer().addRecipe(r); allRecipeKeys.add(k);
+        }
+
+        // ── Ranged Gear recipes — 4 tiers × 4 pieces = 16 recipes ────────────
+        // RangedGearCraftListener intercepts PrepareItemCraftEvent to swap in PDC item.
+        for (String[] entry : new String[][]{
+            {"LEATHER_HELMET",     "ranged_leather_helmet"},
+            {"LEATHER_CHESTPLATE", "ranged_leather_chestplate"},
+            {"LEATHER_LEGGINGS",   "ranged_leather_leggings"},
+            {"LEATHER_BOOTS",      "ranged_leather_boots"}
+        }) {
+            Material mat = Material.valueOf(entry[0]);
+            NamespacedKey k = new NamespacedKey(this, entry[1]);
+            ShapelessRecipe r = new ShapelessRecipe(k, new ItemStack(mat));
+            r.addIngredient(mat); r.addIngredient(Material.STRING);
+            getServer().addRecipe(r); allRecipeKeys.add(k);
+        }
+        for (String[] entry : new String[][]{
+            {"CHAINMAIL_HELMET",     "ranged_chain_helmet"},
+            {"CHAINMAIL_CHESTPLATE", "ranged_chain_chestplate"},
+            {"CHAINMAIL_LEGGINGS",   "ranged_chain_leggings"},
+            {"CHAINMAIL_BOOTS",      "ranged_chain_boots"}
+        }) {
+            Material mat = Material.valueOf(entry[0]);
+            NamespacedKey k = new NamespacedKey(this, entry[1]);
+            ShapelessRecipe r = new ShapelessRecipe(k, new ItemStack(mat));
+            r.addIngredient(mat); r.addIngredient(Material.FEATHER); r.addIngredient(Material.LAPIS_LAZULI);
+            getServer().addRecipe(r); allRecipeKeys.add(k);
+        }
+        for (String[] entry : new String[][]{
+            {"NETHERITE_HELMET",     "ranged_netherite_helmet"},
+            {"NETHERITE_CHESTPLATE", "ranged_netherite_chestplate"},
+            {"NETHERITE_LEGGINGS",   "ranged_netherite_leggings"},
+            {"NETHERITE_BOOTS",      "ranged_netherite_boots"}
+        }) {
+            Material mat = Material.valueOf(entry[0]);
+            NamespacedKey k = new NamespacedKey(this, entry[1]);
+            ShapelessRecipe r = new ShapelessRecipe(k, new ItemStack(mat));
+            r.addIngredient(mat); r.addIngredient(Material.NETHERITE_INGOT); r.addIngredient(Material.FEATHER);
+            getServer().addRecipe(r); allRecipeKeys.add(k);
+        }
+        for (String[] entry : new String[][]{
+            {"NETHERITE_HELMET",     "ranged_dragon_helmet"},
+            {"NETHERITE_CHESTPLATE", "ranged_dragon_chestplate"},
+            {"NETHERITE_LEGGINGS",   "ranged_dragon_leggings"},
+            {"NETHERITE_BOOTS",      "ranged_dragon_boots"}
+        }) {
+            Material mat = Material.valueOf(entry[0]);
+            NamespacedKey k = new NamespacedKey(this, entry[1]);
+            ShapelessRecipe r = new ShapelessRecipe(k, new ItemStack(mat));
+            r.addIngredient(mat); r.addIngredient(Material.NETHER_STAR); r.addIngredient(Material.ARROW);
+            getServer().addRecipe(r); allRecipeKeys.add(k);
+        }
+
+        // ── Arcane Tome recipe: Book + Amethyst Shard + Purple Dye ──────────
+        NamespacedKey arcaneTomeRecipe = new NamespacedKey(this, "arcane_tome_recipe");
+        ShapelessRecipe arcaneTomeR = new ShapelessRecipe(arcaneTomeRecipe,
+                spellBookManager.buildArcaneTomeItem());
+        arcaneTomeR.addIngredient(Material.BOOK);
+        arcaneTomeR.addIngredient(Material.AMETHYST_SHARD);
+        arcaneTomeR.addIngredient(Material.PURPLE_DYE);
+        getServer().addRecipe(arcaneTomeR);
+        allRecipeKeys.add(arcaneTomeRecipe);
+
         int totalRecipes = allRecipeKeys.size();
-        getLogger().info("DifficultyEngine: Registered " + totalRecipes
-                + " crafting recipes (4 staffs + 4 rune batches + 4 mage gear pieces + 8 magic cauldron).");
-        getLogger().info("  Mage Gear recipe: LEATHER_PIECE + PURPLE_DYE + BLAZE_POWDER");
+        getLogger().info("DifficultyEngine: Registered " + totalRecipes + " crafting recipes.");
+        getLogger().info("  Mage Gear:   LEATHER_PIECE + PURPLE_DYE + BLAZE_POWDER (4 tiers)");
+        getLogger().info("  Melee Gear:  ARMOUR_PIECE + tier ingredient (Iron/Diamond/Netherite/Dragon)");
+        getLogger().info("  Ranged Gear: ARMOUR_PIECE + tier ingredient (Leather/Chain/Netherite/Dragon)");
         getLogger().info("  Open crafting table → recipe book to search for them.");
     }
 

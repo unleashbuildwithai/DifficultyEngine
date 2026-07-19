@@ -5,7 +5,6 @@ import com.yourname.difficulty.DifficultyLevel;
 import org.bukkit.Bukkit;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.boss.BarColor;
-import org.bukkit.boss.BarFlag;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.boss.BossBar;
 import org.bukkit.entity.Player;
@@ -89,16 +88,17 @@ public class PartyHudTask extends BukkitRunnable {
                                : ratio > 0.25 ? BarColor.YELLOW
                                : BarColor.RED;
 
-                DifficultyLevel diff   = diffManager.getDifficulty(memberUid);
-                String          icon   = diffIcon(diff);
-                String          hearts = "§c❤ §f" + (int) hp + "§8/§7" + (int) maxHp;
-                String          title  = icon + " §f" + mp.getName() + "  " + hearts;
+                DifficultyLevel diff      = diffManager.getDifficulty(memberUid);
+                String          icon      = diffIcon(diff);
+                String          heartBar  = buildHeartBar(hp, maxHp);
+                String          hpNums    = "§f" + (int) hp + "§8/§7" + (int) maxHp;
+                // Format:  ◆ Name  ❤❤❤♡♡  15/20
+                String          title     = icon + " §f" + mp.getName() + "  " + heartBar + " " + hpNums;
 
                 BossBar bar = myBars.get(memberUid);
                 if (bar == null) {
-                    // Create new bar and show to viewer
-                    bar = Bukkit.createBossBar(title, color, BarStyle.SEGMENTED_10,
-                            BarFlag.CREATE_FOG);  // no fog — flag doesn't add fog by itself
+                    // Create new bar and show to viewer (SOLID = clean, no segments)
+                    bar = Bukkit.createBossBar(title, color, BarStyle.SOLID);
                     bar.setVisible(true);
                     bar.addPlayer(viewer);
                     myBars.put(memberUid, bar);
@@ -133,6 +133,26 @@ public class PartyHudTask extends BukkitRunnable {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Builds a row of heart symbols representing the entity's current health.
+     *
+     * <p>Up to 10 heart glyphs are shown. Each heart represents an equal
+     * fraction of {@code maxHp}. Filled hearts are §c (red), empty are §8 (dark grey).
+     *
+     * <p>Example — 15 / 20 HP → §c❤❤❤❤❤❤❤❤§8❤❤
+     */
+    private static String buildHeartBar(double hp, double maxHp) {
+        if (maxHp <= 0) return "§8❤❤❤❤❤❤❤❤❤❤";
+        int total  = 10;
+        int filled = (int) Math.round((hp / maxHp) * total);
+        filled = Math.max(0, Math.min(total, filled));
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < filled;         i++) sb.append("§c❤");
+        for (int i = filled; i < total;     i++) sb.append("§8❤");
+        return sb.toString();
+    }
 
     /**
      * A coloured diamond icon that doubles as a "portrait" colour indicator

@@ -1,6 +1,8 @@
 package com.yourname.difficulty.items;
 
 import com.yourname.difficulty.items.EarthBlockTier;
+import com.yourname.difficulty.items.MeleeGearTier;
+import com.yourname.difficulty.items.RangedGearTier;
 import com.yourname.difficulty.magic.MagicElement;
 import com.yourname.difficulty.skills.SkillCapeManager;
 import com.yourname.difficulty.skills.SkillType;
@@ -53,6 +55,9 @@ public class ItemFactory {
     public static final String DRAGON_ARROW_KEY      = "dragon_arrow";
     public static final String DRAGON_ARROW_TIP_KEY  = "dragon_arrow_tip";
     public static final String MAGIC_BAG_KEY         = "magic_bag";
+    public static final String MELEE_GEAR_KEY        = "melee_gear";
+    public static final String RANGED_GEAR_KEY       = "ranged_gear";
+    public static final String RAINBOW_AXOLOTL_KEY   = "rainbow_axolotl";
 
     // ── NamespacedKeys ────────────────────────────────────────────────────────
     private final NamespacedKey soulfurPotionKey;
@@ -67,8 +72,13 @@ public class ItemFactory {
     private final NamespacedKey dragonArrowKey;
     private final NamespacedKey dragonArrowTipKey;
     private final NamespacedKey magicBagKey;
+    private final NamespacedKey meleeGearKey;
+    private final NamespacedKey rangedGearKey;
+    private final NamespacedKey rainbowAxolotlKey;
     /** Per-tier PDC keys (MAGE tier maps to mageGearKey). */
-    private final Map<MageGearTier, NamespacedKey> mageGearTierKeys = new EnumMap<>(MageGearTier.class);
+    private final Map<MageGearTier,  NamespacedKey> mageGearTierKeys  = new EnumMap<>(MageGearTier.class);
+    private final Map<MeleeGearTier, NamespacedKey> meleeGearTierKeys = new EnumMap<>(MeleeGearTier.class);
+    private final Map<RangedGearTier, NamespacedKey> rangedGearTierKeys = new EnumMap<>(RangedGearTier.class);
 
     private final Map<MagicElement, NamespacedKey> staffKeys    = new EnumMap<>(MagicElement.class);
     private final Map<MagicElement, NamespacedKey> runeKeys     = new EnumMap<>(MagicElement.class);
@@ -103,6 +113,17 @@ public class ItemFactory {
             } else {
                 mageGearTierKeys.put(tier, new NamespacedKey(plugin, tier.pdcKey));
             }
+        }
+
+        // Melee & Ranged tier keys
+        this.meleeGearKey       = new NamespacedKey(plugin, MELEE_GEAR_KEY);
+        this.rangedGearKey      = new NamespacedKey(plugin, RANGED_GEAR_KEY);
+        this.rainbowAxolotlKey  = new NamespacedKey(plugin, RAINBOW_AXOLOTL_KEY);
+        for (MeleeGearTier tier : MeleeGearTier.values()) {
+            meleeGearTierKeys.put(tier, new NamespacedKey(plugin, tier.pdcKey));
+        }
+        for (RangedGearTier tier : RangedGearTier.values()) {
+            rangedGearTierKeys.put(tier, new NamespacedKey(plugin, tier.pdcKey));
         }
 
         for (MagicElement el : MagicElement.values()) {
@@ -160,8 +181,47 @@ public class ItemFactory {
         for (EarthBlockTier tier : EarthBlockTier.values()) {
             registryPage2.add(buildEarthMagicPage(tier));
         }
+        // Rainbow Axolotl — rare cosmetic collectible
+        registryPage2.add(buildRainbowAxolotl());
         // Magic Bag — portable 4-section arcane storage
         registryPage2.add(buildMagicBag());
+
+        // Melee Gear — 4 tiers × 4 pieces = 16 items
+        for (MeleeGearTier tier : MeleeGearTier.values()) {
+            Material helm  = (tier == MeleeGearTier.IRON)    ? Material.IRON_HELMET
+                           : (tier == MeleeGearTier.DIAMOND) ? Material.DIAMOND_HELMET
+                           : Material.NETHERITE_HELMET;
+            Material chest = (tier == MeleeGearTier.IRON)    ? Material.IRON_CHESTPLATE
+                           : (tier == MeleeGearTier.DIAMOND) ? Material.DIAMOND_CHESTPLATE
+                           : Material.NETHERITE_CHESTPLATE;
+            Material legs  = (tier == MeleeGearTier.IRON)    ? Material.IRON_LEGGINGS
+                           : (tier == MeleeGearTier.DIAMOND) ? Material.DIAMOND_LEGGINGS
+                           : Material.NETHERITE_LEGGINGS;
+            Material boots = (tier == MeleeGearTier.IRON)    ? Material.IRON_BOOTS
+                           : (tier == MeleeGearTier.DIAMOND) ? Material.DIAMOND_BOOTS
+                           : Material.NETHERITE_BOOTS;
+            registryPage2.add(buildMeleeGearPiece(tier, helm,  "Helmet"));
+            registryPage2.add(buildMeleeGearPiece(tier, chest, "Chestplate"));
+            registryPage2.add(buildMeleeGearPiece(tier, legs,  "Leggings"));
+            registryPage2.add(buildMeleeGearPiece(tier, boots, "Boots"));
+        }
+
+        // Ranged Gear — 4 tiers × 4 pieces = 16 items
+        for (RangedGearTier tier : RangedGearTier.values()) {
+            boolean isLeather  = (tier == RangedGearTier.LEATHER);
+            boolean isChain    = (tier == RangedGearTier.CHAIN);
+            Material helm  = isLeather ? Material.LEATHER_HELMET     : isChain ? Material.CHAINMAIL_HELMET     : Material.NETHERITE_HELMET;
+            Material chest = isLeather ? Material.LEATHER_CHESTPLATE : isChain ? Material.CHAINMAIL_CHESTPLATE : Material.NETHERITE_CHESTPLATE;
+            Material legs  = isLeather ? Material.LEATHER_LEGGINGS   : isChain ? Material.CHAINMAIL_LEGGINGS   : Material.NETHERITE_LEGGINGS;
+            Material boots = isLeather ? Material.LEATHER_BOOTS      : isChain ? Material.CHAINMAIL_BOOTS      : Material.NETHERITE_BOOTS;
+            String helmName  = isLeather ? "Cap"   : isChain ? "Coif"      : "Helm";
+            String chestName = isLeather ? "Tunic" : isChain ? "Body"      : "Platebody";
+            String legsName  = isLeather ? "Chaps" : isChain ? "Chaps"     : "Platelegs";
+            registryPage2.add(buildRangedGearPiece(tier, helm,  helmName));
+            registryPage2.add(buildRangedGearPiece(tier, chest, chestName));
+            registryPage2.add(buildRangedGearPiece(tier, legs,  legsName));
+            registryPage2.add(buildRangedGearPiece(tier, boots, "Boots"));
+        }
     }
 
     // ── Soulfur Potion ────────────────────────────────────────────────────────
@@ -790,7 +850,7 @@ public class ItemFactory {
         LeatherArmorMeta meta = (LeatherArmorMeta) item.getItemMeta();
         if (meta != null) {
             meta.setDisplayName("§d🦄 Unicorn Slippers");
-            meta.setColor(Color.fromRGB(255, 220, 250));
+            meta.setColor(Color.fromRGB(255, 105, 180)); // deep hot-pink
             meta.addEnchant(Enchantment.UNBREAKING, 3, true);
             meta.addItemFlags(ItemFlag.HIDE_ENCHANTS, ItemFlag.HIDE_ATTRIBUTES);
             meta.setLore(List.of(
@@ -815,6 +875,48 @@ public class ItemFactory {
     public boolean isUnicornSlippers(ItemStack item) {
         if (item == null || !item.hasItemMeta()) return false;
         return item.getItemMeta().getPersistentDataContainer().has(unicornSlippersKey, PersistentDataType.BYTE);
+    }
+
+    // ── Rainbow Axolotl ───────────────────────────────────────────────────────
+
+    /**
+     * The Rainbow Axolotl — a rare cosmetic collectible.
+     * Represented as an Axolotl Bucket with rainbow enchantment glow.
+     * All 5 axolotl variants are listed in the lore as a "collector's note".
+     * Right-clicking while holding does nothing — purely decorative in inventory.
+     */
+    public ItemStack buildRainbowAxolotl() {
+        ItemStack item = new ItemStack(Material.AXOLOTL_BUCKET);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§d🌈 §lRainbow Axolotl §d🌈");
+            meta.addEnchant(Enchantment.UNBREAKING, 1, true);
+            meta.setEnchantmentGlintOverride(true);
+            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS, ItemFlag.HIDE_ATTRIBUTES);
+            meta.setLore(List.of(
+                "§8" + "─".repeat(28),
+                "§7A mythical axolotl that shimmers",
+                "§7through every colour of the rainbow.",
+                "§8" + "─".repeat(28),
+                "§d✦ §7Variants: §bLeuci §d• §5Wild §d• §6Gold §d• §bCyan §d• §9Blue",
+                "§7All 5 colours cycle while worn",
+                "§7as a fishing cape companion.",
+                "§8" + "─".repeat(28),
+                "§8Rarity: §d★★★★★ §8Legendary",
+                "§6Obtain: §7Rare catch from §bFishing Cape§7,",
+                "§7or trade at the §6VIP Shop §85,000 gp",
+                "§8" + "─".repeat(28),
+                "§8[DifficultyEngine — Rainbow Axolotl]"
+            ));
+            meta.getPersistentDataContainer().set(rainbowAxolotlKey, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    public boolean isRainbowAxolotl(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer().has(rainbowAxolotlKey, PersistentDataType.BYTE);
     }
 
     // ── GunZ Sword ────────────────────────────────────────────────────────────
@@ -1031,6 +1133,216 @@ public class ItemFactory {
         return earthPageKeys.get(tier);
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    //  MELEE GEAR — All 4 Tiers
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Builds a melee gear piece for the given tier, material and piece name.
+     * All pieces get the universal {@code melee_gear} PDC key PLUS their
+     * tier-specific key (so {@link #getMeleeGearTier} can identify them).
+     *
+     * Dragon tier items receive a full enchantment suite and the glint override
+     * so they visually stand out from vanilla armour in the same material.
+     */
+    public ItemStack buildMeleeGearPiece(MeleeGearTier tier, Material mat, String pieceName) {
+        ItemStack item = new ItemStack(mat);
+        ItemMeta  meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(tier.displayPrefix + " " + pieceName);
+            meta.setUnbreakable(true);
+            meta.addItemFlags(ItemFlag.HIDE_UNBREAKABLE, ItemFlag.HIDE_ATTRIBUTES);
+
+            // Dragon gets full enchants + glint
+            if (tier == MeleeGearTier.DRAGON) {
+                meta.addEnchant(Enchantment.PROTECTION,     4, true);
+                meta.addEnchant(Enchantment.UNBREAKING,     3, true);
+                meta.addEnchant(Enchantment.MENDING,        1, true);
+                meta.addEnchant(Enchantment.THORNS,         3, true);
+                if (mat == Material.NETHERITE_BOOTS) {
+                    meta.addEnchant(Enchantment.FEATHER_FALLING, 4, true);
+                }
+                meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+                meta.setEnchantmentGlintOverride(true);
+            }
+
+            meta.setLore(List.of(
+                "§8" + "─".repeat(26),
+                "§7Tier: " + tier.displayPrefix,
+                "§8Requires: §aMelee Level §a" + tier.levelRequired,
+                "§8" + "─".repeat(26),
+                "§7⚔ Defence bonus: §a×" + String.format("%.2f", tier.defenceBonus) + " §8per piece",
+                "§7⚔ Damage bonus:  §a×" + String.format("%.2f", tier.damageBonus)  + " §8(full set)",
+                "§8" + "─".repeat(26),
+                "§6Craft: §7" + tier.craftIngredients,
+                "§8[DifficultyEngine — " + tier.displayPrefix.replaceAll("§.", "") + " Melee Gear]"
+            ));
+            // Universal tag (any DE melee gear)
+            meta.getPersistentDataContainer().set(meleeGearKey, PersistentDataType.BYTE, (byte) 1);
+            // Tier-specific tag
+            NamespacedKey tierKey = meleeGearTierKeys.get(tier);
+            if (tierKey != null) {
+                meta.getPersistentDataContainer().set(tierKey, PersistentDataType.BYTE, (byte) 1);
+            }
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    /** Returns {@code true} if the item is ANY tier of DE melee gear. */
+    public boolean isMeleeGear(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer().has(meleeGearKey, PersistentDataType.BYTE);
+    }
+
+    /**
+     * Returns the {@link MeleeGearTier} of the item, or {@code null} if it is
+     * not DE melee gear. Checks from DRAGON down to IRON.
+     */
+    public MeleeGearTier getMeleeGearTier(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return null;
+        var pdc = item.getItemMeta().getPersistentDataContainer();
+        for (MeleeGearTier tier : new MeleeGearTier[]{
+                MeleeGearTier.DRAGON, MeleeGearTier.NETHERITE,
+                MeleeGearTier.DIAMOND, MeleeGearTier.IRON}) {
+            NamespacedKey key = meleeGearTierKeys.get(tier);
+            if (key != null && pdc.has(key, PersistentDataType.BYTE)) return tier;
+        }
+        return null;
+    }
+
+    /**
+     * Returns the additive melee damage multiplier from all DE melee gear worn
+     * by the player.  Returns 1.0 if no DE melee gear is equipped.
+     */
+    public double getMeleeDamageBonus(Player player) {
+        for (ItemStack piece : player.getInventory().getArmorContents()) {
+            MeleeGearTier tier = getMeleeGearTier(piece);
+            if (tier != null) return tier.damageBonus; // all 4 pieces share the same tier
+        }
+        return 1.0;
+    }
+
+    /**
+     * Returns the additive defence XP multiplier from all DE melee gear worn.
+     * Stacks across pieces — wearing 4 pieces multiplies the bonus × 4.
+     */
+    public double getMeleeDefenceBonus(Player player) {
+        double bonus = 0.0;
+        for (ItemStack piece : player.getInventory().getArmorContents()) {
+            MeleeGearTier tier = getMeleeGearTier(piece);
+            if (tier != null) bonus += tier.defenceBonus;
+        }
+        return bonus == 0.0 ? 1.0 : bonus;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  RANGED GEAR — All 4 Tiers
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Builds a ranged gear piece for the given tier, material and piece name.
+     * All pieces get the universal {@code ranged_gear} PDC key PLUS their
+     * tier-specific key (so {@link #getRangedGearTier} can identify them).
+     *
+     * LEATHER tier uses {@link LeatherArmorMeta} to apply a hunter-green tint.
+     * Dragon tier items receive a full enchantment suite with Projectile Protection.
+     */
+    public ItemStack buildRangedGearPiece(RangedGearTier tier, Material mat, String pieceName) {
+        ItemStack item = new ItemStack(mat);
+        ItemMeta  meta = item.getItemMeta();
+        if (meta == null) return item;
+
+        meta.setDisplayName(tier.displayPrefix + " " + pieceName);
+        meta.setUnbreakable(true);
+        meta.addItemFlags(ItemFlag.HIDE_UNBREAKABLE, ItemFlag.HIDE_ATTRIBUTES);
+
+        // Leather tier: apply hunter-green tint
+        if (tier == RangedGearTier.LEATHER && meta instanceof LeatherArmorMeta lam) {
+            lam.setColor(Color.fromRGB(80, 120, 40));
+        }
+
+        // Dragon gets Projectile Protection + full enchants + glint
+        if (tier == RangedGearTier.DRAGON) {
+            meta.addEnchant(Enchantment.PROJECTILE_PROTECTION, 4, true);
+            meta.addEnchant(Enchantment.UNBREAKING,            3, true);
+            meta.addEnchant(Enchantment.MENDING,               1, true);
+            if (mat == Material.NETHERITE_BOOTS) {
+                meta.addEnchant(Enchantment.FEATHER_FALLING, 4, true);
+            }
+            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+            meta.setEnchantmentGlintOverride(true);
+        }
+
+        meta.setLore(List.of(
+            "§8" + "─".repeat(26),
+            "§7Tier: " + tier.displayPrefix,
+            "§8Requires: §aRanged Level §a" + tier.levelRequired,
+            "§8" + "─".repeat(26),
+            "§7🏹 Ranged bonus:     §a×" + String.format("%.2f", tier.rangedBonus) + " §8(full set)",
+            "§7🏹 Draw speed bonus: §a-" + tier.drawSpeedBonus + "ms §8per piece",
+            "§8" + "─".repeat(26),
+            "§6Craft: §7" + tier.craftIngredients,
+            "§8[DifficultyEngine — " + tier.displayPrefix.replaceAll("§.", "") + " Ranged Gear]"
+        ));
+        // Universal tag (any DE ranged gear)
+        meta.getPersistentDataContainer().set(rangedGearKey, PersistentDataType.BYTE, (byte) 1);
+        // Tier-specific tag
+        NamespacedKey tierKey = rangedGearTierKeys.get(tier);
+        if (tierKey != null) {
+            meta.getPersistentDataContainer().set(tierKey, PersistentDataType.BYTE, (byte) 1);
+        }
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    /** Returns {@code true} if the item is ANY tier of DE ranged gear. */
+    public boolean isRangedGear(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer().has(rangedGearKey, PersistentDataType.BYTE);
+    }
+
+    /**
+     * Returns the {@link RangedGearTier} of the item, or {@code null} if it is
+     * not DE ranged gear. Checks from DRAGON down to LEATHER.
+     */
+    public RangedGearTier getRangedGearTier(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return null;
+        var pdc = item.getItemMeta().getPersistentDataContainer();
+        for (RangedGearTier tier : new RangedGearTier[]{
+                RangedGearTier.DRAGON, RangedGearTier.NETHERITE,
+                RangedGearTier.CHAIN,  RangedGearTier.LEATHER}) {
+            NamespacedKey key = rangedGearTierKeys.get(tier);
+            if (key != null && pdc.has(key, PersistentDataType.BYTE)) return tier;
+        }
+        return null;
+    }
+
+    /**
+     * Returns the additive ranged damage multiplier from the highest-tier DE
+     * ranged gear currently equipped.  Returns 1.0 if no DE ranged gear is worn.
+     */
+    public double getRangedDamageBonus(Player player) {
+        for (ItemStack piece : player.getInventory().getArmorContents()) {
+            RangedGearTier tier = getRangedGearTier(piece);
+            if (tier != null) return tier.rangedBonus;
+        }
+        return 1.0;
+    }
+
+    /**
+     * Returns the total draw-speed bonus (ms shaved off bow draw time) from all
+     * DE ranged gear worn.  Stacks across pieces (4 pieces × per-piece bonus).
+     */
+    public long getRangedDrawSpeedBonus(Player player) {
+        long bonus = 0L;
+        for (ItemStack piece : player.getInventory().getArmorContents()) {
+            RangedGearTier tier = getRangedGearTier(piece);
+            if (tier != null) bonus += tier.drawSpeedBonus;
+        }
+        return bonus;
+    }
+
     // ── Magic Bag ─────────────────────────────────────────────────────────────
 
     /**
@@ -1113,4 +1425,7 @@ public class ItemFactory {
     public NamespacedKey getUnicornSlippersKey()       { return unicornSlippersKey; }
     public NamespacedKey getMageGearKey()              { return mageGearKey; }
     public NamespacedKey getMagicBagKey()              { return magicBagKey; }
+    public NamespacedKey getMeleeGearKey()             { return meleeGearKey; }
+    public NamespacedKey getRangedGearKey()            { return rangedGearKey; }
+    public NamespacedKey getRainbowAxolotlKey()        { return rainbowAxolotlKey; }
 }

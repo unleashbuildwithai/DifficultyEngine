@@ -26,6 +26,12 @@ public class PartyManager {
     /** Rolling damage log: player UUID → deque of [timestampMs, damage*100] */
     private final Map<UUID, ArrayDeque<long[]>> dpsLog = new HashMap<>();
 
+    /**
+     * UUIDs of members who are currently offline but still in a party.
+     * They remain in the party data and will be welcomed back on rejoin.
+     */
+    private final Set<UUID> offlineMembers = new HashSet<>();
+
     private static final long WINDOW_MS = 25_000L; // 25-second rolling window
 
     // ── Party creation / joining ──────────────────────────────────────────────
@@ -97,6 +103,24 @@ public class PartyManager {
      * Removes a player from their party. If they were the leader,
      * a new leader is chosen from remaining members (or the party disbands).
      */
+    // ── Offline member tracking ───────────────────────────────────────────────
+
+    /**
+     * Marks a member as offline.  They remain in the party — their name shows
+     * grey in /party list and they are skipped by the HUD task.
+     */
+    public void markOffline(UUID uuid) { offlineMembers.add(uuid); }
+
+    /**
+     * Marks a member as back online.  Call from PlayerJoinEvent.
+     */
+    public void markOnline(UUID uuid) { offlineMembers.remove(uuid); }
+
+    /** Returns {@code true} if the member has been marked offline. */
+    public boolean isOffline(UUID uuid) { return offlineMembers.contains(uuid); }
+
+    // ── Party leaving / disbanding ────────────────────────────────────────────
+
     public List<UUID> leaveParty(UUID uuid) {
         UUID leader = memberIndex.remove(uuid);
         if (leader == null) return List.of();

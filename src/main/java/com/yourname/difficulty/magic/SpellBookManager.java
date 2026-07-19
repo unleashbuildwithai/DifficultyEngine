@@ -31,7 +31,7 @@ import java.util.logging.Level;
  */
 public class SpellBookManager {
 
-    public static final int    TOTAL_PAGES    = 37;
+    public static final int    TOTAL_PAGES    = 41;
     public static final String SPELL_TOME_KEY = "spell_tome";
     public static final String SPELL_PAGE_KEY = "spell_page";
 
@@ -530,7 +530,76 @@ public class SpellBookManager {
             "§7▶ Freeze chain (4 hits)\n" +
             "§7  is deadliest!\n" +
             "§7▶ Find more §dSpell Pages!\n\n" +
-            "§8[37 / 37]";
+            "§8[37 / 41]";
+
+        // ── Mage Gear visual craft guides (pages 38-41) ──────────────────────
+
+        PAGE_CONTENT[37] =
+            "§9Apprentice Gear §8(Lv 1)\n" +
+            "§8─────────────────\n" +
+            "§7 Hood      Top\n" +
+            "§8[§7L§8+§5◆§8+§7~§8]  [§7L§8+§5◆§8+§7~§8]\n" +
+            "§9  Hood      Top\n\n" +
+            "§7 Legs     Boots\n" +
+            "§8[§7L§8+§5◆§8+§7~§8]  [§7L§8+§5◆§8+§7~§8]\n" +
+            "§9  Legs    Boots\n" +
+            "§8─────────────────\n" +
+            "§7L §8= Leather piece\n" +
+            "§5◆ §8= Purple Dye\n" +
+            "§7~ §8= String\n" +
+            "§8Bonus: §e−100ms §8CD/piece\n" +
+            "§8[38 / 41]";
+
+        PAGE_CONTENT[38] =
+            "§5Mage Gear §8(Lv 30)\n" +
+            "§8─────────────────\n" +
+            "§7 Hood      Top\n" +
+            "§8[§7L§8+§5◆§8+§6⚗§8]  [§7L§8+§5◆§8+§6⚗§8]\n" +
+            "§5  Hood      Top\n\n" +
+            "§7 Legs     Boots\n" +
+            "§8[§7L§8+§5◆§8+§6⚗§8]  [§7L§8+§5◆§8+§6⚗§8]\n" +
+            "§5  Legs    Boots\n" +
+            "§8─────────────────\n" +
+            "§7L §8= Leather piece\n" +
+            "§5◆ §8= Purple Dye\n" +
+            "§6⚗ §8= Blaze Powder\n" +
+            "§8Bonus: §e−250ms §8CD/piece\n" +
+            "§8[39 / 41]";
+
+        PAGE_CONTENT[39] =
+            "§bAlch Gear §8(Lv 60)\n" +
+            "§8─────────────────\n" +
+            "§7 Hood      Top\n" +
+            "§8[§7L§8+§9◆§8+§6⚗§8+§9E§8]\n" +
+            "§b  Hood      Top\n\n" +
+            "§7 Legs     Boots\n" +
+            "§8[§7L§8+§9◆§8+§6⚗§8+§9E§8]\n" +
+            "§b  Legs    Boots\n" +
+            "§8─────────────────\n" +
+            "§7L §8= Leather piece\n" +
+            "§9◆ §8= Blue Dye\n" +
+            "§6⚗ §8= Blaze Powder\n" +
+            "§9E §8= Eye of Ender\n" +
+            "§8Bonus: §e−350ms §8CD/piece\n" +
+            "§8[40 / 41]";
+
+        PAGE_CONTENT[40] =
+            "§4Master Gear §8(Lv 90)\n" +
+            "§8─────────────────\n" +
+            "§7 Hood      Top\n" +
+            "§8[§7L§8+§8◆§8+§6⚗§8+§5S§8+§4D§8]\n" +
+            "§4  Hood      Top\n\n" +
+            "§7 Legs     Boots\n" +
+            "§8[§7L§8+§8◆§8+§6⚗§8+§5S§8+§4D§8]\n" +
+            "§4  Legs    Boots\n" +
+            "§8─────────────────\n" +
+            "§7L §8= Leather piece\n" +
+            "§8◆ §8= Black Dye\n" +
+            "§6⚗ §8= Blaze Powder\n" +
+            "§5S §8= Enchanted Shard\n" +
+            "§4D §8= Dragon Breath\n" +
+            "§8Bonus: §e−500ms §8CD/piece\n" +
+            "§8[41 / 41]";
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -610,6 +679,37 @@ public class SpellBookManager {
     }
 
     // ── Item builders ─────────────────────────────────────────────────────────
+
+    /**
+     * Builds a craftable, blank Arcane Tome — all pages show "???".
+     * Craft recipe: Book + Amethyst Shard + Purple Dye.
+     * Right-clicking opens the player's spell book view.
+     */
+    public ItemStack buildArcaneTomeItem() {
+        ItemStack item = new ItemStack(Material.ENCHANTED_BOOK);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§5✦ Arcane Tome §8[empty]");
+            meta.setLore(List.of(
+                "§8" + "─".repeat(22),
+                "§7A blank grimoire of elemental magic.",
+                "§7All pages start as §8???§7.",
+                "§8" + "─".repeat(22),
+                "§7Right-click to read your tome.",
+                "§7Find §dSpell Pages §7(4% mob drop)",
+                "§7and right-click them to unlock pages!",
+                "§8" + "─".repeat(22),
+                "§6Craft: §7Book + §5Amethyst Shard§7 + §5Purple Dye",
+                "§8[DifficultyEngine — Arcane Tome]"
+            ));
+            meta.addEnchant(Enchantment.UNBREAKING, 1, true);
+            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS, ItemFlag.HIDE_ATTRIBUTES);
+            meta.getPersistentDataContainer()
+                    .set(spellTomeKey, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
 
     /** The carryable Arcane Tome item. Right-clicking opens the book view. */
     public ItemStack buildSpellTomeItem() {

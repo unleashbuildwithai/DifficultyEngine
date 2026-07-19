@@ -13,9 +13,14 @@ import org.bukkit.entity.TropicalFish;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scoreboard.Scoreboard;
+import org.bukkit.scoreboard.Team;
 import org.bukkit.util.Vector;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -46,6 +51,13 @@ import java.util.UUID;
  *  A lastCapeName map tracks the displayed cape name.  When a swap is
  *  detected the old hologram stand is removed immediately — this prevents
  *  the "ghost name / health-bar glitched into the world" bug.
+ *
+ * ── FISH / AXOLOTL ENTITY FIX ─────────────────────────────────────────────
+ *  All spawned TropicalFish and Axolotl entities are added to the
+ *  "de_cape_mobs" scoreboard team.  That team has:
+ *    COLLISION_RULE      = NEVER  → entity cannot physically push the player.
+ *    NAME_TAG_VISIBILITY = NEVER  → suppresses the health-bar overlay that
+ *                                   appears when the player looks at the entity.
  */
 public class CapeVisualTask extends BukkitRunnable {
 
@@ -62,6 +74,12 @@ public class CapeVisualTask extends BukkitRunnable {
     private final CapeDataManager       capeDataManager;
     private final JavaPlugin            plugin;
 
+    /**
+     * Scoreboard team applied to all spawned fish and axolotl entities.
+     * Configured with COLLISION_RULE = NEVER and NAME_TAG_VISIBILITY = NEVER.
+     */
+    private final Team capeEntityTeam;
+
     /** Live map of player UUID → their current cape hologram stand. */
     private final Map<UUID, ArmorStand> holograms    = new HashMap<>();
 
@@ -73,12 +91,45 @@ public class CapeVisualTask extends BukkitRunnable {
 
     private int tick = 0;
 
+    // ── Fishing cape orbit system ─────────────────────────────────────────────
+    /** Axolotls in a vertical great-circle ring (poles), rotating around Y-axis. */
+    private static final int    AXOLOTL_COUNT  = 6;
+    private static final double AXOLOTL_RADIUS = 1.10;
+    /** Tropical fish in a horizontal equator ring at waist height. */
+    private static final int    FISH_COUNT     = 8;
+    private static final double FISH_RADIUS    = 1.20;
+    /** Radians the rings advance per 10-tick run cycle. */
+    private static final double ORBIT_SPEED    = 0.040;
+
+    private final Map<UUID, List<org.bukkit.entity.Entity>> fishingOrbit  = new HashMap<>();
+    private final Map<UUID, Double>                         fishingAngles = new HashMap<>();
+
     public CapeVisualTask(SkillCapeManager capeManager,
                           CapeDataManager  capeDataManager,
                           JavaPlugin       plugin) {
         this.capeManager     = capeManager;
         this.capeDataManager = capeDataManager;
         this.plugin          = plugin;
+        this.capeEntityTeam  = ensureCapeEntityTeam();
+    }
+
+    /**
+     * Creates (or retrieves) the {@code "de_cape_mobs"} scoreboard team on the
+     * main scoreboard and configures it so that cape fish/axolotl entities:
+     * <ul>
+     *   <li>Never collide with players (no physical push).</li>
+     *   <li>Never show a name-tag / health-bar overlay.</li>
+     * </ul>
+     */
+    private Team ensureCapeEntityTeam() {
+        Scoreboard sb = plugin.getServer().getScoreboardManager().getMainScoreboard();
+        Team team = sb.getTeam("de_cape_mobs");
+        if (team == null) {
+            team = sb.registerNewTeam("de_cape_mobs");
+        }
+        team.setOption(Team.Option.COLLISION_RULE,      Team.OptionStatus.NEVER);
+        team.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.NEVER);
+        return team;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -96,6 +147,7 @@ public class CapeVisualTask extends BukkitRunnable {
             if (p == null || !p.isOnline() || !isWearingCape(p)) {
                 if (!stand.isDead()) stand.remove();
                 lastCapeName.remove(entry.getKey());
+                despawnFishingOrbit(entry.getKey());
                 return true;
             }
             return false;
@@ -110,6 +162,7 @@ public class CapeVisualTask extends BukkitRunnable {
                 ArmorStand old = holograms.remove(player.getUniqueId());
                 if (old != null && !old.isDead()) old.remove();
                 lastCapeName.remove(player.getUniqueId());
+                despawnFishingOrbit(player.getUniqueId());
                 continue;
             }
 
@@ -129,6 +182,12 @@ public class CapeVisualTask extends BukkitRunnable {
             // ── Emit particles (every other run for skill capes) ───────────
             if (!shouldEmitParticles(cape)) continue;
             spawnCapeParticles(player, cape);
+
+            // ── Fishing orbit cleanup for non-fishing capes ────────────────
+            SkillType activeSk = capeManager.getCapeSkill(cape);
+            if (activeSk != SkillType.FISHING) {
+                despawnFishingOrbit(player.getUniqueId());
+            }
         }
     }
 
@@ -152,19 +211,20 @@ public class CapeVisualTask extends BukkitRunnable {
             // Remove stale reference if any
             if (stand != null && !stand.isDead()) stand.remove();
 
-            stand = (ArmorStand) player.getWorld()
-                    .spawnEntity(hologramPos, EntityType.ARMOR_STAND);
-
-            // Apply flags immediately AFTER spawn to minimise flicker
-            stand.setMarker(true);          // no hitbox → no health-bar interaction
-            stand.setInvisible(true);
-            stand.setSmall(true);
-            stand.setGravity(false);
-            stand.setCanPickupItems(false);
-            stand.setPersistent(false);     // not saved to world NBT
-            stand.setBasePlate(false);
-            stand.setArms(false);
-            stand.addScoreboardTag(HOLOGRAM_TAG);
+            // world.spawn() with Consumer — all flags set BEFORE entity packet is
+            // sent to the client, so the client never sees an untouched ArmorStand
+            // and the crosshair cannot show "Armour Stand" even for one tick.
+            stand = player.getWorld().spawn(hologramPos, ArmorStand.class, s -> {
+                s.setMarker(true);          // no hitbox → crosshair can't target
+                s.setInvisible(true);
+                s.setSmall(true);
+                s.setGravity(false);
+                s.setCanPickupItems(false);
+                s.setPersistent(false);     // not saved to world NBT
+                s.setBasePlate(false);
+                s.setArms(false);
+                s.addScoreboardTag(HOLOGRAM_TAG);
+            });
             holograms.put(player.getUniqueId(), stand);
         }
 
@@ -251,37 +311,18 @@ public class CapeVisualTask extends BukkitRunnable {
         SkillType skill = capeManager.getCapeSkill(cape);
         if (skill == null) return;
 
-        // ── Fishing cape: water + fish entities + axolotl pixel art ──────
+        // ── Fishing cape: water cascade + dual-ring orbit ─────────────────
         if (skill == SkillType.FISHING) {
             try {
-                player.getWorld().spawnParticle(Particle.FALLING_WATER, loc,  12, 0.40, 0.30, 0.40, 0.0);
-                player.getWorld().spawnParticle(Particle.FALLING_WATER, locH,  6, 0.25, 0.15, 0.25, 0.0);
-                player.getWorld().spawnParticle(Particle.SPLASH,        loc,   6, 0.35, 0.20, 0.35, 0.04);
-                player.getWorld().spawnParticle(Particle.SPLASH,        locH,  3, 0.20, 0.10, 0.20, 0.03);
+                player.getWorld().spawnParticle(Particle.FALLING_WATER, loc,  10, 0.35, 0.25, 0.35, 0.0);
+                player.getWorld().spawnParticle(Particle.FALLING_WATER, locH,  5, 0.20, 0.12, 0.20, 0.0);
+                player.getWorld().spawnParticle(Particle.SPLASH,        loc,   5, 0.30, 0.15, 0.30, 0.03);
+                player.getWorld().spawnParticle(Particle.UNDERWATER,    loc,   3, 0.30, 0.20, 0.30, 0.0);
             } catch (Exception ex) {
                 plugin.getLogger().warning("[CapeVFX] Fishing water particles error: " + ex.getMessage());
             }
-
-            if (tick % 8 == 0) {
-                try { spawnTemporaryFish(player, loc); } catch (Exception ex) {
-                    plugin.getLogger().warning("[CapeVFX] Fish spawn error: " + ex.getMessage());
-                }
-                if (Math.random() < 0.5) {
-                    try { spawnTemporaryFish(player, loc); } catch (Exception ex) { /* swallow */ }
-                }
-            }
-            // Axolotl: 50 % chance pixel art, 50 % chance water-bubble entity cameo
-            if (tick % 20 == 0) {
-                try {
-                    if (Math.random() < 0.5) {
-                        spawnAxolotlPixelArt(player, loc, right);
-                    } else {
-                        spawnAxolotlWaterBubble(player, loc);
-                    }
-                } catch (Exception ex) {
-                    plugin.getLogger().warning("[CapeVFX] Axolotl cameo error: " + ex.getMessage());
-                }
-            }
+            // Update orbit rings (teleports persistent entities to their positions)
+            updateFishingOrbit(player);
             return;
         }
 
@@ -512,6 +553,147 @@ public class CapeVisualTask extends BukkitRunnable {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
+    //  Fishing cape — dual orbit rings
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Maintains (or creates) two persistent orbit rings for the fishing cape:
+     * <ol>
+     *   <li><b>Vertical ring</b> — {@value #AXOLOTL_COUNT} axolotls arranged on a
+     *       great circle (longitude loop) rotating slowly around the player's Y-axis.</li>
+     *   <li><b>Horizontal ring</b> — {@value #FISH_COUNT} tropical fish at waist height
+     *       orbiting in the opposite direction.</li>
+     * </ol>
+     * Called from {@link #spawnCapeParticles} every run cycle while the player
+     * wears a Fishing Cape.
+     */
+    private void updateFishingOrbit(Player player) {
+        UUID uuid  = player.getUniqueId();
+        double angle = fishingAngles.getOrDefault(uuid, 0.0) + ORBIT_SPEED;
+        fishingAngles.put(uuid, angle);
+
+        List<org.bukkit.entity.Entity> entities = fishingOrbit.get(uuid);
+        boolean needRespawn = (entities == null
+                || entities.size() < AXOLOTL_COUNT + FISH_COUNT
+                || entities.stream().anyMatch(e -> e == null || e.isDead()));
+
+        if (needRespawn) {
+            spawnFishingOrbit(player, angle);
+            return;
+        }
+
+        // Centre point: player torso height
+        Location centre = player.getLocation().clone().add(0, 1.0, 0);
+
+        // ── Move axolotls (vertical great-circle ring) ─────────────────────
+        for (int i = 0; i < AXOLOTL_COUNT; i++) {
+            org.bukkit.entity.Entity e = entities.get(i);
+            double circAngle = 2 * Math.PI * i / AXOLOTL_COUNT;
+            double rx = Math.cos(circAngle) * Math.cos(angle) * AXOLOTL_RADIUS;
+            double ry = Math.sin(circAngle)                   * AXOLOTL_RADIUS;
+            double rz = Math.cos(circAngle) * Math.sin(angle) * AXOLOTL_RADIUS;
+            e.teleport(centre.clone().add(rx, ry, rz));
+        }
+
+        // ── Move fish (horizontal equator ring, counter-rotating) ──────────
+        for (int i = 0; i < FISH_COUNT; i++) {
+            org.bukkit.entity.Entity e = entities.get(AXOLOTL_COUNT + i);
+            double fishAngle = 2 * Math.PI * i / FISH_COUNT - angle * 1.3;
+            double rx = Math.cos(fishAngle) * FISH_RADIUS;
+            double rz = Math.sin(fishAngle) * FISH_RADIUS;
+            e.teleport(centre.clone().add(rx, 0, rz));
+        }
+    }
+
+    /**
+     * Spawns all {@value #AXOLOTL_COUNT} axolotls + {@value #FISH_COUNT} tropical fish
+     * for the fishing orbit rings and stores them in {@link #fishingOrbit}.
+     * Flags are set atomically via the {@code world.spawn()} Consumer overload.
+     */
+    private void spawnFishingOrbit(Player player, double angle) {
+        UUID uuid = player.getUniqueId();
+        // Despawn any previous (partially dead) entities
+        List<org.bukkit.entity.Entity> old = fishingOrbit.get(uuid);
+        if (old != null) {
+            for (org.bukkit.entity.Entity e : old) if (e != null && !e.isDead()) e.remove();
+        }
+
+        List<org.bukkit.entity.Entity> entities = new ArrayList<>();
+        Location centre = player.getLocation().clone().add(0, 1.0, 0);
+
+        // ── Axolotls: vertical great-circle ring ──────────────────────────
+        org.bukkit.entity.Axolotl.Variant[] variants = org.bukkit.entity.Axolotl.Variant.values();
+        for (int i = 0; i < AXOLOTL_COUNT; i++) {
+            double circAngle = 2 * Math.PI * i / AXOLOTL_COUNT;
+            double rx = Math.cos(circAngle) * Math.cos(angle) * AXOLOTL_RADIUS;
+            double ry = Math.sin(circAngle)                   * AXOLOTL_RADIUS;
+            double rz = Math.cos(circAngle) * Math.sin(angle) * AXOLOTL_RADIUS;
+            final org.bukkit.entity.Axolotl.Variant variant = variants[i % variants.length];
+
+            org.bukkit.entity.Axolotl axolotl = player.getWorld().spawn(
+                centre.clone().add(rx, ry, rz),
+                org.bukkit.entity.Axolotl.class,
+                a -> {
+                    a.setAI(false);
+                    a.setGravity(false);
+                    a.setPersistent(false);
+                    a.setInvulnerable(true);
+                    a.setSilent(true);
+                    a.setCustomNameVisible(false);
+                    a.setCollidable(false);
+                    a.setAdult();
+                    a.setVariant(variant);
+                    a.addScoreboardTag(FISH_TAG);
+                    capeEntityTeam.addEntry(a.getUniqueId().toString());
+                });
+            entities.add(axolotl);
+        }
+
+        // ── Tropical fish: horizontal equator ring ─────────────────────────
+        TropicalFish.Pattern[]  patterns  = TropicalFish.Pattern.values();
+        org.bukkit.DyeColor[]   dyeColors = org.bukkit.DyeColor.values();
+        for (int i = 0; i < FISH_COUNT; i++) {
+            double fishAngle = 2 * Math.PI * i / FISH_COUNT - angle * 1.3;
+            double rx = Math.cos(fishAngle) * FISH_RADIUS;
+            double rz = Math.sin(fishAngle) * FISH_RADIUS;
+            final TropicalFish.Pattern pattern = patterns[i % patterns.length];
+            final org.bukkit.DyeColor  body    = dyeColors[(i * 3 + 1) % dyeColors.length];
+            final org.bukkit.DyeColor  pat     = dyeColors[(i * 2)     % dyeColors.length];
+
+            TropicalFish fish = player.getWorld().spawn(
+                centre.clone().add(rx, 0, rz),
+                TropicalFish.class,
+                f -> {
+                    f.setAI(false);
+                    f.setGravity(false);
+                    f.setPersistent(false);
+                    f.setInvulnerable(true);
+                    f.setSilent(true);
+                    f.setCustomNameVisible(false);
+                    f.setCollidable(false);
+                    f.setPattern(pattern);
+                    f.setBodyColor(body);
+                    f.setPatternColor(pat);
+                    f.addScoreboardTag(FISH_TAG);
+                    capeEntityTeam.addEntry(f.getUniqueId().toString());
+                });
+            entities.add(fish);
+        }
+
+        fishingOrbit.put(uuid, entities);
+    }
+
+    /** Removes all orbit entities for the given player and clears their angle. */
+    private void despawnFishingOrbit(UUID uuid) {
+        List<org.bukkit.entity.Entity> entities = fishingOrbit.remove(uuid);
+        fishingAngles.remove(uuid);
+        if (entities == null) return;
+        for (org.bukkit.entity.Entity e : entities) {
+            if (e != null && !e.isDead()) e.remove();
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
     //  Axolotl pixel-art (replaces real entity that flops in air)
     // ═══════════════════════════════════════════════════════════════════════
 
@@ -573,11 +755,16 @@ public class CapeVisualTask extends BukkitRunnable {
      * particles, giving the illusion of an "invisible water bubble" — without
      * placing any actual water blocks or affecting the world.
      * Auto-removed after 2.5 s (50 ticks).
+     *
+     * The entity is added to the "de_cape_mobs" scoreboard team so it cannot
+     * physically push the player and its health bar is hidden.
      */
     private void spawnAxolotlWaterBubble(Player player, Location center) {
         org.bukkit.entity.Axolotl axolotl = (org.bukkit.entity.Axolotl)
                 player.getWorld().spawnEntity(
-                        center.clone().add((Math.random() - 0.5) * 0.2, 0.2, (Math.random() - 0.5) * 0.2),
+                        center.clone().add(
+                                (Math.random() - 0.5) * 0.2, 0.2,
+                                (Math.random() - 0.5) * 0.2),
                         EntityType.AXOLOTL);
 
         axolotl.setAI(false);
@@ -590,7 +777,11 @@ public class CapeVisualTask extends BukkitRunnable {
         axolotl.setCollidable(false);
         axolotl.addScoreboardTag(FISH_TAG);
 
-        org.bukkit.entity.Axolotl.Variant[] variants = org.bukkit.entity.Axolotl.Variant.values();
+        // Team membership → no collision + no health-bar overlay
+        capeEntityTeam.addEntry(axolotl.getUniqueId().toString());
+
+        org.bukkit.entity.Axolotl.Variant[] variants =
+                org.bukkit.entity.Axolotl.Variant.values();
         axolotl.setVariant(variants[(int)(Math.random() * variants.length)]);
 
         axolotl.setVelocity(new Vector(
@@ -612,7 +803,8 @@ public class CapeVisualTask extends BukkitRunnable {
                     double radius = 0.38;
                     double yOff   = (Math.random() - 0.5) * 0.30;
                     Location pLoc = a.clone().add(
-                            Math.cos(angle) * radius, yOff, Math.sin(angle) * radius);
+                            Math.cos(angle) * radius, yOff,
+                            Math.sin(angle) * radius);
                     player.getWorld().spawnParticle(Particle.FALLING_WATER, pLoc, 1, 0, 0, 0, 0);
                     if (i % 2 == 0)
                         player.getWorld().spawnParticle(Particle.SPLASH, pLoc, 1, 0, 0, 0, 0.02);
@@ -635,6 +827,10 @@ public class CapeVisualTask extends BukkitRunnable {
     //  Fishing cape: temporary tropical-fish entities
     // ═══════════════════════════════════════════════════════════════════════
 
+    /**
+     * Spawns a temporary TropicalFish near the player's back.
+     * Added to the "de_cape_mobs" team → no collision, no health-bar.
+     */
     private void spawnTemporaryFish(Player player, Location loc) {
         Location spawnLoc = loc.clone().add(
                 (Math.random() - 0.5) * 0.4, 0.0, (Math.random() - 0.5) * 0.4);
@@ -650,6 +846,9 @@ public class CapeVisualTask extends BukkitRunnable {
         fish.setCustomNameVisible(false);
         fish.setCollidable(false);
         fish.addScoreboardTag(FISH_TAG);
+
+        // Team membership → no collision + no health-bar overlay
+        capeEntityTeam.addEntry(fish.getUniqueId().toString());
 
         TropicalFish.Pattern[]    patterns  = TropicalFish.Pattern.values();
         org.bukkit.DyeColor[]     dyeColors = org.bukkit.DyeColor.values();
@@ -722,5 +921,17 @@ public class CapeVisualTask extends BukkitRunnable {
                 if (e.getScoreboardTags().contains(FISH_TAG)) e.remove();
             })
         );
+
+        // Despawn all fishing orbit entities
+        for (UUID uuid : new HashSet<>(fishingOrbit.keySet())) {
+            despawnFishingOrbit(uuid);
+        }
+
+        // Clear team entries (best-effort)
+        try {
+            for (String entry : new HashSet<>(capeEntityTeam.getEntries())) {
+                capeEntityTeam.removeEntry(entry);
+            }
+        } catch (Exception ignored) { /* team may have been unregistered externally */ }
     }
 }

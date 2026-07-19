@@ -38,8 +38,13 @@ import java.util.Random;
  */
 public class DifficultyEngine implements Listener {
 
-    /** Radius to scan for players when a mob spawns. */
-    private static final double SPAWN_CHECK_RADIUS = 64.0;
+    /**
+     * Radius to scan for the nearest player when a mob spawns.
+     * Intentionally kept smaller than before (40 vs 64 blocks) so that a
+     * Nightmare player far across the map cannot accidentally scale mobs
+     * that spawn next to peaceful players.
+     */
+    private static final double SPAWN_CHECK_RADIUS = 40.0;
     /** Radius to scan when redirecting mob aggro. */
     private static final double AGGRO_CHECK_RADIUS = 32.0;
     /**
@@ -69,12 +74,22 @@ public class DifficultyEngine implements Listener {
     // Spawn scaling
     // -------------------------------------------------------------------------
 
+    /**
+     * Scales the spawned mob's stats based on the difficulty of the NEAREST
+     * player within {@code SPAWN_CHECK_RADIUS} blocks — not the highest one.
+     *
+     * <p><b>Anti-grief design:</b> Using "nearest" instead of "highest nearby"
+     * means a Nightmare player wandering 35 blocks away from a peaceful area
+     * will not make mobs harder for the peaceful players right next to the
+     * spawn.  Each player effectively gets mobs tuned to their own difficulty
+     * level rather than the hardest player in the vicinity.
+     */
     @EventHandler
     public void onCreatureSpawn(CreatureSpawnEvent event) {
         if (!(event.getEntity() instanceof Monster mob)) return;
 
-        // Find the toughest nearby player difficulty
-        DifficultyLevel level = getHighestNearbyDifficulty(mob, SPAWN_CHECK_RADIUS);
+        // Use the NEAREST player's difficulty, not the highest in range
+        DifficultyLevel level = getNearestPlayerDifficulty(mob, SPAWN_CHECK_RADIUS);
 
         // EASY is vanilla — no changes. PEACEFUL doesn't buff mobs either.
         if (level.getTier() <= DifficultyLevel.EASY.getTier()) return;
@@ -229,8 +244,36 @@ public class DifficultyEngine implements Listener {
     // -------------------------------------------------------------------------
 
     /**
+     * Returns the {@link DifficultyLevel} of the player NEAREST to the mob
+     * within {@code radius} blocks.  Falls back to {@code EASY} if no player
+     * is found.
+     *
+     * <p>Used for mob <em>spawn</em> scaling — mobs are tuned to the player
+     * most likely to encounter them, not the strongest player in the area.
+     */
+    private DifficultyLevel getNearestPlayerDifficulty(LivingEntity mob, double radius) {
+        Player  nearest    = null;
+        double  closestSq  = Double.MAX_VALUE;
+
+        for (Entity e : mob.getNearbyEntities(radius, radius, radius)) {
+            if (!(e instanceof Player p)) continue;
+            double distSq = p.getLocation().distanceSquared(mob.getLocation());
+            if (distSq < closestSq) {
+                closestSq = distSq;
+                nearest   = p;
+            }
+        }
+
+        if (nearest == null) return DifficultyLevel.EASY;
+        return manager.getDifficulty(nearest.getUniqueId());
+    }
+
+    /**
      * Returns the highest DifficultyLevel among all players within
      * {@code radius} blocks of the given mob. Defaults to EASY.
+     *
+     * <p>Still used for <em>aggro</em> management (onEntityTarget) where
+     * checking the highest nearby difficulty is the correct behaviour.
      */
     DifficultyLevel getHighestNearbyDifficulty(LivingEntity mob, double radius) {
         DifficultyLevel highest = DifficultyLevel.EASY;

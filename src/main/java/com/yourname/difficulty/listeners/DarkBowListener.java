@@ -34,6 +34,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.bukkit.Material;
 
 /**
  * DarkBowListener — Implements the Dark Bow and Dragon Arrow system.
@@ -116,6 +117,12 @@ public class DarkBowListener implements Listener {
         if (lastShot != null && now - lastShot < 400L) return;
         leftClickCooldown.put(player.getUniqueId(), now);
 
+        // Require a regular arrow in inventory
+        if (!consumeRegularArrow(player)) {
+            player.sendActionBar("§4[Dark Bow] §cNo arrows in inventory!");
+            return;
+        }
+
         // Fire an instant normal arrow
         Vector dir = player.getLocation().getDirection().clone();
         Arrow quickArrow = player.getWorld().spawnArrow(
@@ -127,7 +134,29 @@ public class DarkBowListener implements Listener {
         quickArrow.setDamage(6.0); // flat arrow damage
 
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_ARROW_SHOOT, 0.9f, 1.3f);
-        player.sendActionBar("§4[Dark Bow] §f→ §7Quick Shot");
+        player.sendActionBar("§4[Dark Bow] §f→ §7Quick Shot §8(arrow consumed)");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  HELPERS — arrow inventory management
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Removes exactly 1 regular {@link Material#ARROW} from the player's
+     * inventory. Returns {@code true} if an arrow was found and consumed,
+     * {@code false} if the inventory contained no regular arrows.
+     */
+    private boolean consumeRegularArrow(Player player) {
+        for (ItemStack item : player.getInventory().getContents()) {
+            if (item == null || item.getType() != Material.ARROW) continue;
+            if (item.getAmount() <= 1) {
+                player.getInventory().remove(item);
+            } else {
+                item.setAmount(item.getAmount() - 1);
+            }
+            return true;
+        }
+        return false;
     }
 
     // ══════════════════════════════════════════════════════════════════════════

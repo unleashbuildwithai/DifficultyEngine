@@ -16,28 +16,65 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.java.JavaPlugin;
 
-import java.util.Arrays;
-import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 /**
- * MagicBagGUIListener — handles all interaction with the Magic Bag.
+ * MagicBagGUIListener — handles all interaction with the 4-page Magic Bag.
  *
- * ── Right-click Magic Bag item              → open GUI
- * ── Inventory close                         → save contents
- * ── Click inside bag GUI                    → enforce section order + sort
- * ── Shift-click magic item from any chest   → auto-route into bag section
- * ── Player join                             → load bag from disk
- * ── Player quit                             → save bag to disk
+ * ── Interactions handled ──────────────────────────────────────────────────
+ *  Right-click Magic Bag item          → open GUI on page 0 (Fire/inbox)
+ *  Click ◀ / ▶ buttons                → navigate pages (saves first)
+ *  Click ⟳ Auto-Sort                  → redistribute items by element
+ *  Click item slot (left/right)        → vanilla swap (ANY item allowed)
+ *  Shift-click item slot (top inv)     → move item to player inventory
+ *  Shift-click from player inventory   → move item into current bag page (random slot)
+ *  Shift-click magic item from chest   → auto-route into correct element page
+ *  Close GUI                           → save current page
+ *  Join / Quit                         → load / save bag data
+ *
+ * ── Key fix from previous version ────────────────────────────────────────
+ *  • Items NO LONGER vanish on auto-sort: the current page is read back into
+ *    the bag array BEFORE autoSort() is called.
+ *  • ANY item can be placed in any slot — no element restriction on placement.
+ *    Auto-sort is the only thing that moves items between pages.
  */
 public class MagicBagGUIListener implements Listener {
 
     private final MagicBagManager bagManager;
     private final MagicBagGUI     bagGUI;
+    private final JavaPlugin       plugin;
 
-    public MagicBagGUIListener(MagicBagManager bagManager, MagicBagGUI bagGUI) {
+    /**
+     * Tracks which page each player is currently viewing.
+     * Removed on close or quit.
+     */
+    private final Map<UUID, Integer> playerPage = new HashMap<>();
+
+    /**
+     * While a player is navigating to another page (i.e. closing one inventory
+     * to open the next), we suppress the normal close-save to avoid a double
+     * save that could interleave with the open.  The navigation click already
+     * performs a readItems() before scheduling the page switch.
+     */
+    private final java.util.Set<UUID> navigating = new java.util.HashSet<>();
+
+    public MagicBagGUIListener(MagicBagManager bagManager,
+                                MagicBagGUI     bagGUI,
+                                JavaPlugin       plugin) {
         this.bagManager = bagManager;
         this.bagGUI     = bagGUI;
+        this.plugin     = plugin;
+    }
+
+    // ── Public helper ─────────────────────────────────────────────────────────
+
+    /** Opens the bag on page 0 (the Fire/inbox page). */
+    public void openForPlayer(Player player) {
+        openPage(player, 0);
     }
 
     // ── Auto-load / save on join / quit ───────────────────────────────────────
@@ -49,17 +86,14 @@ public class MagicBagGUIListener implements Listener {
 
     @EventHandler(priority = EventPriority.LOW)
     public void onQuit(PlayerQuitEvent event) {
-        bagManager.saveAsync(event.getPlayer().getUniqueId());
+        UUID uuid = event.getPlayer().getUniqueId();
+        playerPage.remove(uuid);
+        navigating.remove(uuid);
+        bagManager.saveAsync(uuid);
     }
 
-    // ── Prevent placing the CHEST block when holding the Magic Bag ───────────
+    // ── Prevent placing the CHEST block when holding the Magic Bag ────────────
 
-    /**
-     * Paper 1.21 sometimes fires BlockPlaceEvent even when PlayerInteractEvent
-     * was cancelled.  Cancel chest placement whenever the item in hand is the
-     * Magic Bag so the player never accidentally places a chest instead of
-     * opening the bag.
-     */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = false)
     public void onBlockPlace(BlockPlaceEvent event) {
         if (bagManager.isMagicBag(event.getItemInHand())) {
@@ -77,86 +111,114 @@ public class MagicBagGUIListener implements Listener {
         Action action = event.getAction();
         if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) return;
 
-        event.setCancelled(true); // prevent chest placement
-        bagGUI.open(event.getPlayer());
+        event.setCancelled(true);
+        openPage(event.getPlayer(), 0);
     }
 
     // ── Save when the bag GUI is closed ───────────────────────────────────────
 
     @EventHandler(priority = EventPriority.NORMAL)
     public void onClose(InventoryCloseEvent event) {
+        if (!MagicBagGUI.isMagicBagTitle(event.getView().getTitle())) return;
         if (!(event.getPlayer() instanceof Player player)) return;
-        if (!MagicBagGUI.TITLE.equals(event.getView().getTitle())) return;
 
-        ItemStack[] bag = bagManager.getBag(player.getUniqueId());
-        bagGUI.readItems(event.getInventory(), bag);
-        bagManager.saveAsync(player.getUniqueId());
+        UUID uuid = player.getUniqueId();
+
+        if (navigating.contains(uuid)) {
+            // Navigation already read + will reopen — don't double-process
+            navigating.remove(uuid);
+            return;
+        }
+
+        int page = playerPage.getOrDefault(uuid, 0);
+        bagGUI.readItems(event.getInventory(), bagManager.getBag(uuid), page);
+        bagManager.saveAsync(uuid);
+        playerPage.remove(uuid);
     }
 
-    // ── Bag GUI click handling ────────────────────────────────────────────────
+    // ── Drag: cancel drags over non-item slots ────────────────────────────────
+
+    @EventHandler(priority = EventPriority.NORMAL)
+    public void onBagDrag(InventoryDragEvent event) {
+        if (!MagicBagGUI.isMagicBagTitle(event.getView().getTitle())) return;
+
+        // Cancel if the drag touches the header row or nav row
+        for (int raw : event.getRawSlots()) {
+            if (raw < MagicBagGUI.SIZE && !MagicBagGUI.isItemSlot(raw)) {
+                event.setCancelled(true);
+                return;
+            }
+        }
+    }
+
+    // ── Main click handler ────────────────────────────────────────────────────
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onBagClick(InventoryClickEvent event) {
-        if (!MagicBagGUI.TITLE.equals(event.getView().getTitle())) return;
+        if (!MagicBagGUI.isMagicBagTitle(event.getView().getTitle())) return;
         if (!(event.getWhoClicked() instanceof Player player)) return;
 
-        event.setCancelled(true); // default: block everything
+        event.setCancelled(true); // block by default; un-cancel selectively
 
         boolean isTopInv = event.getClickedInventory() != null
                 && event.getClickedInventory().equals(event.getView().getTopInventory());
 
         if (!isTopInv) {
+            // Click in PLAYER inventory (bottom half)
             handleBottomClick(player, event);
             return;
         }
 
         // ── Top (bag) inventory ───────────────────────────────────────────────
         int slot = event.getSlot();
+        int page = playerPage.getOrDefault(player.getUniqueId(), 0);
 
-        // Sort button
-        if (slot == MagicBagGUI.SORT_SLOT) {
-            sortBag(player, event.getView().getTopInventory());
-            player.sendMessage("§e⟳ §7Magic Bag sorted!");
+        // ── Navigation buttons ────────────────────────────────────────────────
+        if (slot == MagicBagGUI.PREV_SLOT) {
+            navigateTo(player, event.getView().getTopInventory(), page,
+                    (page - 1 + MagicBagManager.PAGES) % MagicBagManager.PAGES);
+            return;
+        }
+        if (slot == MagicBagGUI.NEXT_SLOT) {
+            navigateTo(player, event.getView().getTopInventory(), page,
+                    (page + 1) % MagicBagManager.PAGES);
             return;
         }
 
-        // Glass pane / non-item slot?
-        int bagIndex = MagicBagGUI.guiSlotToBagIndex(slot);
-        if (bagIndex < 0) return;
+        // ── Auto-sort button ──────────────────────────────────────────────────
+        if (slot == MagicBagGUI.SORT_SLOT) {
+            // CRITICAL FIX: read current page items into bag BEFORE sorting,
+            // otherwise items placed in this GUI session get wiped by autoSort.
+            ItemStack[] bag = bagManager.getBag(player.getUniqueId());
+            bagGUI.readItems(event.getView().getTopInventory(), bag, page);
 
-        // Left / right click — allow swap only if cursor item fits this section
+            bagManager.autoSort(player.getUniqueId());
+
+            // Refresh the current page view
+            bagGUI.populateItems(event.getView().getTopInventory(),
+                    bagManager.getBag(player.getUniqueId()), page);
+
+            player.sendMessage("§d✦ §7Magic Bag sorted by element across all pages!");
+            return;
+        }
+
+        // ── Item storage slots ────────────────────────────────────────────────
+        if (!MagicBagGUI.isItemSlot(slot)) return; // header/nav pane clicked — ignore
+
+        // Left / right click — vanilla item swap (ANY item is allowed)
         if (event.getClick() == ClickType.LEFT || event.getClick() == ClickType.RIGHT) {
             ItemStack cursor  = event.getCursor();
             ItemStack current = event.getCurrentItem();
-
-            boolean cursorEmpty  = cursor == null || cursor.getType().isAir();
+            boolean cursorEmpty  = cursor  == null || cursor.getType().isAir();
             boolean currentEmpty = current == null || current.getType().isAir();
-
             if (cursorEmpty && currentEmpty) return;
-
-            if (!cursorEmpty) {
-                // Enforce section restriction
-                int itemSection = bagManager.classifyItem(cursor);
-                int guiSection  = MagicBagGUI.guiSlotToSection(slot);
-
-                if (itemSection < 0) {
-                    player.sendMessage("§c✗ §7That item doesn't belong in the Magic Bag.");
-                    return;
-                }
-                if (itemSection != guiSection) {
-                    player.sendMessage("§c✗ §7That belongs in §"
-                            + sectionColor(itemSection)
-                            + MagicBagManager.sectionLabel(itemSection)
-                            + "§7, not §" + sectionColor(guiSection)
-                            + MagicBagManager.sectionLabel(guiSection) + "§7.");
-                    return;
-                }
-            }
-            event.setCancelled(false); // allow the vanilla swap
+            event.setCancelled(false); // allow vanilla item exchange
+            return;
         }
 
-        // Shift-click from top: move item back to player inventory
-        if (event.getClick() == ClickType.SHIFT_LEFT || event.getClick() == ClickType.SHIFT_RIGHT) {
+        // Shift-click from top → push item back to player inventory
+        if (event.getClick() == ClickType.SHIFT_LEFT
+                || event.getClick() == ClickType.SHIFT_RIGHT) {
             ItemStack current = event.getCurrentItem();
             if (current == null || current.getType().isAir()) return;
             player.getInventory().addItem(current.clone());
@@ -164,75 +226,56 @@ public class MagicBagGUIListener implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.NORMAL)
-    public void onBagDrag(InventoryDragEvent event) {
-        if (!MagicBagGUI.TITLE.equals(event.getView().getTitle())) return;
-        for (int raw : event.getRawSlots()) {
-            if (raw < MagicBagGUI.SIZE && MagicBagGUI.guiSlotToBagIndex(raw) < 0) {
-                event.setCancelled(true);
-                return;
-            }
-        }
-    }
-
-    // ── Bottom-inventory click (shift-click into bag while bag GUI open) ───────
+    // ── Player-inventory click while bag is open ──────────────────────────────
 
     private void handleBottomClick(Player player, InventoryClickEvent event) {
+        // Allow normal non-shift clicks in player inventory
         if (event.getClick() != ClickType.SHIFT_LEFT
                 && event.getClick() != ClickType.SHIFT_RIGHT) {
-            event.setCancelled(false); // allow normal clicks in player inv
+            event.setCancelled(false);
             return;
         }
 
         ItemStack clicked = event.getCurrentItem();
         if (clicked == null || clicked.getType().isAir()) return;
 
-        int section = bagManager.classifyItem(clicked);
-        if (section >= 0) {
-            // It's a magic item — route to bag
-            event.setCancelled(true);
-            if (bagManager.addToBag(player.getUniqueId(), clicked)) {
-                event.setCurrentItem(new ItemStack(Material.AIR));
-                bagGUI.populateItems(event.getView().getTopInventory(),
-                        bagManager.getBag(player.getUniqueId()));
-                player.sendMessage("§d✦ §7Item sorted to §"
-                        + sectionColor(section)
-                        + MagicBagManager.sectionLabel(section) + "§7.");
-            } else {
-                player.sendMessage("§c✗ §7That bag section is full!");
-                event.setCancelled(false);
-            }
+        int page = playerPage.getOrDefault(player.getUniqueId(), 0);
+
+        // Try to add to current page first; fall back to any page
+        boolean added = bagManager.addToBag(player.getUniqueId(), clicked.clone(), page);
+        if (!added) {
+            // Classify and try the correct page
+            added = bagManager.addToBag(player.getUniqueId(), clicked.clone());
+        }
+
+        if (added) {
+            event.setCurrentItem(new ItemStack(Material.AIR));
+            bagGUI.populateItems(event.getView().getTopInventory(),
+                    bagManager.getBag(player.getUniqueId()), page);
+            player.sendMessage("§d✦ §7Item added to bag.");
         } else {
-            event.setCancelled(false); // not a magic item, allow normal shift
+            event.setCancelled(false);
+            player.sendMessage("§c✗ §7Bag page is full! Try auto-sorting or using another page.");
         }
     }
 
-    // ── Auto-collect / auto-bag for any chest interaction ─────────────────────
+    // ── Chest shift-click → auto-route into bag ───────────────────────────────
 
     /**
-     * Intercepts shift-clicks that involve a magic item and a container, in
-     * BOTH directions — so players can't accidentally lose magic items in chests.
-     *
-     * Direction A (chest → player inventory):
-     *   Shift-clicking a magic item FROM a chest redirects it into the bag.
-     *
-     * Direction B (player inventory → chest):
-     *   Shift-clicking a magic item FROM the player inventory while a chest is
-     *   open redirects it into the bag instead of the chest.
-     *
-     * In both cases the bag GUI does not need to be open.  The player must be
-     * carrying a Magic Bag somewhere in their inventory.
+     * Intercepts shift-clicks on items inside chests/barrels/hoppers when the
+     * player carries a Magic Bag.  Routes magic items straight into the correct
+     * element page instead of the player's inventory.
      */
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onChestShiftClick(InventoryClickEvent event) {
-        // Skip if the bag GUI itself is open (handled by onBagClick above)
-        if (MagicBagGUI.TITLE.equals(event.getView().getTitle())) return;
+        // Skip if bag GUI is open (handled above)
+        if (MagicBagGUI.isMagicBagTitle(event.getView().getTitle())) return;
         if (!(event.getWhoClicked() instanceof Player player)) return;
         if (event.getClickedInventory() == null) return;
         if (event.getClick() != ClickType.SHIFT_LEFT
                 && event.getClick() != ClickType.SHIFT_RIGHT) return;
 
-        // Must involve a container as the top inventory
+        // Only trigger from containers
         InventoryType topType = event.getView().getTopInventory().getType();
         if (topType != InventoryType.CHEST
                 && topType != InventoryType.BARREL
@@ -242,43 +285,66 @@ public class MagicBagGUIListener implements Listener {
 
         ItemStack clicked = event.getCurrentItem();
         if (clicked == null || clicked.getType().isAir()) return;
+        if (!playerHasBag(player)) return;
 
-        int section = bagManager.classifyItem(clicked);
-        if (section < 0) return;           // not a magic item — let vanilla handle it
-        if (!playerHasBag(player)) return; // player not carrying a bag
+        // Only intercept items that have an element classification (non-zero)
+        // so that vanilla items shift-click normally into inventory
+        int targetPage = bagManager.classifyItemToPage(clicked);
+        // If it's a pure magic-element item (rune/staff), auto-bag it
+        // For generic items, let vanilla handle it (they can manually bag them)
+        if (targetPage == 0 && bagManager.classifyItemToPage(clicked) == 0) {
+            // Check if it's actually a magic item (staff/rune/gear)
+            boolean isMagic = false;
+            org.bukkit.inventory.meta.ItemMeta meta = clicked.getItemMeta();
+            if (meta != null && meta.hasDisplayName()) {
+                String dn = meta.getDisplayName();
+                if (dn.contains("Rune") || dn.contains("Staff") || dn.contains("Mage")
+                        || dn.contains("Spell") || dn.contains("Dragon") || dn.contains("Dark Bow")) {
+                    isMagic = true;
+                }
+            }
+            if (!isMagic) return; // let vanilla shift-click handle it
+        }
 
-        // Both directions — from chest or from player inventory
         event.setCancelled(true);
-        ItemStack toAdd = clicked.clone();
-        if (bagManager.addToBag(player.getUniqueId(), toAdd)) {
+        if (bagManager.addToBag(player.getUniqueId(), clicked.clone())) {
             event.setCurrentItem(new ItemStack(Material.AIR));
-            player.sendMessage("§d✦ §7" + itemName(clicked) + " §8→ §dMagic Bag §8("
-                    + MagicBagManager.sectionLabel(section) + "§8)");
+            player.sendMessage("§d✦ §7" + itemName(clicked)
+                    + " §8→ §dMagic Bag §8(" + MagicBagManager.pageLabel(targetPage) + "§8)");
         } else {
             event.setCancelled(false);
-            player.sendMessage("§c✗ §7Magic Bag section full — item went normally.");
+            player.sendMessage("§c✗ §7Magic Bag full — item went normally.");
         }
     }
 
-    // ── Sort button action ────────────────────────────────────────────────────
+    // ── Navigation helper ─────────────────────────────────────────────────────
 
-    private void sortBag(Player player, org.bukkit.inventory.Inventory topInv) {
-        ItemStack[] bag = bagManager.getBag(player.getUniqueId());
+    /**
+     * Saves the current page, marks the player as "navigating" (so the close
+     * event doesn't double-save), then opens the target page after 1 tick.
+     */
+    private void navigateTo(Player player, org.bukkit.inventory.Inventory topInv,
+                             int currentPage, int targetPage) {
+        UUID uuid = player.getUniqueId();
 
-        for (int s = 0; s < MagicBagManager.SECTION_COUNT; s++) {
-            int start = s * MagicBagManager.SLOTS_PER_SECTION;
-            ItemStack[] section = Arrays.copyOfRange(bag, start,
-                    start + MagicBagManager.SLOTS_PER_SECTION);
+        // Save current page items into the bag array
+        bagGUI.readItems(topInv, bagManager.getBag(uuid), currentPage);
+        bagManager.saveAsync(uuid);
 
-            // Sort: non-empty first (desc amount), nulls at back
-            Arrays.sort(section, Comparator.comparingInt(
-                    it -> (it == null || it.getType().isAir()) ? 0 : -it.getAmount()));
+        // Mark navigating so onClose doesn't interfere
+        navigating.add(uuid);
+        playerPage.put(uuid, targetPage);
 
-            System.arraycopy(section, 0, bag, start, MagicBagManager.SLOTS_PER_SECTION);
-        }
+        // Open new page after 1 tick (inventory must be fully closed first)
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            if (player.isOnline()) openPage(player, targetPage);
+        }, 1L);
+    }
 
-        bagGUI.populateItems(topInv, bag);
-        bagManager.saveAsync(player.getUniqueId());
+    /** Opens a specific page, recording it in playerPage. */
+    private void openPage(Player player, int page) {
+        playerPage.put(player.getUniqueId(), page);
+        bagGUI.open(player, page);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -294,15 +360,5 @@ public class MagicBagGUIListener implements Listener {
         if (item.hasItemMeta() && item.getItemMeta().hasDisplayName())
             return item.getItemMeta().getDisplayName();
         return item.getType().name().toLowerCase().replace('_', ' ');
-    }
-
-    private static char sectionColor(int section) {
-        return switch (section) {
-            case 0  -> '5';   // purple
-            case 1  -> '9';   // blue
-            case 2  -> 'b';   // cyan
-            case 3  -> '2';   // green
-            default -> '7';   // gray
-        };
     }
 }
