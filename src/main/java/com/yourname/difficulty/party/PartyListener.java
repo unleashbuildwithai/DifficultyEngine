@@ -170,6 +170,37 @@ public class PartyListener implements Listener, org.bukkit.command.CommandExecut
             return true;
         }
         switch (args[0].toLowerCase()) {
+            case "invite" -> {
+                if (args.length < 2) {
+                    player.sendMessage("§c Usage: /party invite <player>");
+                    return true;
+                }
+                Player target = org.bukkit.Bukkit.getPlayerExact(args[1]);
+                if (target == null || !target.isOnline()) {
+                    player.sendMessage("§cPlayer not found or not online: §e" + args[1]);
+                    return true;
+                }
+                if (target.equals(player)) {
+                    player.sendMessage("§cYou cannot invite yourself.");
+                    return true;
+                }
+                if (partyManager.isInParty(target.getUniqueId())
+                        && partyManager.getPartyMembers(target.getUniqueId())
+                                       .contains(player.getUniqueId())) {
+                    player.sendMessage("§e" + target.getName() + " §cis already in your party.");
+                    return true;
+                }
+                partyManager.sendInvite(player.getUniqueId(), target.getUniqueId());
+                player.sendMessage("§6Party invite sent to §e" + target.getName() + "§6!");
+                target.sendMessage("");
+                target.sendMessage("§6┌─ §e[Party Invite] §6────────────────────");
+                target.sendMessage("§6│ §e" + player.getName() + " §7has invited you to their party!");
+                target.sendMessage("§6│ §aType: §f/party accept §7to join");
+                target.sendMessage("§6│ §cType: §f/party leave §7to decline");
+                target.sendMessage("§6└────────────────────────────────────");
+                target.sendMessage("");
+                target.playSound(target.getLocation(), org.bukkit.Sound.BLOCK_NOTE_BLOCK_BELL, 1f, 1.2f);
+            }
             case "accept" -> {
                 if (!partyManager.hasPendingInvite(player.getUniqueId())) {
                     player.sendMessage("§cYou have no pending party invite.");

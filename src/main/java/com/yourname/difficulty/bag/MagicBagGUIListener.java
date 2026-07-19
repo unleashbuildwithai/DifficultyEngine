@@ -6,6 +6,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
@@ -51,9 +52,24 @@ public class MagicBagGUIListener implements Listener {
         bagManager.saveAsync(event.getPlayer().getUniqueId());
     }
 
+    // ── Prevent placing the CHEST block when holding the Magic Bag ───────────
+
+    /**
+     * Paper 1.21 sometimes fires BlockPlaceEvent even when PlayerInteractEvent
+     * was cancelled.  Cancel chest placement whenever the item in hand is the
+     * Magic Bag so the player never accidentally places a chest instead of
+     * opening the bag.
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = false)
+    public void onBlockPlace(BlockPlaceEvent event) {
+        if (bagManager.isMagicBag(event.getItemInHand())) {
+            event.setCancelled(true);
+        }
+    }
+
     // ── Right-click the bag item to open the GUI ──────────────────────────────
 
-    @EventHandler(priority = EventPriority.NORMAL)
+    @EventHandler(priority = EventPriority.HIGH)
     public void onUse(PlayerInteractEvent event) {
         ItemStack item = event.getItem();
         if (item == null || !bagManager.isMagicBag(item)) return;

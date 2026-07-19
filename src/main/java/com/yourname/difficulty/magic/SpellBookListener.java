@@ -45,7 +45,7 @@ public class SpellBookListener implements Listener {
 
     // ── Right-click handler ───────────────────────────────────────────────────
 
-    @EventHandler(priority = EventPriority.NORMAL)
+    @EventHandler(priority = EventPriority.HIGH)
     public void onInteract(PlayerInteractEvent event) {
         // Only fire once (main hand)
         if (event.getHand() != EquipmentSlot.HAND) return;

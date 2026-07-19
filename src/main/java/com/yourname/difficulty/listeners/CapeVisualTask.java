@@ -191,7 +191,7 @@ public class CapeVisualTask extends BukkitRunnable {
         if (capeManager.isBossCape(cape)) return "§5[BOSS CAPE]";
         if (capeManager.isMaxCape(cape))  return "§6[MAX CAPE]";
         SkillType skill = capeManager.getCapeSkill(cape);
-        if (skill == null) return "";
+        if (skill == null) return "§8[Cape]";
         return switch (skill) {
             case MELEE       -> "§c[⚔ Melee Cape]";
             case RANGED      -> "§a[🏹 Ranged Cape]";
@@ -253,21 +253,33 @@ public class CapeVisualTask extends BukkitRunnable {
 
         // ── Fishing cape: water + fish entities + axolotl pixel art ──────
         if (skill == SkillType.FISHING) {
-            player.getWorld().spawnParticle(Particle.FALLING_WATER, loc,  12, 0.40, 0.30, 0.40, 0.0);
-            player.getWorld().spawnParticle(Particle.FALLING_WATER, locH,  6, 0.25, 0.15, 0.25, 0.0);
-            player.getWorld().spawnParticle(Particle.SPLASH,        loc,   6, 0.35, 0.20, 0.35, 0.04);
-            player.getWorld().spawnParticle(Particle.SPLASH,        locH,  3, 0.20, 0.10, 0.20, 0.03);
+            try {
+                player.getWorld().spawnParticle(Particle.FALLING_WATER, loc,  12, 0.40, 0.30, 0.40, 0.0);
+                player.getWorld().spawnParticle(Particle.FALLING_WATER, locH,  6, 0.25, 0.15, 0.25, 0.0);
+                player.getWorld().spawnParticle(Particle.SPLASH,        loc,   6, 0.35, 0.20, 0.35, 0.04);
+                player.getWorld().spawnParticle(Particle.SPLASH,        locH,  3, 0.20, 0.10, 0.20, 0.03);
+            } catch (Exception ex) {
+                plugin.getLogger().warning("[CapeVFX] Fishing water particles error: " + ex.getMessage());
+            }
 
             if (tick % 8 == 0) {
-                spawnTemporaryFish(player, loc);
-                if (Math.random() < 0.5) spawnTemporaryFish(player, loc);
+                try { spawnTemporaryFish(player, loc); } catch (Exception ex) {
+                    plugin.getLogger().warning("[CapeVFX] Fish spawn error: " + ex.getMessage());
+                }
+                if (Math.random() < 0.5) {
+                    try { spawnTemporaryFish(player, loc); } catch (Exception ex) { /* swallow */ }
+                }
             }
             // Axolotl: 50 % chance pixel art, 50 % chance water-bubble entity cameo
             if (tick % 20 == 0) {
-                if (Math.random() < 0.5) {
-                    spawnAxolotlPixelArt(player, loc, right);
-                } else {
-                    spawnAxolotlWaterBubble(player, loc);
+                try {
+                    if (Math.random() < 0.5) {
+                        spawnAxolotlPixelArt(player, loc, right);
+                    } else {
+                        spawnAxolotlWaterBubble(player, loc);
+                    }
+                } catch (Exception ex) {
+                    plugin.getLogger().warning("[CapeVFX] Axolotl cameo error: " + ex.getMessage());
                 }
             }
             return;

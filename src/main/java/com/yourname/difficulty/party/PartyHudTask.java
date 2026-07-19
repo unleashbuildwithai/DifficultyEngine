@@ -4,22 +4,29 @@ import com.yourname.difficulty.PlayerDifficultyManager;
 import com.yourname.difficulty.DifficultyLevel;
 import org.bukkit.Bukkit;
 import org.bukkit.attribute.Attribute;
+import org.bukkit.boss.BarColor;
+import org.bukkit.boss.BarFlag;
+import org.bukkit.boss.BarStyle;
+import org.bukkit.boss.BossBar;
 import org.bukkit.entity.Player;
-import org.bukkit.scoreboard.*;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.*;
 
 /**
- * PartyHudTask — Updates a scoreboard sidebar for every player in a party.
- * Runs every 20 ticks (1 second).
+ * PartyHudTask — Shows each party member as a BossBar at the top of the screen.
  *
- * Sidebar format:
- *  §6=== Party ===
- *  §fPlayerA §c♥20 §7NM §e1,234 dmg
- *  §fPlayerB §a♥14 §7HARD §e567 dmg
- *  ...
+ * ── Per member bar format ────────────────────────────────────────────────────
+ *   ❤  PlayerName  HP/MaxHP  [DIFFICULTY]
+ *   Progress bar = HP / MaxHP ratio
+ *   Color:  GREEN  > 50 %  |  YELLOW 25–50 %  |  RED < 25 %
+ *
+ * Each viewer sees one BossBar per party member (excluding themselves).
+ * Bars are created on party join, updated every second, removed on leave.
+ *
+ * The skin icon (player head) is approximated in the bar title using a
+ * coloured ◆ diamond character colour-coded to the player's difficulty.
  */
 public class PartyHudTask extends BukkitRunnable {
 
@@ -27,8 +34,12 @@ public class PartyHudTask extends BukkitRunnable {
     private final PlayerDifficultyManager diffManager;
     private final JavaPlugin              plugin;
 
-    /** Player UUID → their personal scoreboard (so we don't mess with others) */
-    private final Map<UUID, Scoreboard> boards = new HashMap<>();
+    /**
+     * viewer UUID → (member UUID → their BossBar shown to this viewer)
+     * Outer map keyed by the player WATCHING, inner map keyed by the member
+     * BEING WATCHED.
+     */
+    private final Map<UUID, Map<UUID, BossBar>> bossBarMap = new HashMap<>();
 
     public PartyHudTask(PartyManager partyManager,
                         PlayerDifficultyManager diffManager,
@@ -41,78 +52,100 @@ public class PartyHudTask extends BukkitRunnable {
     @Override
     public void run() {
         for (Player viewer : Bukkit.getOnlinePlayers()) {
-            UUID uid = viewer.getUniqueId();
+            UUID viewerUid = viewer.getUniqueId();
 
-            if (!partyManager.isInParty(uid)) {
-                // Remove party board if they left
-                if (boards.containsKey(uid)) {
-                    viewer.setScoreboard(Bukkit.getScoreboardManager().getMainScoreboard());
-                    boards.remove(uid);
-                }
+            if (!partyManager.isInParty(viewerUid)) {
+                clearBars(viewer);
                 continue;
             }
 
-            Scoreboard board = boards.computeIfAbsent(uid,
-                k -> Bukkit.getScoreboardManager().getNewScoreboard());
-            viewer.setScoreboard(board);
+            Set<UUID> members = partyManager.getPartyMembers(viewerUid);
 
-            // Remove stale objective
-            Objective old = board.getObjective("party_hud");
-            if (old != null) old.unregister();
+            Map<UUID, BossBar> myBars =
+                    bossBarMap.computeIfAbsent(viewerUid, k -> new LinkedHashMap<>());
 
-            Objective obj = board.registerNewObjective("party_hud", Criteria.DUMMY,
-                "§6=== Party ===");
-            obj.setDisplaySlot(DisplaySlot.SIDEBAR);
+            // ── Remove bars for members who left ──────────────────────────
+            myBars.entrySet().removeIf(entry -> {
+                if (!members.contains(entry.getKey())) {
+                    entry.getValue().removePlayer(viewer);
+                    return true;
+                }
+                return false;
+            });
 
-            Set<UUID> members = partyManager.getPartyMembers(uid);
-            int score = members.size() + 1;
+            // ── Update / create a bar for each party member ───────────────
+            for (UUID memberUid : members) {
+                if (memberUid.equals(viewerUid)) continue; // skip self
 
-            for (UUID m : members) {
-                Player mp = Bukkit.getPlayer(m);
-                if (mp == null) continue;
+                Player mp = Bukkit.getPlayer(memberUid);
+                if (mp == null || !mp.isOnline()) continue;
 
-                String name      = mp.getName();
-                double hp        = Math.round(mp.getHealth());
-                var maxHpAttr    = mp.getAttribute(Attribute.GENERIC_MAX_HEALTH);
-                double maxHp     = maxHpAttr != null ? maxHpAttr.getValue() : 20.0;
-                String hpColor   = hp / maxHp > 0.5 ? "§a" : hp / maxHp > 0.25 ? "§e" : "§c";
-                DifficultyLevel diff = diffManager.getDifficulty(m);
-                String diffTag   = diffAbbrev(diff);
-                double dmg       = partyManager.getRollingDamage(m);
-                String dmgStr    = dmg > 0 ? " §e" + formatDmg(dmg) : "";
+                double hp    = mp.getHealth();
+                var maxAttr  = mp.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+                double maxHp = maxAttr != null ? maxAttr.getValue() : 20.0;
+                double ratio = Math.max(0.0, Math.min(1.0, hp / maxHp));
 
-                // Unique entry per player (Scoreboard requires unique strings for scores)
-                String entry = hpColor + "♥" + (int)hp + " §7" + diffTag + " §f" + name + dmgStr;
-                // Truncate if too long (max ~40 chars visible)
-                if (entry.length() > 38) entry = entry.substring(0, 38);
+                BarColor color = ratio > 0.5 ? BarColor.GREEN
+                               : ratio > 0.25 ? BarColor.YELLOW
+                               : BarColor.RED;
 
-                Score s = obj.getScore(entry);
-                s.setScore(score--);
+                DifficultyLevel diff   = diffManager.getDifficulty(memberUid);
+                String          icon   = diffIcon(diff);
+                String          hearts = "§c❤ §f" + (int) hp + "§8/§7" + (int) maxHp;
+                String          title  = icon + " §f" + mp.getName() + "  " + hearts;
+
+                BossBar bar = myBars.get(memberUid);
+                if (bar == null) {
+                    // Create new bar and show to viewer
+                    bar = Bukkit.createBossBar(title, color, BarStyle.SEGMENTED_10,
+                            BarFlag.CREATE_FOG);  // no fog — flag doesn't add fog by itself
+                    bar.setVisible(true);
+                    bar.addPlayer(viewer);
+                    myBars.put(memberUid, bar);
+                } else {
+                    // Update existing bar
+                    bar.setTitle(title);
+                    bar.setColor(color);
+                }
+                bar.setProgress(ratio);
             }
         }
     }
 
-    public void cleanup() {
-        for (Map.Entry<UUID, Scoreboard> e : boards.entrySet()) {
-            Player p = Bukkit.getPlayer(e.getKey());
-            if (p != null) p.setScoreboard(Bukkit.getScoreboardManager().getMainScoreboard());
+    /** Remove all boss bars for a specific viewer. */
+    private void clearBars(Player viewer) {
+        Map<UUID, BossBar> myBars = bossBarMap.remove(viewer.getUniqueId());
+        if (myBars == null) return;
+        for (BossBar bar : myBars.values()) {
+            bar.removePlayer(viewer);
         }
-        boards.clear();
     }
 
-    private String diffAbbrev(DifficultyLevel d) {
-        if (d == null) return "?";
+    /** Clean up ALL bars — called on plugin disable. */
+    public void cleanup() {
+        for (Map.Entry<UUID, Map<UUID, BossBar>> viewerEntry : bossBarMap.entrySet()) {
+            Player viewer = Bukkit.getPlayer(viewerEntry.getKey());
+            for (BossBar bar : viewerEntry.getValue().values()) {
+                if (viewer != null) bar.removePlayer(viewer);
+            }
+        }
+        bossBarMap.clear();
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * A coloured diamond icon that doubles as a "portrait" colour indicator
+     * for the party member's difficulty level.
+     */
+    private static String diffIcon(DifficultyLevel d) {
+        if (d == null) return "§7◆";
         return switch (d) {
-            case PEACEFUL  -> "PCFL";
-            case EASY      -> "EASY";
-            case MEDIUM    -> "MED";
-            case HARD      -> "HARD";
-            case NIGHTMARE -> "NM";
+            case PEACEFUL  -> "§7◆";    // gray
+            case EASY      -> "§a◆";    // green
+            case MEDIUM    -> "§e◆";    // yellow
+            case HARD      -> "§6◆";    // orange
+            case NIGHTMARE -> "§c◆";    // red
         };
-    }
-
-    private String formatDmg(double dmg) {
-        if (dmg >= 1000) return String.format("%.1fK", dmg / 1000);
-        return String.format("%.0f", dmg);
     }
 }
