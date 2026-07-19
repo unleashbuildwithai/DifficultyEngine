@@ -92,6 +92,16 @@ commands:
     description: Give the Magic Bag item to yourself or a player (Admin).
     usage: /givebag [player]
 
+  skilllvl:
+    description: Manually set, add, or reset skill levels for a player (Admin).
+    usage: /skilllvl <player> <skill|all> <set|add|reset> [value]
+    aliases: [setskill, adminskill]
+
+  questnpc:
+    description: Manage quest NPC villagers in the world (Admin).
+    usage: /questnpc <spawn|remove|list|info> [id]
+    aliases: [qnpc]
+
 permissions:
   difficultyengine.use:
     description: Allows use of standard player commands.

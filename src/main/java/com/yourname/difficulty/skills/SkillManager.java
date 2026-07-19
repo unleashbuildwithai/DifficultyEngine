@@ -106,6 +106,22 @@ public class SkillManager {
         }
     }
 
+    /**
+     * Sets a skill to an exact level (1–99) by writing the corresponding XP value.
+     * Used by the /skilllvl admin command.
+     *
+     * @param uuid  the player's UUID
+     * @param skill the skill to update
+     * @param level the target level (clamped to 1–99)
+     */
+    public void setLevel(UUID uuid, SkillType skill, int level) {
+        int clamped = Math.max(1, Math.min(SkillLevel.MAX_LEVEL, level));
+        long xp = SkillLevel.getXpForLevel(clamped);
+        skillData.computeIfAbsent(uuid, k -> new EnumMap<>(SkillType.class))
+                 .put(skill, xp);
+        saveAll();
+    }
+
     // ── Persistence ───────────────────────────────────────────────────────────
 
     public void saveAll() {

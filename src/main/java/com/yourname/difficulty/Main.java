@@ -52,7 +52,12 @@ import com.yourname.difficulty.skills.ItemLevelListener;
 import com.yourname.difficulty.skills.SkillBonusManager;
 import com.yourname.difficulty.skills.SkillCombatListener;
 import com.yourname.difficulty.skills.SkillCapeManager;
+import com.yourname.difficulty.quests.BossQuestCapeTask;
+import com.yourname.difficulty.quests.NpcQuestListener;
+import com.yourname.difficulty.quests.NpcQuestManager;
+import com.yourname.difficulty.quests.NpcQuestSpawner;
 import com.yourname.difficulty.skills.SkillCommand;
+import com.yourname.difficulty.skills.SkillLvlCommand;
 import com.yourname.difficulty.skills.SkillGUI;
 import com.yourname.difficulty.skills.SkillGUIListener;
 import com.yourname.difficulty.skills.SkillListener;
@@ -98,6 +103,9 @@ public class Main extends JavaPlugin {
     // ── Magic Bag ──────────────────────────────────────────────────────────────
     private MagicBagManager    magicBagManager;
     private MagicBagGUI        magicBagGUI;
+    // ── NPC Quest System ───────────────────────────────────────────────────────
+    private NpcQuestManager  npcQuestManager;
+    private NpcQuestSpawner  npcQuestSpawner;
 
     /** All crafting recipe keys registered by this plugin — used for recipe-book discovery. */
     private final List<NamespacedKey> allRecipeKeys = new ArrayList<>();
@@ -247,12 +255,30 @@ public class Main extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new SpellBookListener(spellBookManager), this);
 
-        // ── Quest system ───────────────────────────────────────────────────────
+        // ── Quest system (legacy QuestType) ───────────────────────────────────
         this.questManager = new QuestManager(this, goldManager, skillManager, itemFactory);
         this.questGUI     = new QuestGUI(questManager);
         getServer().getPluginManager().registerEvents(questGUI, this);
+
+        // ── NPC Quest System (300 quests — main + secret) ─────────────────────
+        this.npcQuestManager = new NpcQuestManager(this, goldManager);
+        this.npcQuestSpawner = new NpcQuestSpawner(this);
+        getServer().getPluginManager().registerEvents(npcQuestSpawner, this);
         getServer().getPluginManager().registerEvents(
-                new QuestKillListener(questManager), this);
+                new NpcQuestListener(npcQuestManager, npcQuestSpawner), this);
+
+        // Wire /questnpc command
+        org.bukkit.command.PluginCommand questNpcCmd = getCommand("questnpc");
+        if (questNpcCmd != null) {
+            questNpcCmd.setExecutor(npcQuestSpawner);
+            questNpcCmd.setTabCompleter(npcQuestSpawner);
+        } else {
+            getLogger().warning("Command 'questnpc' not found in plugin.yml — skipping.");
+        }
+
+        // Kill tracking feeds both systems
+        getServer().getPluginManager().registerEvents(
+                new QuestKillListener(questManager, npcQuestManager), this);
 
         // ── Party system ───────────────────────────────────────────────────────
         this.partyManager  = new PartyManager();
@@ -289,6 +315,16 @@ public class Main extends JavaPlugin {
 
         this.adminLightCommand = new AdminLightCommand(this);
         registerCmd("adminlight", adminLightCommand);
+
+        // ── /skilllvl — Admin skill level editor ──────────────────────────────
+        SkillLvlCommand skillLvlCmd = new SkillLvlCommand(skillManager);
+        org.bukkit.command.PluginCommand skilllvlPluginCmd = getCommand("skilllvl");
+        if (skilllvlPluginCmd != null) {
+            skilllvlPluginCmd.setExecutor(skillLvlCmd);
+            skilllvlPluginCmd.setTabCompleter(skillLvlCmd);
+        } else {
+            getLogger().warning("Command 'skilllvl' not found in plugin.yml — skipping.");
+        }
 
         registerCmd("skills", new SkillCommand(skillManager, skillGUI, false));
 
@@ -449,8 +485,15 @@ public class Main extends JavaPlugin {
         this.capeVisualTask = new CapeVisualTask(skillCapeManager, capeDataManager, this);
         capeVisualTask.runTaskTimer(this, 10L, 10L);
 
-        // Magic Item Glow — element-specific ambient particles for held staffs — every 4 ticks
-        new MagicGlowTask(itemFactory, this).runTaskTimer(this, 5L, 4L);
+        // Magic Item Glow — Lv99 Magic only — element particles — every 4 ticks
+        new MagicGlowTask(itemFactory, skillManager, this).runTaskTimer(this, 5L, 4L);
+
+        // Boss Quest Cape fire ring — every 10 ticks (0.5 s)
+        new BossQuestCapeTask(this).runTaskTimer(this, 10L, 10L);
+
+        // Restore any quest NPCs that might be missing after a reload (delayed 3 s)
+        getServer().getScheduler().runTaskLater(this,
+                () -> npcQuestSpawner.restoreMissingNpcs(), 60L);
 
         for (Player p : getServer().getOnlinePlayers()) {
             difficultyManager.syncNightmareTag(p, difficultyManager.getDifficulty(p.getUniqueId()));
@@ -484,6 +527,7 @@ public class Main extends JavaPlugin {
         if (vipShopListener   != null) vipShopListener.shutdown();
         if (gunZSwordListener != null) gunZSwordListener.shutdown();
         if (magicBagManager   != null) magicBagManager.saveAll();
+        if (npcQuestManager   != null) npcQuestManager.saveAll();
         for (Player p : getServer().getOnlinePlayers()) {
             SkillBonusManager.removeDefenceHpBonus(p);
         }

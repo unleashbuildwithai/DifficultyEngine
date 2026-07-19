@@ -2,6 +2,8 @@ package com.yourname.difficulty.listeners;
 
 import com.yourname.difficulty.items.ItemFactory;
 import com.yourname.difficulty.magic.MagicElement;
+import com.yourname.difficulty.skills.SkillManager;
+import com.yourname.difficulty.skills.SkillType;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
@@ -37,13 +39,15 @@ public class MagicGlowTask extends BukkitRunnable {
     private static final Color AIR_DEEP    = Color.fromRGB(  0, 220, 255);
     private static final Color AIR_BRIGHT  = Color.fromRGB(160, 245, 255);
 
-    private final ItemFactory itemFactory;
-    private final JavaPlugin  plugin;
+    private final ItemFactory  itemFactory;
+    private final SkillManager skillManager;
+    private final JavaPlugin   plugin;
     private int tick = 0;
 
-    public MagicGlowTask(ItemFactory itemFactory, JavaPlugin plugin) {
-        this.itemFactory = itemFactory;
-        this.plugin      = plugin;
+    public MagicGlowTask(ItemFactory itemFactory, SkillManager skillManager, JavaPlugin plugin) {
+        this.itemFactory  = itemFactory;
+        this.skillManager = skillManager;
+        this.plugin       = plugin;
     }
 
     @Override
@@ -53,6 +57,9 @@ public class MagicGlowTask extends BukkitRunnable {
             ItemStack hand = player.getInventory().getItemInMainHand();
             MagicElement el = itemFactory.getStaffElement(hand);
             if (el == null) continue;
+
+            // ── Staff glow is a level-99 Magic perk only ────────────────────
+            if (skillManager.getLevel(player.getUniqueId(), SkillType.MAGIC) < 99) continue;
 
             // Position near the player's right-hand hold area
             Location eye  = player.getEyeLocation();

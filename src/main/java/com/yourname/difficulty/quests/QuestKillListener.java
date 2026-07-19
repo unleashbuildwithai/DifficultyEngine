@@ -12,10 +12,12 @@ import org.bukkit.event.entity.EntityDeathEvent;
  */
 public class QuestKillListener implements Listener {
 
-    private final QuestManager questManager;
+    private final QuestManager    questManager;
+    private final NpcQuestManager npcQuestManager;
 
-    public QuestKillListener(QuestManager questManager) {
-        this.questManager = questManager;
+    public QuestKillListener(QuestManager questManager, NpcQuestManager npcQuestManager) {
+        this.questManager    = questManager;
+        this.npcQuestManager = npcQuestManager;
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -26,6 +28,10 @@ public class QuestKillListener implements Listener {
 
         EntityType type = mob.getType();
 
+        // ── NPC quest kill tracking ────────────────────────────────────────────
+        npcQuestManager.onKill(killer, type);
+
+        // ── Legacy QuestType tracking ─────────────────────────────────────────
         for (QuestType q : QuestType.values()) {
             // Permanent quest already done — skip
             if (questManager.isPermaDone(killer.getUniqueId(), q)) continue;
