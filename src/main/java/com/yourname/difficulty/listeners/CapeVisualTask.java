@@ -3,11 +3,13 @@ package com.yourname.difficulty.listeners;
 import com.yourname.difficulty.skills.CapeDataManager;
 import com.yourname.difficulty.skills.SkillCapeManager;
 import com.yourname.difficulty.skills.SkillType;
+import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.TropicalFish;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -20,104 +22,126 @@ import java.util.UUID;
 /**
  * CapeVisualTask — Ambient visual effects for equipped skill capes.
  *
- * Runs every 10 ticks (0.5 s). For each online player wearing a recognised
+ * Runs every 10 ticks (0.5 s).  For each online player wearing a recognised
  * cape two effects are applied:
  *
  * ── BACK LABEL (hologram) ─────────────────────────────────────────────────
  *  An invisible ArmorStand (marker) is placed 0.3 blocks BEHIND the player
  *  at torso height (~0.8 blocks from feet).
  *
- * ── PARTICLES ────────────────────────────────────────────────────────────
- *  Cape → Particle mapping:
- *    MELEE       → CRIT          (red sparks)
- *    RANGED      → ENCHANTED_HIT (green sparks)
- *    DEFENCE     → END_ROD       (white-blue rods)
- *    PRAYER      → ENCHANT       (floating letters)
- *    MAGIC       → DUST rainbow  (cycling rainbow sparkles)
- *    WOODCUTTING → HAPPY_VILLAGER
- *    FISHING     → FALLING_WATER + air-swimming fish/axolotl
- *    FARMING     → COMPOSTER
- *    BOSS Cape   → SOUL_FIRE_FLAME
- *    Max Cape    → FIREWORK
+ * ── SHAPED PARTICLES ──────────────────────────────────────────────────────
+ *  Each skill cape renders its attribute symbol in DUST particles:
+ *    MELEE       → ⚔  sword shape
+ *    RANGED      → 🏹  bow + arrow shape
+ *    DEFENCE     → 🛡  shield shape
+ *    PRAYER      → ✟  cross shape
+ *    MAGIC       → ★  six-pointed star (rainbow cycling)
+ *    WOODCUTTING → 🪓  axe shape
+ *    FISHING     → water cascade + tropical fish + axolotl pixel art
+ *    FARMING     → 🛒  minecart shape
+ *    BOSS Cape   → SOUL_FIRE_FLAME + SOUL cloud
+ *    Max Cape    → FIREWORK + END_ROD burst
  *
- * NOTE: Capes are stored in CapeDataManager — players keep their chestplate
- * slot free to wear armour simultaneously with a cape.
+ * ── SWAP FIX ──────────────────────────────────────────────────────────────
+ *  A lastCapeName map tracks the displayed cape name.  When a swap is
+ *  detected the old hologram stand is removed immediately — this prevents
+ *  the "ghost name / health-bar glitched into the world" bug.
  */
 public class CapeVisualTask extends BukkitRunnable {
 
-    /** Scoreboard tag applied to every hologram stand so they can be bulk-removed. */
+    /** Scoreboard tag applied to every hologram stand. */
     public static final String HOLOGRAM_TAG = "DE_cape_sign";
 
-    /**
-     * Scoreboard tag applied to every temporary fish / axolotl entity spawned
-     * by the Fishing cape effect so they can be bulk-swept on plugin disable.
-     */
+    /** Scoreboard tag applied to every temporary fish entity. */
     private static final String FISH_TAG = "DE_cape_fish";
 
-    /** How far behind the player the label stand is placed (blocks). */
     private static final double BACK_OFFSET = 0.30;
-    /** Height from player feet where the stand is spawned (blocks). */
     private static final double BACK_HEIGHT = 0.80;
 
-    private final SkillCapeManager        capeManager;
-    private final CapeDataManager         capeDataManager;
-    private final JavaPlugin              plugin;
-    /** Live map of player UUID → their current cape hologram stand. */
-    private final Map<UUID, ArmorStand>   holograms = new HashMap<>();
-    private int                           tick      = 0;
+    private final SkillCapeManager      capeManager;
+    private final CapeDataManager       capeDataManager;
+    private final JavaPlugin            plugin;
 
-    public CapeVisualTask(SkillCapeManager capeManager, CapeDataManager capeDataManager, JavaPlugin plugin) {
+    /** Live map of player UUID → their current cape hologram stand. */
+    private final Map<UUID, ArmorStand> holograms    = new HashMap<>();
+
+    /**
+     * Tracks the display name of each player's last-known equipped cape.
+     * Used to detect swaps so the old stand can be killed immediately.
+     */
+    private final Map<UUID, String>     lastCapeName = new HashMap<>();
+
+    private int tick = 0;
+
+    public CapeVisualTask(SkillCapeManager capeManager,
+                          CapeDataManager  capeDataManager,
+                          JavaPlugin       plugin) {
         this.capeManager     = capeManager;
         this.capeDataManager = capeDataManager;
         this.plugin          = plugin;
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Main loop
+    // ═══════════════════════════════════════════════════════════════════════
+
     @Override
     public void run() {
         tick++;
 
-        // ── Update / remove holograms for all tracked players ─────────────────
+        // ── Sweep stale holograms (player offline / cape removed) ──────────
         holograms.entrySet().removeIf(entry -> {
-            Player p = plugin.getServer().getPlayer(entry.getKey());
+            Player     p     = plugin.getServer().getPlayer(entry.getKey());
             ArmorStand stand = entry.getValue();
             if (p == null || !p.isOnline() || !isWearingCape(p)) {
                 if (!stand.isDead()) stand.remove();
-                return true; // remove from map
+                lastCapeName.remove(entry.getKey());
+                return true;
             }
             return false;
         });
 
-        // ── Process all online players ────────────────────────────────────────
+        // ── Process every online player ────────────────────────────────────
         for (Player player : plugin.getServer().getOnlinePlayers()) {
-            // Cape is stored in CapeDataManager — independent of the chestplate slot.
-            // Players can now wear both chestplate armour AND a skill cape simultaneously.
-            ItemStack chest = capeDataManager.getEquippedCape(player.getUniqueId());
+            ItemStack cape = capeDataManager.getEquippedCape(player.getUniqueId());
 
-            if (chest == null) {
-                // Remove hologram if cape was just unequipped
+            if (cape == null) {
+                // Cape unequipped — destroy hologram immediately
                 ArmorStand old = holograms.remove(player.getUniqueId());
                 if (old != null && !old.isDead()) old.remove();
+                lastCapeName.remove(player.getUniqueId());
                 continue;
             }
 
-            // ── Hologram: create or teleport ──────────────────────────────────
-            updateHologram(player, chest);
+            // ── Cape-swap fix: detect name change → kill old stand ─────────
+            String currentName = getCapeName(cape);
+            String lastName    = lastCapeName.get(player.getUniqueId());
+            if (!currentName.equals(lastName)) {
+                // Cape changed — remove old hologram so no ghost lingers
+                ArmorStand old = holograms.remove(player.getUniqueId());
+                if (old != null && !old.isDead()) old.remove();
+                lastCapeName.put(player.getUniqueId(), currentName);
+            }
 
-            // ── Particles (every other tick = ~1 s for regular capes) ─────────
-            if (!shouldEmitParticles(chest, tick)) continue;
-            spawnCapeParticles(player, chest);
+            // ── Update / create hologram ───────────────────────────────────
+            updateHologram(player, cape);
+
+            // ── Emit particles (every other run for skill capes) ───────────
+            if (!shouldEmitParticles(cape)) continue;
+            spawnCapeParticles(player, cape);
         }
     }
 
-    // ── Hologram management ───────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Hologram management
+    // ═══════════════════════════════════════════════════════════════════════
 
     private void updateHologram(Player player, ItemStack cape) {
-        // ── Back position ─────────────────────────────────────────────────────
+        // Position: directly behind the player at torso height
         Vector facing = player.getLocation().getDirection();
         Vector back   = new Vector(-facing.getX(), 0, -facing.getZ());
         if (back.lengthSquared() > 1e-6) back.normalize();
 
-        // Place 0.3 blocks behind, 0.8 blocks up from feet  →  sits on back
         Location hologramPos = player.getLocation().clone()
                 .add(back.multiply(BACK_OFFSET))
                 .add(0, BACK_HEIGHT, 0);
@@ -125,33 +149,35 @@ public class CapeVisualTask extends BukkitRunnable {
         ArmorStand stand = holograms.get(player.getUniqueId());
 
         if (stand == null || stand.isDead() || !stand.isValid()) {
-            // Spawn a fresh invisible marker stand
+            // Remove stale reference if any
+            if (stand != null && !stand.isDead()) stand.remove();
+
             stand = (ArmorStand) player.getWorld()
                     .spawnEntity(hologramPos, EntityType.ARMOR_STAND);
+
+            // Apply flags immediately AFTER spawn to minimise flicker
+            stand.setMarker(true);          // no hitbox → no health-bar interaction
             stand.setInvisible(true);
             stand.setSmall(true);
             stand.setGravity(false);
             stand.setCanPickupItems(false);
-            stand.setPersistent(false);        // won't save to world file
-            stand.setMarker(true);             // no hitbox → no health bar popup
+            stand.setPersistent(false);     // not saved to world NBT
             stand.setBasePlate(false);
             stand.setArms(false);
             stand.addScoreboardTag(HOLOGRAM_TAG);
             holograms.put(player.getUniqueId(), stand);
         }
 
-        // ── Fix: hide the label when looking steeply down (prevents double-cape) ─
-        float pitch = player.getLocation().getPitch();
-        if (pitch > 55f) {
-            // Player is looking down — hide name to prevent it appearing in view
+        // Hide label when the player looks steeply downward (avoids double-image)
+        if (player.getLocation().getPitch() > 55f) {
             stand.setCustomNameVisible(false);
             stand.setCustomName(null);
         } else {
             stand.setCustomNameVisible(true);
-            stand.setCustomName(capeSymbolText(cape));
+            stand.setCustomName(capeLabel(cape));
         }
 
-        // Only teleport if moved more than ~0.3 blocks — reduces teleport spam
+        // Only teleport when the stand has actually moved (saves bandwidth)
         Location sl = stand.getLocation();
         if (!sl.getWorld().equals(hologramPos.getWorld())
                 || sl.distanceSquared(hologramPos) > 0.09) {
@@ -159,35 +185,44 @@ public class CapeVisualTask extends BukkitRunnable {
         }
     }
 
-    // ── Cape symbol text ──────────────────────────────────────────────────────
+    // ── Label text ────────────────────────────────────────────────────────
 
-    private String capeSymbolText(ItemStack cape) {
+    private String capeLabel(ItemStack cape) {
         if (capeManager.isBossCape(cape)) return "§5[BOSS CAPE]";
         if (capeManager.isMaxCape(cape))  return "§6[MAX CAPE]";
         SkillType skill = capeManager.getCapeSkill(cape);
         if (skill == null) return "";
         return switch (skill) {
-            case MELEE       -> "§c[Melee Cape]";
-            case RANGED      -> "§a[Ranged Cape]";
-            case DEFENCE     -> "§9[Defence Cape]";
-            case PRAYER      -> "§f[Prayer Cape]";
-            case MAGIC       -> "§d[Magic Cape]";
-            case WOODCUTTING -> "§2[WC Cape]";
-            case FISHING     -> "§b[Fishing Cape]";
-            case FARMING     -> "§e[Farming Cape]";
+            case MELEE       -> "§c[⚔ Melee Cape]";
+            case RANGED      -> "§a[🏹 Ranged Cape]";
+            case DEFENCE     -> "§9[🛡 Defence Cape]";
+            case PRAYER      -> "§f[✟ Prayer Cape]";
+            case MAGIC       -> "§d[✦ Magic Cape]";
+            case WOODCUTTING -> "§2[🪓 WC Cape]";
+            case FISHING     -> "§b[🐟 Fishing Cape]";
+            case FARMING     -> "§e[🛒 Farming Cape]";
         };
     }
 
-    // ── Particle emission ─────────────────────────────────────────────────────
+    /** Stable identifier used for swap-detection (avoids colour-code noise). */
+    private String getCapeName(ItemStack cape) {
+        if (cape == null || !cape.hasItemMeta()) return "";
+        var m = cape.getItemMeta();
+        return m.hasDisplayName() ? m.getDisplayName() : "";
+    }
 
-    private boolean shouldEmitParticles(ItemStack cape, int tick) {
-        if (capeManager.isMaxCape(cape) || capeManager.isBossCape(cape)) return true;
-        return (tick % 2) == 0;
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Particle dispatch
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private boolean shouldEmitParticles(ItemStack cape) {
+        // Boss + Max cape emit every tick; skill capes emit every other tick
+        return capeManager.isMaxCape(cape) || capeManager.isBossCape(cape)
+                || (tick % 2) == 0;
     }
 
     private void spawnCapeParticles(Player player, ItemStack cape) {
-        // Offset 0.45 blocks behind the player so particles appear on the
-        // cape's surface and stay out of the first-person camera view.
+        // Common back-offset location (cape surface, mid and upper torso)
         Vector pFacing = player.getLocation().getDirection();
         Vector pBack   = new Vector(-pFacing.getX(), 0, -pFacing.getZ());
         if (pBack.lengthSquared() > 1e-6) pBack.normalize();
@@ -196,6 +231,12 @@ public class CapeVisualTask extends BukkitRunnable {
         Location loc  = player.getLocation().clone().add(pBack).add(0, 1.0, 0);
         Location locH = player.getLocation().clone().add(pBack).add(0, 1.5, 0);
 
+        // Right-hand vector (perpendicular to facing, horizontal)
+        // right = (-fz, 0, fx) — same as facing × (0,1,0)
+        Vector right = new Vector(-pFacing.getZ(), 0, pFacing.getX());
+        if (right.lengthSquared() > 1e-6) right.normalize();
+
+        // ── Special capes ─────────────────────────────────────────────────
         if (capeManager.isBossCape(cape)) {
             player.getWorld().spawnParticle(Particle.SOUL_FIRE_FLAME, loc,  10, 0.3, 0.2, 0.3, 0.04);
             player.getWorld().spawnParticle(Particle.SOUL,            locH,  5, 0.2, 0.1, 0.2, 0.03);
@@ -210,149 +251,347 @@ public class CapeVisualTask extends BukkitRunnable {
         SkillType skill = capeManager.getCapeSkill(cape);
         if (skill == null) return;
 
-        switch (skill) {
-            case MELEE -> {
-                player.getWorld().spawnParticle(Particle.CRIT,         loc,  9, 0.3, 0.25, 0.3, 0.06);
-                player.getWorld().spawnParticle(Particle.ENCHANTED_HIT, locH, 4, 0.2, 0.1,  0.2, 0.03);
-            }
-            case RANGED -> {
-                player.getWorld().spawnParticle(Particle.ENCHANTED_HIT, loc,  9, 0.3, 0.2, 0.3, 0.05);
-                player.getWorld().spawnParticle(Particle.CRIT,          locH, 3, 0.2, 0.1, 0.2, 0.02);
-            }
-            case DEFENCE -> {
-                player.getWorld().spawnParticle(Particle.END_ROD,  loc,  7, 0.3, 0.2, 0.3, 0.015);
-                player.getWorld().spawnParticle(Particle.ENCHANT, locH, 4, 0.25, 0.1, 0.25, 0.08);
-            }
-            case PRAYER -> {
-                player.getWorld().spawnParticle(Particle.ENCHANT,        loc,  11, 0.35, 0.25, 0.35, 0.12);
-                player.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, locH,  3, 0.2,  0.1,  0.2,  0.0);
-            }
-            case MAGIC -> {
-                // ── Rainbow sparkles — cycle hue across full spectrum ─────────
-                float hue1 = (tick % 100) / 100.0f;
-                float hue2 = ((tick + 33) % 100) / 100.0f;
-                float hue3 = ((tick + 66) % 100) / 100.0f;
+        // ── Fishing cape: water + fish entities + axolotl pixel art ──────
+        if (skill == SkillType.FISHING) {
+            player.getWorld().spawnParticle(Particle.FALLING_WATER, loc,  12, 0.40, 0.30, 0.40, 0.0);
+            player.getWorld().spawnParticle(Particle.FALLING_WATER, locH,  6, 0.25, 0.15, 0.25, 0.0);
+            player.getWorld().spawnParticle(Particle.SPLASH,        loc,   6, 0.35, 0.20, 0.35, 0.04);
+            player.getWorld().spawnParticle(Particle.SPLASH,        locH,  3, 0.20, 0.10, 0.20, 0.03);
 
-                Particle.DustOptions dust1 = new Particle.DustOptions(hsbToColor(hue1), 1.3f);
-                Particle.DustOptions dust2 = new Particle.DustOptions(hsbToColor(hue2), 1.1f);
-                Particle.DustOptions dust3 = new Particle.DustOptions(hsbToColor(hue3), 1.0f);
+            if (tick % 8 == 0) {
+                spawnTemporaryFish(player, loc);
+                if (Math.random() < 0.5) spawnTemporaryFish(player, loc);
+            }
+            // Axolotl as pixel-art particles (no real entity in air)
+            if (tick % 20 == 0) {
+                spawnAxolotlPixelArt(player, loc, right);
+            }
+            return;
+        }
 
-                player.getWorld().spawnParticle(Particle.DUST, loc,  7, 0.3, 0.25, 0.3, 0, dust1);
-                player.getWorld().spawnParticle(Particle.DUST, locH, 4, 0.2, 0.1,  0.2, 0, dust2);
-                player.getWorld().spawnParticle(Particle.DUST, loc,  3, 0.2, 0.2,  0.2, 0, dust3);
-            }
-            case WOODCUTTING -> {
-                player.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, loc,  7, 0.35, 0.2,  0.35, 0.0);
-                player.getWorld().spawnParticle(Particle.COMPOSTER,      locH, 4, 0.25, 0.15, 0.25, 0.0);
-            }
-            case FISHING -> {
-                // ── Lighter water-cascade effect (reduced from 48→27 particles) ──
-                player.getWorld().spawnParticle(Particle.FALLING_WATER, loc,  12, 0.40, 0.30, 0.40, 0.0);
-                player.getWorld().spawnParticle(Particle.FALLING_WATER, locH,  6, 0.25, 0.15, 0.25, 0.0);
-                player.getWorld().spawnParticle(Particle.SPLASH,        loc,   6, 0.35, 0.20, 0.35, 0.04);
-                player.getWorld().spawnParticle(Particle.SPLASH,        locH,  3, 0.20, 0.10, 0.20, 0.03);
+        // ── All other skill capes: shaped attribute symbol ─────────────
+        spawnSymbolParticles(player, skill, loc, right);
+    }
 
-                // ── 1-2 tropical fish (air-swimming) every 4 s ───────────────
-                if (tick % 8 == 0) {
-                    spawnTemporaryFish(player, loc);
-                    if (Math.random() < 0.5) spawnTemporaryFish(player, loc);
-                }
-                // ── Axolotl cameo every 10 s ──────────────────────────────────
-                if (tick % 20 == 0) {
-                    spawnTemporaryAxolotl(player, loc);
-                }
-            }
-            case FARMING -> {
-                player.getWorld().spawnParticle(Particle.COMPOSTER,      loc,  7, 0.35, 0.2,  0.35, 0.0);
-                player.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, locH, 3, 0.2,  0.15, 0.2,  0.0);
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Shaped attribute symbol particles
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Renders each cape's attribute symbol as DUST particles arranged in a
+     * 2-D sprite on the plane perpendicular to the player's facing direction.
+     *
+     * Coordinates: (rightOffset, upOffset) in blocks, centred on {@code center}.
+     */
+    private void spawnSymbolParticles(Player player, SkillType skill,
+                                      Location center, Vector right) {
+        double[][] shape = getSymbolShape(skill);
+
+        // Magic cape: rainbow-cycling colour per tick
+        Particle.DustOptions dust;
+        if (skill == SkillType.MAGIC) {
+            float hue = (tick % 100) / 100.0f;
+            dust = new Particle.DustOptions(hsbToColor(hue), 1.3f);
+        } else {
+            dust = new Particle.DustOptions(getSkillColor(skill), 1.2f);
+        }
+
+        for (double[] pt : shape) {
+            double rOff = pt[0];
+            double uOff = pt[1];
+
+            // Tiny random jitter for a shimmering/sparkle look
+            double jitter = (Math.random() - 0.5) * 0.04;
+
+            // ~75 % chance to spawn each point — gives a twinkling effect
+            if (Math.random() < 0.25) continue;
+
+            Location pLoc = center.clone()
+                    .add(right.clone().multiply(rOff))
+                    .add(0, uOff + jitter, 0);
+
+            player.getWorld().spawnParticle(Particle.DUST, pLoc, 1, 0, 0, 0, 0, dust);
+        }
+
+        // Sparse ambient particle around the symbol for depth
+        Particle ambient = getAmbientParticle(skill);
+        if (ambient != null) {
+            player.getWorld().spawnParticle(ambient, center, 2, 0.25, 0.30, 0.25, 0.01);
+        }
+    }
+
+    // ── Symbol shape definitions ──────────────────────────────────────────
+
+    /**
+     * Returns an array of {rightOffset, upOffset} pairs (in blocks) that
+     * together trace the outline of each skill's attribute symbol.
+     * Centre (0,0) is at the cape surface; scale is roughly ±0.5 blocks.
+     */
+    private double[][] getSymbolShape(SkillType skill) {
+        return switch (skill) {
+
+            // ─── MELEE — crossed sword ────────────────────────────────────
+            case MELEE -> new double[][] {
+                { 0.00,  0.52},   // blade tip
+                { 0.00,  0.37},   // blade upper
+                { 0.00,  0.22},   // blade mid
+                {-0.22,  0.04},   // crossguard left
+                {-0.11,  0.04},   // crossguard inner-left
+                { 0.00,  0.04},   // crossguard centre
+                { 0.11,  0.04},   // crossguard inner-right
+                { 0.22,  0.04},   // crossguard right
+                { 0.00, -0.12},   // grip upper
+                { 0.00, -0.28},   // grip lower
+                { 0.00, -0.44},   // pommel
+            };
+
+            // ─── DEFENCE — kite shield ────────────────────────────────────
+            case DEFENCE -> new double[][] {
+                {-0.10,  0.48},   // top-left
+                { 0.00,  0.52},   // top-centre
+                { 0.10,  0.48},   // top-right
+                {-0.27,  0.28},   // left upper
+                { 0.27,  0.28},   // right upper
+                {-0.30,  0.06},   // left mid
+                { 0.30,  0.06},   // right mid
+                {-0.27, -0.14},   // left lower
+                { 0.27, -0.14},   // right lower
+                {-0.14, -0.34},   // bottom-left
+                { 0.14, -0.34},   // bottom-right
+                { 0.00, -0.52},   // bottom point
+            };
+
+            // ─── RANGED — bow + arrow ─────────────────────────────────────
+            case RANGED -> new double[][] {
+                // Bow limbs (left arc)
+                {-0.30,  0.42},   // bow top
+                {-0.36,  0.22},   // bow upper curve
+                {-0.38,  0.00},   // bow centre (limb)
+                {-0.36, -0.22},   // bow lower curve
+                {-0.30, -0.42},   // bow bottom
+                // Bowstring (diagonal segments)
+                {-0.24,  0.32},   // string top
+                {-0.12,  0.12},   // string upper
+                { 0.00,  0.00},   // nock
+                {-0.12, -0.12},   // string lower
+                {-0.24, -0.32},   // string bottom
+                // Arrow shaft (rightward)
+                { 0.12,  0.00},
+                { 0.24,  0.00},
+                { 0.36,  0.00},
+                // Arrowhead
+                { 0.46,  0.10},
+                { 0.46, -0.10},
+                { 0.54,  0.00},   // tip
+            };
+
+            // ─── FARMING — minecart ───────────────────────────────────────
+            case FARMING -> new double[][] {
+                // Cart body (flat-bed rectangle)
+                {-0.24,  0.26},   // top-left
+                {-0.08,  0.26},   // top mid-left
+                { 0.08,  0.26},   // top mid-right
+                { 0.24,  0.26},   // top-right
+                {-0.24,  0.08},   // body bottom-left
+                { 0.24,  0.08},   // body bottom-right
+                {-0.24,  0.17},   // left side
+                { 0.24,  0.17},   // right side
+                // Axle bar
+                {-0.12, -0.02},
+                { 0.00, -0.02},
+                { 0.12, -0.02},
+                // Left wheel
+                {-0.20, -0.10},   // wheel top
+                {-0.26, -0.20},   // wheel outer
+                {-0.18, -0.28},   // wheel bottom-outer
+                {-0.10, -0.22},   // wheel inner
+                // Right wheel
+                { 0.20, -0.10},
+                { 0.26, -0.20},
+                { 0.18, -0.28},
+                { 0.10, -0.22},
+            };
+
+            // ─── PRAYER — latin cross ─────────────────────────────────────
+            case PRAYER -> new double[][] {
+                { 0.00,  0.52},   // top
+                { 0.00,  0.36},   // upper shaft
+                { 0.00,  0.22},   // crossbar row
+                {-0.28,  0.22},   // left arm
+                {-0.14,  0.22},   // inner-left
+                { 0.14,  0.22},   // inner-right
+                { 0.28,  0.22},   // right arm
+                { 0.00,  0.07},   // lower shaft upper
+                { 0.00, -0.10},   // lower shaft mid
+                { 0.00, -0.26},   // lower shaft lower
+                { 0.00, -0.42},   // base
+            };
+
+            // ─── MAGIC — six-pointed star (Star of David) ─────────────────
+            case MAGIC -> new double[][] {
+                // Outer points
+                { 0.00,  0.52},   // top
+                { 0.26,  0.14},   // upper-right
+                { 0.38, -0.20},   // lower-right
+                { 0.00, -0.38},   // bottom
+                {-0.38, -0.20},   // lower-left
+                {-0.26,  0.14},   // upper-left
+                // Inner hexagon ring
+                { 0.00,  0.24},   // inner-top
+                { 0.20,  0.06},   // inner-upper-right
+                { 0.20, -0.16},   // inner-lower-right
+                { 0.00, -0.22},   // inner-bottom
+                {-0.20, -0.16},   // inner-lower-left
+                {-0.20,  0.06},   // inner-upper-left
+            };
+
+            // ─── WOODCUTTING — axe ────────────────────────────────────────
+            case WOODCUTTING -> new double[][] {
+                // Handle (vertical)
+                { 0.04,  0.48},   // top
+                { 0.04,  0.32},
+                { 0.04,  0.16},
+                { 0.04,  0.00},
+                { 0.04, -0.18},   // handle base
+                // Axe head (upper-right)
+                { 0.22,  0.48},   // blade top-left
+                { 0.36,  0.38},   // blade top arc
+                { 0.42,  0.22},   // blade outer upper
+                { 0.42,  0.06},   // blade outer lower
+                { 0.34, -0.06},   // blade lower arc
+                { 0.18,  0.02},   // blade inner lower
+                // Blade cutting edge (rightmost vertical)
+                { 0.44,  0.34},
+                { 0.44,  0.14},
+            };
+
+            default -> new double[][]{};
+        };
+    }
+
+    /** Primary DUST colour for each skill cape's symbol. */
+    private static Color getSkillColor(SkillType skill) {
+        return switch (skill) {
+            case MELEE       -> Color.fromRGB(220,  40,  40);   // crimson
+            case RANGED      -> Color.fromRGB( 40, 200,  80);   // lime-green
+            case DEFENCE     -> Color.fromRGB( 60, 120, 255);   // royal-blue
+            case PRAYER      -> Color.fromRGB(240, 220, 180);   // warm white/gold
+            case WOODCUTTING -> Color.fromRGB( 80, 160,  50);   // forest-green
+            case FARMING     -> Color.fromRGB(180, 110,  40);   // harvest-gold
+            default          -> Color.fromRGB(200, 200, 200);
+        };
+    }
+
+    /** Secondary ambient particle that fills the space around the symbol. */
+    private static Particle getAmbientParticle(SkillType skill) {
+        return switch (skill) {
+            case MELEE       -> Particle.CRIT;
+            case RANGED      -> Particle.ENCHANTED_HIT;
+            case DEFENCE     -> Particle.END_ROD;
+            case PRAYER      -> Particle.ENCHANT;
+            case FARMING     -> Particle.COMPOSTER;
+            case WOODCUTTING -> Particle.HAPPY_VILLAGER;
+            default          -> null;  // MAGIC uses pure rainbow dust
+        };
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Axolotl pixel-art (replaces real entity that flops in air)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Draws a tiny pixel-art axolotl using DUST particles (pink / dark-pink / white).
+     * The grid is 7 wide × 5 tall, each "pixel" ~0.10 blocks apart.
+     *
+     * Legend:  0 = empty  1 = body (pink)  2 = gills (dark-pink)  3 = eye (white)
+     */
+    private void spawnAxolotlPixelArt(Player player, Location center, Vector right) {
+        int[][] pixels = {
+            { 0, 2, 0, 0, 0, 2, 0 },   // row 4 — gill tufts
+            { 0, 1, 1, 1, 1, 1, 0 },   // row 3 — head
+            { 1, 1, 3, 1, 3, 1, 1 },   // row 2 — eyes
+            { 1, 1, 1, 1, 1, 1, 1 },   // row 1 — body
+            { 0, 1, 0, 1, 0, 1, 0 },   // row 0 — legs / feet
+        };
+
+        Color pink     = Color.fromRGB(255, 150, 180);
+        Color darkPink = Color.fromRGB(200,  80, 120);
+        Color white    = Color.fromRGB(240, 240, 240);
+
+        final double spacing = 0.10;
+        int cols = pixels[0].length;   // 7
+        int rows = pixels.length;      // 5
+
+        for (int row = 0; row < rows; row++) {
+            for (int col = 0; col < cols; col++) {
+                int pixel = pixels[rows - 1 - row][col]; // flip: row 0 → bottom
+                if (pixel == 0) continue;
+
+                Color c = switch (pixel) {
+                    case 1  -> pink;
+                    case 2  -> darkPink;
+                    case 3  -> white;
+                    default -> pink;
+                };
+
+                double rOff = (col - cols / 2.0) * spacing;
+                double uOff = row * spacing + 0.10;   // sit slightly above loc
+
+                Location pLoc = center.clone()
+                        .add(right.clone().multiply(rOff))
+                        .add(0, uOff, 0);
+
+                player.getWorld().spawnParticle(
+                        Particle.DUST, pLoc, 1, 0, 0, 0, 0,
+                        new Particle.DustOptions(c, 1.0f));
             }
         }
     }
 
-    // ── Fishing cape: temporary entity helpers ────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Fishing cape: temporary tropical-fish entities
+    // ═══════════════════════════════════════════════════════════════════════
 
-    /**
-     * Spawns a Tropical Fish that floats / swims in air at the cape position.
-     * Gravity is disabled so it drifts outward from the player instead of falling.
-     * Auto-removed after 3 s (60 ticks).
-     */
     private void spawnTemporaryFish(Player player, Location loc) {
         Location spawnLoc = loc.clone().add(
                 (Math.random() - 0.5) * 0.4, 0.0, (Math.random() - 0.5) * 0.4);
 
-        org.bukkit.entity.TropicalFish fish = (org.bukkit.entity.TropicalFish)
+        TropicalFish fish = (TropicalFish)
                 player.getWorld().spawnEntity(spawnLoc, EntityType.TROPICAL_FISH);
 
         fish.setAI(false);
-        fish.setGravity(false);  // air-swim — no falling
+        fish.setGravity(false);
         fish.setPersistent(false);
         fish.setInvulnerable(true);
         fish.setSilent(true);
-        fish.setCustomNameVisible(false);     // hide name tag
-        fish.setCollidable(false);            // players walk through fish
+        fish.setCustomNameVisible(false);
+        fish.setCollidable(false);
         fish.addScoreboardTag(FISH_TAG);
 
-        // Random tropical-fish appearance
-        org.bukkit.entity.TropicalFish.Pattern[] patterns =
-                org.bukkit.entity.TropicalFish.Pattern.values();
-        org.bukkit.DyeColor[] dyeColors = org.bukkit.DyeColor.values();
+        TropicalFish.Pattern[]    patterns  = TropicalFish.Pattern.values();
+        org.bukkit.DyeColor[]     dyeColors = org.bukkit.DyeColor.values();
         fish.setPattern(patterns[(int)(Math.random() * patterns.length)]);
         fish.setPatternColor(dyeColors[(int)(Math.random() * dyeColors.length)]);
         fish.setBodyColor(dyeColors[(int)(Math.random() * dyeColors.length)]);
 
-        // Gentle outward drift — no upward kick needed (gravity off)
         fish.setVelocity(new Vector(
                 (Math.random() - 0.5) * 0.40,
                 (Math.random() - 0.5) * 0.15,
-                (Math.random() - 0.5) * 0.40
-        ));
+                (Math.random() - 0.5) * 0.40));
 
         // Auto-remove after 3 seconds (60 ticks)
         plugin.getServer().getScheduler().runTaskLater(plugin,
                 () -> { if (!fish.isDead()) fish.remove(); }, 60L);
     }
 
-    /**
-     * Spawns a colourful Axolotl that floats in air for a brief cameo.
-     * Gravity disabled — removed after 2.5 s.
-     */
-    private void spawnTemporaryAxolotl(Player player, Location loc) {
-        org.bukkit.entity.Axolotl axolotl = (org.bukkit.entity.Axolotl)
-                player.getWorld().spawnEntity(loc.clone(), EntityType.AXOLOTL);
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Rainbow colour helper (HSB → RGB)
+    // ═══════════════════════════════════════════════════════════════════════
 
-        axolotl.setAI(false);
-        axolotl.setGravity(false);
-        axolotl.setPersistent(false);
-        axolotl.setInvulnerable(true);
-        axolotl.setAdult();
-        axolotl.setSilent(true);
-        axolotl.setCustomNameVisible(false);  // hide name tag
-        axolotl.setCollidable(false);         // players walk through axolotl
-        axolotl.addScoreboardTag(FISH_TAG);
-
-        // Random colour variant
-        org.bukkit.entity.Axolotl.Variant[] variants =
-                org.bukkit.entity.Axolotl.Variant.values();
-        axolotl.setVariant(variants[(int)(Math.random() * variants.length)]);
-
-        // Gentle drift in all directions
-        axolotl.setVelocity(new Vector(
-                (Math.random() - 0.5) * 0.18,
-                (Math.random() - 0.5) * 0.10,
-                (Math.random() - 0.5) * 0.18
-        ));
-
-        // Auto-remove after 2.5 seconds (50 ticks)
-        plugin.getServer().getScheduler().runTaskLater(plugin,
-                () -> { if (!axolotl.isDead()) axolotl.remove(); }, 50L);
-    }
-
-    // ── Rainbow colour helper ─────────────────────────────────────────────────
-
-    private static org.bukkit.Color hsbToColor(float hue) {
-        int   h  = (int)(hue * 6);
-        float f  = hue * 6 - h;
-        float q  = 1 - f;
+    private static Color hsbToColor(float hue) {
+        int   h = (int)(hue * 6);
+        float f = hue * 6 - h;
+        float q = 1 - f;
         float r, g, b;
         switch (h % 6) {
             case 0  -> { r = 1; g = f; b = 0; }
@@ -362,37 +601,39 @@ public class CapeVisualTask extends BukkitRunnable {
             case 4  -> { r = f; g = 0; b = 1; }
             default -> { r = 1; g = 0; b = q; }
         }
-        return org.bukkit.Color.fromRGB(
+        return Color.fromRGB(
                 Math.max(0, Math.min(255, (int)(r * 255))),
                 Math.max(0, Math.min(255, (int)(g * 255))),
                 Math.max(0, Math.min(255, (int)(b * 255))));
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Helpers
+    // ═══════════════════════════════════════════════════════════════════════
 
-    /** Cape is now tracked in CapeDataManager — not the chestplate slot. */
     private boolean isWearingCape(Player player) {
         return capeDataManager.hasCape(player.getUniqueId());
     }
 
     /**
-     * Removes all hologram stands managed by this task.
-     * Call from {@code Main#onDisable()} so stands don't persist after reload.
+     * Removes ALL hologram stands managed by this task.
+     * Called from {@code Main#onDisable()} and at startup to sweep orphans.
      */
     public void cleanup() {
         for (ArmorStand stand : holograms.values()) {
             if (!stand.isDead()) stand.remove();
         }
         holograms.clear();
+        lastCapeName.clear();
 
-        // Sweep orphaned stands from a previous crash
+        // Sweep orphaned hologram stands (from previous crash / reload)
         plugin.getServer().getWorlds().forEach(world ->
             world.getEntitiesByClass(ArmorStand.class).forEach(stand -> {
                 if (stand.getScoreboardTags().contains(HOLOGRAM_TAG)) stand.remove();
             })
         );
 
-        // Sweep orphaned fish / axolotl entities
+        // Sweep orphaned fish entities
         plugin.getServer().getWorlds().forEach(world ->
             world.getEntities().forEach(e -> {
                 if (e.getScoreboardTags().contains(FISH_TAG)) e.remove();
