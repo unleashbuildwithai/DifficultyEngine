@@ -1,5 +1,6 @@
 package com.yourname.difficulty.items;
 
+import com.yourname.difficulty.items.EarthBlockTier;
 import com.yourname.difficulty.magic.MagicElement;
 import com.yourname.difficulty.skills.SkillCapeManager;
 import com.yourname.difficulty.skills.SkillType;
@@ -45,6 +46,8 @@ public class ItemFactory {
     public static final String SPELL_COMBO_BOOK_KEY  = "spell_combo_book";
     public static final String ANCIENT_KILL_TOME_KEY = "ancient_kill_tome";
     public static final String UNICORN_SLIPPERS_KEY  = "unicorn_slippers";
+    /** Prefix for all earth-page PDC keys. */
+    public static final String EARTH_PAGE_KEY_PREFIX = "de_earth_page_";
 
     // ── NamespacedKeys ────────────────────────────────────────────────────────
     private final NamespacedKey soulfurPotionKey;
@@ -60,6 +63,9 @@ public class ItemFactory {
     private final Map<MagicElement, NamespacedKey> staffKeys    = new EnumMap<>(MagicElement.class);
     private final Map<MagicElement, NamespacedKey> runeKeys     = new EnumMap<>(MagicElement.class);
     private final Map<MagicElement, NamespacedKey> runeDustKeys = new EnumMap<>(MagicElement.class);
+
+    /** Per-tier Earth Magic Page keys. */
+    private final Map<EarthBlockTier, NamespacedKey> earthPageKeys = new EnumMap<>(EarthBlockTier.class);
 
     private final SkillCapeManager capeManager;
 
@@ -89,6 +95,12 @@ public class ItemFactory {
             runeKeys.put(el,     new NamespacedKey(plugin, el.runeKey));
             runeDustKeys.put(el, new NamespacedKey(plugin, el.runeKey + "_dust"));
         }
+
+        // Earth Magic Page keys — one per throwable block tier
+        for (EarthBlockTier tier : EarthBlockTier.values()) {
+            earthPageKeys.put(tier, new NamespacedKey(plugin, tier.pageKey));
+        }
+
         this.capeManager = capeManager;
         register();
     }
@@ -123,6 +135,10 @@ public class ItemFactory {
         registryPage2.add(buildMageGearGuide());
         registryPage2.add(buildUnicornSlippers());
         registryPage2.addAll(capeManager.buildAllCapes());
+        // Earth Magic Pages — one per throwable block tier
+        for (EarthBlockTier tier : EarthBlockTier.values()) {
+            registryPage2.add(buildEarthMagicPage(tier));
+        }
     }
 
     // ── Soulfur Potion ────────────────────────────────────────────────────────
@@ -226,13 +242,13 @@ public class ItemFactory {
         lore.add(switch (element) {
             case FIRE  -> "§7Right-click → §claunches a fireball§7.";
             case WATER -> "§7Right-click on ground (+ bucket) → §b5-block river§7.";
-            case EARTH -> "§7Right-click → §2throws a dirt ball§7.";
-            case AIR   -> "§7On ground → §7air gust. In air → §fhover (slow fall)§7.";
+            case EARTH -> "§7Right-click → §2throws a block§7 (Lv10+: use blocks in inventory).";
+            case AIR   -> "§7On ground → §7air gust. In air → §7hover (slow fall)§7.";
         });
         lore.add("§8▶ Air gust power scales with §5mage gear §8equipped.");
         lore.add("§8" + "─".repeat(26));
-        lore.add("§7Consumes §e1× §7" + element.runeName + " §7per cast.");
-        lore.add("§6Craft: §fShard + §f" + element.staffCraftIngredient.name() + " + §fStick");
+        lore.add("§7Consumes §61× §7" + element.runeName + " §7per cast.");
+        lore.add("§6Craft: §7Shard + §7" + element.staffCraftIngredient.name() + " + §7Stick");
         lore.add("§8[DifficultyEngine — Magic Staff]");
         return lore;
     }
@@ -271,7 +287,7 @@ public class ItemFactory {
             meta.setLore(List.of(
                 "§8" + "─".repeat(26),
                 "§7Tier: " + tier.displayPrefix,
-                "§8Requires: §eMagic Level §a" + tier.levelRequired,
+                "§8Requires: §aMagic Level §a" + tier.levelRequired,
                 "§8" + "─".repeat(26),
                 "§d✦ §7Spell cooldown: §a-" + tier.cooldownBonus + "ms §8per piece",
                 "§d✦ §7Air gust power: §a+" + (int)(tier.airPower * 12.5) + "% §8per piece",
@@ -321,9 +337,6 @@ public class ItemFactory {
         for (MageGearTier tier : reversed) {
             NamespacedKey key = mageGearTierKeys.get(tier);
             if (key != null && pdc.has(key, PersistentDataType.BYTE)) {
-                // For MAGE tier, the key is shared with the universal key —
-                // only return MAGE if NO higher-tier key is also present
-                // (Alch/Master are already checked before Mage, so this is safe)
                 return tier;
             }
         }
@@ -387,7 +400,7 @@ public class ItemFactory {
                 "§7Consumed when casting with the",
                 element.color + element.name() + " Staff§7.",
                 "§8" + "─".repeat(22),
-                "§6Craft: §f4× " + element.runeCraftIngredient.name() + " §8→ §f8× Rune",
+                "§6Craft: §74× " + element.runeCraftIngredient.name() + " §8→ §68× Rune",
                 "§8[DifficultyEngine — Magic Rune]"
             ));
             meta.getPersistentDataContainer().set(runeKeys.get(element), PersistentDataType.BYTE, (byte) 1);
@@ -407,7 +420,7 @@ public class ItemFactory {
             meta.setLore(List.of(
                 "§8" + "─".repeat(22),
                 "§7Magical dust — drops from " + dustMobSource(element) + "§7.",
-                "§6Craft: §74× this §7→ §e8× " + element.runeName,
+                "§6Craft: §74× this §7→ §68× " + element.runeName,
                 "§8[DifficultyEngine — Rune Dust]"
             ));
             meta.getPersistentDataContainer().set(runeDustKeys.get(element), PersistentDataType.BYTE, (byte) 1);
@@ -451,7 +464,7 @@ public class ItemFactory {
             meta.setLore(List.of(
                 "§7Your personal spell combo book.",
                 "§7Pages unlock via §dSpell Pages§7.",
-                "§7Use §e/spellbook §7to read it.",
+                "§7Use §6/spellbook §7to read it.",
                 "§8[DifficultyEngine — Arcane Tome]"
             ));
             item.setItemMeta(meta);
@@ -533,7 +546,7 @@ public class ItemFactory {
             );
             meta.addPage(
                 "§8§l STATUE CRUMBLE \n\n" +
-                "§7Target is §e§lSTATUE§7.\nHit with Air bolt.\n\n" +
+                "§7Target is §6§lSTATUE§7.\nHit with Air bolt.\n\n" +
                 "§c§l⚡ INSTANT DEATH\n\n" +
                 "§7The mud explodes\noutward violently."
             );
@@ -555,10 +568,6 @@ public class ItemFactory {
 
     // ── Mage Gear Guide (first-wand gift) ────────────────────────────────────
 
-    /**
-     * Written book given to a player the first time they cast a staff spell
-     * in a session.  Acts as a table of contents for the mage gear system.
-     */
     public ItemStack buildMageGearGuide() {
         ItemStack item = new ItemStack(Material.WRITTEN_BOOK);
         BookMeta meta = (BookMeta) item.getItemMeta();
@@ -574,7 +583,7 @@ public class ItemFactory {
             );
             meta.addPage(
                 "§9§l─ Apprentice Gear ─\n" +
-                "§8Magic Lv §e1§8+\n\n" +
+                "§8Magic Lv §a1§8+\n\n" +
                 "§6Ingredients:\n" +
                 "§7Leather piece\n" +
                 "§7+ Purple Dye\n" +
@@ -584,7 +593,7 @@ public class ItemFactory {
             );
             meta.addPage(
                 "§5§l─ Mage Gear ─\n" +
-                "§8Magic Lv §e30§8+\n\n" +
+                "§8Magic Lv §a30§8+\n\n" +
                 "§6Ingredients:\n" +
                 "§7Leather piece\n" +
                 "§7+ Purple Dye\n" +
@@ -594,7 +603,7 @@ public class ItemFactory {
             );
             meta.addPage(
                 "§b§l─ Alch Mage Gear ─\n" +
-                "§8Magic Lv §e60§8+\n\n" +
+                "§8Magic Lv §a60§8+\n\n" +
                 "§6Ingredients:\n" +
                 "§7Leather piece\n" +
                 "§7+ Blue Dye\n" +
@@ -605,7 +614,7 @@ public class ItemFactory {
             );
             meta.addPage(
                 "§4§l─ Master Mage Gear ─\n" +
-                "§8Magic Lv §e90§8+\n\n" +
+                "§8Magic Lv §a90§8+\n\n" +
                 "§6Ingredients:\n" +
                 "§7Leather piece\n" +
                 "§7+ Black Dye\n" +
@@ -647,15 +656,15 @@ public class ItemFactory {
             meta.addPage(
                 "§8§l─ Crafting a Staff ─\n\n" +
                 "§7You need:\n\n" +
-                "§e• 1 Enchanted Shard\n§7  (~5% drop from mobs)\n" +
-                "§e• 1 Element ingredient\n" +
-                "§e• 1 Stick\n\n" +
+                "§6• 1 Enchanted Shard\n§7  (~5% drop from mobs)\n" +
+                "§6• 1 Element ingredient\n" +
+                "§6• 1 Stick\n\n" +
                 "§7Craft at a §6crafting table§7!"
             );
             meta.addPage(
                 "§8§l─ Getting Runes ─\n\n" +
                 "§7Each cast uses 1 rune.\n\n" +
-                "§6Craft runes:\n§74× ingredient → §e8 runes\n\n" +
+                "§6Craft runes:\n§74× ingredient → §68 runes\n\n" +
                 "§cFire§7: Nether Brick\n" +
                 "§bWater§7: Ice\n" +
                 "§2Earth§7: Clay Ball\n" +
@@ -665,8 +674,17 @@ public class ItemFactory {
                 "§8§l─ Basic Spells ─\n\n" +
                 "§cFire§7: Fireball. Scorches.\n\n" +
                 "§bWater§7: Bolt. Soaks (WET).\n\n" +
-                "§2Earth§7: Dirt bolt. Slows.\n§72 hits = suffocate!\n\n" +
+                "§2Earth§7: Bolt. Slows.\n§72 hits = suffocate!\n§7Lv10+ throws blocks!\n\n" +
                 "§7Air§7: Gust knocks back.\n§7Hold in air = hover!"
+            );
+            meta.addPage(
+                "§8§l─ Earth Block Throwing ─\n\n" +
+                "§7At §aMagic Lv 10§7+:\n\n" +
+                "§7Carry a §2throwable block\n§7AND an §2Earth Magic Page\n" +
+                "§7in your inventory.\n\n" +
+                "§71st hit: §6Trap §7(block under feet)\n" +
+                "§72nd hit: §cSuffocate!\n\n" +
+                "§8Higher blocks = more damage."
             );
             meta.addPage(
                 "§8§l─ Your First Combo ─\n\n" +
@@ -693,7 +711,7 @@ public class ItemFactory {
             meta.addPage("§8§l─ The Mage's Primer ─\n\n§7Status effects are the\ncore of combo magic.\n\nHit targets to apply\na status, then follow\nup with the right\nelement to combo!");
             meta.addPage("§8§l─ Fire Combos ─\n\n§cFire§7→§cScorched (3s)\n§7+§cFire§7→§c§lBlazing!\n§7+§7Air§7→§6Fanned Flames\n§7+§bWater§7→§6Steam Burst\n\n§c§lBlazing§7 targets:\n§7+§7Air§7→§c§lInferno Blast\n§7+§bWater§7→§6Steam Explosion\n§7+§cFire§7→§c§lInferno Vortex");
             meta.addPage("§8§l─ Water Combos ─\n\n§bWater§7→§bWet (10s)\n\n§bWet§7 targets:\n§7+§2Earth§7→§6Muddy\n§7+§7Air§7→§b❄Chilled (2.5s!)\n§7+§bWater§7→§6Flood Wash\n\n§bChilled§7 targets:\n§7+§7Air§7→§b§lFROZEN (5s!)\n§7+§2Earth§7→§6Cracked Ice");
-            meta.addPage("§8§l─ Earth Combos ─\n\n§2Earth§7→Slowness\n§2Earth+Earth§7→§2Suffocate!\n\n§6Muddy§7 targets:\n§7+§cFire§7→§e§lSTATUE (8s!)\n§7+§7Air§7→§6Mud Launch\n§7+§bWater§7→§6Flood Wash\n\n§e§lStatue§7:\n§7+§2Earth§7→§6Crumble\n§7+§7Air§7→§c§l??? (seek tome)");
+            meta.addPage("§8§l─ Earth Combos ─\n\n§2Earth§7→Trap+Slowness\n§2Earth+Earth§7→§2Suffocate!\n\n§6Muddy§7 targets:\n§7+§cFire§7→§6§lSTATUE (8s!)\n§7+§7Air§7→§6Mud Launch\n§7+§bWater§7→§6Flood Wash\n\n§6§lStatue§7:\n§7+§2Earth§7→§6Crumble\n§7+§7Air§7→§c§l??? (seek tome)");
             meta.addPage("§8§l─ Air Combos ─\n\n§7On§bWet§7→§b❄Chilled\n§7On§b❄Chilled§7→§b§lFrozen\n§7On§6Muddy§7→§6Mud Launch\n§7On§c§lBlazing§7→§c§lInferno Blast\n§7On§cScorched§7→§6Fanned\n§7On§b§lFrozen§7→§c§l???(seek tome)\n\n§8§lHOVER:§7Hold Air staff\nin air to float!");
             item.setItemMeta(meta);
         }
@@ -711,7 +729,7 @@ public class ItemFactory {
             meta.setGeneration(BookMeta.Generation.ORIGINAL);
             meta.addPage("§8§l─ Advanced Theory ─\n\n§7You have mastered the\nbasics. Now learn the\ndeadly chains.\n\n§7The freeze chain and\nstatue trap can end\nfights instantly.\n\n§8Seek the §cAncient\nKill Tome §8for the\nfinal steps.");
             meta.addPage("§8§l─ The Freeze Chain ─\n\n§71. §bWater§7→§bWet\n§72. §7Air on Wet§7→§b❄Chilled\n§73. §7Air on Chilled\n§7   →§b§lFROZEN (5s!)\n§74. ??? on Frozen\n§7   →§c§lINSTANT DEATH\n\n§8High Magic level\nlets you cast faster.");
-            meta.addPage("§8§l─ The Statue Trap ─\n\n§71. §bWater§7→§bWet\n§72. §2Earth on Wet§7→§6Muddy\n§73. §cFire on Muddy\n§7   →§e§lSTATUE (8s!)\n§74. ??? on Statue\n§7   →§c§lINSTANT DEATH\n\n§88 seconds is your\nwindow. Make it count.");
+            meta.addPage("§8§l─ The Statue Trap ─\n\n§71. §bWater§7→§bWet\n§72. §2Earth on Wet§7→§6Muddy\n§73. §cFire on Muddy\n§7   →§6§lSTATUE (8s!)\n§74. ??? on Statue\n§7   →§c§lINSTANT DEATH\n\n§88 seconds is your\nwindow. Make it count.");
             meta.addPage("§8§l─ Thaw Explosion ─\n\n§7A §b§lFROZEN §7target hit\nwith §cFire §7creates a\nmassive steam burst.\n\n§c🔥 Fire + §b§lFrozen\n→§c§lTHAW EXPLOSION!\n\nAoE damage. Great\nvs groups!\n\n§8Also: §bWater§7 on §b§lFrozen\n→§6Slush §7(slow+blind)");
             meta.addPage("§8§l─ Mind Bomb ─\n\n§7Wear §d2+ Mage Gear\n§7for a §d5% §7chance on\nany combo hit:\n\n§d§lMIND BOMB!\n§7Nausea+Blindness 5s\n\n§730% chance→§c§lFALLEN§7.\nPress SPACE to get up.");
             item.setItemMeta(meta);
@@ -740,16 +758,12 @@ public class ItemFactory {
 
     // ── Unicorn Slippers ──────────────────────────────────────────────────────
 
-    /**
-     * VIP cosmetic boots that create a rainbow particle trail at the wearer's feet.
-     * Available from the VIP Shop for 5000 gold coins.
-     */
     public ItemStack buildUnicornSlippers() {
         ItemStack item = new ItemStack(Material.LEATHER_BOOTS);
         LeatherArmorMeta meta = (LeatherArmorMeta) item.getItemMeta();
         if (meta != null) {
             meta.setDisplayName("§d🦄 Unicorn Slippers");
-            meta.setColor(Color.fromRGB(255, 255, 255));
+            meta.setColor(Color.fromRGB(255, 220, 250));
             meta.addEnchant(Enchantment.UNBREAKING, 3, true);
             meta.addItemFlags(ItemFlag.HIDE_ENCHANTS, ItemFlag.HIDE_ATTRIBUTES);
             meta.setLore(List.of(
@@ -757,12 +771,12 @@ public class ItemFactory {
                 "§7Mystical slippers from the",
                 "§7realm of the §dUnicorns§7.",
                 "§8" + "─".repeat(26),
-                "§6✦ §dRainbow Aura§7:",
+                "§d✦ §dRainbow Aura§7:",
                 "§7Wearing these creates a",
                 "§7§d§orainbow particle trail§7",
                 "§7at your feet while worn.",
                 "§8" + "─".repeat(26),
-                "§6VIP Shop exclusive §8— §e5,000 gp",
+                "§6VIP Shop exclusive §8— §65,000 gp",
                 "§8[DifficultyEngine — Unicorn Slippers]"
             ));
             meta.getPersistentDataContainer().set(unicornSlippersKey, PersistentDataType.BYTE, (byte) 1);
@@ -774,6 +788,60 @@ public class ItemFactory {
     public boolean isUnicornSlippers(ItemStack item) {
         if (item == null || !item.hasItemMeta()) return false;
         return item.getItemMeta().getPersistentDataContainer().has(unicornSlippersKey, PersistentDataType.BYTE);
+    }
+
+    // ── Earth Magic Pages ─────────────────────────────────────────────────────
+
+    /**
+     * Builds an Earth Magic Page item for the given block tier.
+     * Players must carry this page in their inventory to throw the corresponding block.
+     * The page is permanent — it is NOT consumed on use.
+     */
+    public ItemStack buildEarthMagicPage(EarthBlockTier tier) {
+        ItemStack item = new ItemStack(Material.BOOK);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§2✦ Earth Page: " + tier.displayName);
+            meta.addEnchant(Enchantment.UNBREAKING, 1, true);
+            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+            meta.setLore(List.of(
+                "§8" + "─".repeat(26),
+                "§7Earth Magic Page §8— §aTier " + tier.levelRequired,
+                "§8Requires: §aMagic Lv §a" + tier.levelRequired,
+                "§8" + "─".repeat(26),
+                "§7Carry this to throw " + tier.displayName + "§7.",
+                "§7Trap damage:       §c" + (int)(tier.trapDamage / 2) + " ❤",
+                "§7Suffocate damage:  §c" + (int)(tier.suffocateDamage / 2) + " ❤",
+                "§8" + "─".repeat(26),
+                "§8• Keep in inventory — not consumed.",
+                "§8• Page in a chest = won't activate.",
+                "§8[DifficultyEngine — Earth Magic Page]"
+            ));
+            meta.getPersistentDataContainer().set(earthPageKeys.get(tier), PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    /**
+     * Returns true if the player has the Earth Magic Page for the given tier
+     * anywhere in their inventory (not a chest — must be carried).
+     */
+    public boolean hasEarthPage(Player player, EarthBlockTier tier) {
+        NamespacedKey key = earthPageKeys.get(tier);
+        if (key == null) return false;
+        for (ItemStack s : player.getInventory().getContents()) {
+            if (s != null && s.hasItemMeta()
+                    && s.getItemMeta().getPersistentDataContainer().has(key, PersistentDataType.BYTE)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Returns the NamespacedKey for an earth page tier. */
+    public NamespacedKey getEarthPageKey(EarthBlockTier tier) {
+        return earthPageKeys.get(tier);
     }
 
     // ── Cape delegation ───────────────────────────────────────────────────────

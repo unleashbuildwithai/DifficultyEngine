@@ -1,5 +1,6 @@
 package com.yourname.difficulty.magic;
 
+import com.yourname.difficulty.items.EarthBlockTier;
 import com.yourname.difficulty.items.ItemFactory;
 import com.yourname.difficulty.skills.SkillBonusManager;
 import com.yourname.difficulty.skills.SkillLevel;
@@ -78,8 +79,9 @@ public class MagicStaffListener implements Listener {
     public static final String META_BLAZING    = "magic_blazing";
     public static final String META_MIND_BOMB  = "magic_mind_bomb";
     public static final String META_FALLEN     = "magic_fallen";
-    public static final String META_STAFF_HIT  = "magic_staff_hit";
-    public static final String META_EARTH_HITS = "magic_earth_hits";
+    public static final String META_STAFF_HIT    = "magic_staff_hit";
+    public static final String META_EARTH_HITS   = "magic_earth_hits";
+    public static final String META_EARTH_TRAPPED = "magic_earth_trapped";
 
     private static final int    AIR_RANGE = 20;
     private static final Random RAND      = new Random();
@@ -94,6 +96,10 @@ public class MagicStaffListener implements Listener {
     private final Map<UUID, Map<MagicElement, Long>> cooldowns          = new HashMap<>();
     private final Map<UUID, BukkitTask>              fallenTasks        = new HashMap<>();
     private final Map<UUID, BukkitTask>              airHoverTasks      = new HashMap<>();
+    /** Projectile UUID → the EarthBlockTier thrown (null = old system / Lv1-9). */
+    private final Map<UUID, EarthBlockTier>          earthBoltTiers     = new HashMap<>();
+    /** Target UUID → the tier of the trap currently placed under them. */
+    private final Map<UUID, EarthBlockTier>          activeTraps        = new HashMap<>();
     /** Players who received the Mage Gear Guide this session (first cast). */
     private final Set<UUID>                          guidedPlayers      = new HashSet<>();
     private final Set<Location>                      quicksandBlocks    = new HashSet<>();
@@ -287,6 +293,42 @@ public class MagicStaffListener implements Listener {
     // ══════════════════════════════════════════════════════════════════════════
 
     private void castEarth(Player player, int magicLevel) {
+        // ── NEW TIER SYSTEM (Magic Level 10+): throw block from inventory ─────
+        if (magicLevel >= 10) {
+            EarthBlockTier tier = findBestEarthTier(player, magicLevel);
+            if (tier == null) {
+                // Refund the consumed earth rune — no valid block+page found
+                player.getInventory().addItem(itemFactory.buildRune(MagicElement.EARTH, 1));
+                player.sendActionBar("§2[Earth] §cNeed a block + Earth Magic Page in inventory! §8(Lv§a" + magicLevel + "§8)");
+                return;
+            }
+            // Consume 1 block from inventory
+            removeOneFromInventory(player, tier.material);
+
+            Snowball bolt = player.launchProjectile(Snowball.class);
+            bolt.setItem(new ItemStack(tier.material));
+            bolt.setVelocity(player.getLocation().getDirection().multiply(2.2));
+
+            trackedProjectiles.put(bolt.getUniqueId(), MagicElement.EARTH);
+            projectileShooters.put(bolt.getUniqueId(), player.getUniqueId());
+            projectileLevels.put(bolt.getUniqueId(), magicLevel);
+            earthBoltTiers.put(bolt.getUniqueId(), tier);
+
+            final EarthBlockTier t = tier;
+            plugin.getServer().getScheduler().runTaskTimer(plugin, task -> {
+                if (!bolt.isValid()) { task.cancel(); return; }
+                bolt.getWorld().spawnParticle(Particle.BLOCK, bolt.getLocation(), 9,
+                    0.12, 0.12, 0.12, t.material.createBlockData());
+                bolt.getWorld().spawnParticle(Particle.SMOKE, bolt.getLocation(), 2,
+                    0.06, 0.06, 0.06, 0.005);
+            }, 0L, 1L);
+
+            player.getWorld().playSound(player.getLocation(), Sound.BLOCK_GRAVEL_PLACE, 1.2f, 0.6f);
+            player.sendActionBar("§2[Earth] §7Threw " + tier.displayName + "§7! §8(Lv§a" + magicLevel + "§8)");
+            return;
+        }
+
+        // ── ORIGINAL SYSTEM (Level 1-9): simple dirt bolt ────────────────────
         Snowball bolt = player.launchProjectile(Snowball.class);
         bolt.setItem(new ItemStack(Material.DIRT));
         bolt.setVelocity(player.getLocation().getDirection().multiply(2.2));
@@ -294,6 +336,7 @@ public class MagicStaffListener implements Listener {
         trackedProjectiles.put(bolt.getUniqueId(), MagicElement.EARTH);
         projectileShooters.put(bolt.getUniqueId(), player.getUniqueId());
         projectileLevels.put(bolt.getUniqueId(), magicLevel);
+        // No earthBoltTier entry → handleEarthHit uses old 2-hit system
 
         plugin.getServer().getScheduler().runTaskTimer(plugin, task -> {
             if (!bolt.isValid()) { task.cancel(); return; }
@@ -306,7 +349,38 @@ public class MagicStaffListener implements Listener {
         }, 0L, 1L);
 
         player.getWorld().playSound(player.getLocation(), Sound.BLOCK_GRAVEL_PLACE, 1.2f, 0.6f);
-        player.sendActionBar("§2[Earth] §7Earth bolt fired!");
+        player.sendActionBar("§2[Earth] §7Earth bolt fired! §8(Reach §aMagic Lv 10§8 for block throwing)");
+    }
+
+    /** Returns the highest tier block the player can throw right now, or null. */
+    private EarthBlockTier findBestEarthTier(Player player, int magicLevel) {
+        EarthBlockTier best = null;
+        for (EarthBlockTier tier : EarthBlockTier.values()) {
+            if (magicLevel < tier.levelRequired) continue;
+            if (!playerHasBlock(player, tier.material)) continue;
+            if (!itemFactory.hasEarthPage(player, tier)) continue;
+            best = tier; // keep overwriting → highest valid tier wins
+        }
+        return best;
+    }
+
+    /** True if the player has ≥1 of the given material in inventory. */
+    private boolean playerHasBlock(Player player, Material mat) {
+        for (ItemStack item : player.getInventory().getContents()) {
+            if (item != null && item.getType() == mat) return true;
+        }
+        return false;
+    }
+
+    /** Removes exactly 1 of the given material from the player's inventory. */
+    private void removeOneFromInventory(Player player, Material mat) {
+        for (ItemStack item : player.getInventory().getContents()) {
+            if (item != null && item.getType() == mat) {
+                if (item.getAmount() > 1) item.setAmount(item.getAmount() - 1);
+                else player.getInventory().remove(item);
+                return;
+            }
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -371,9 +445,10 @@ public class MagicStaffListener implements Listener {
         target.setMetadata(META_STAFF_HIT, new FixedMetadataValue(plugin,
             shooterId != null ? shooterId.toString() : ""));
 
+        EarthBlockTier earthTier = earthBoltTiers.remove(projId);
         if      (element == MagicElement.FIRE)  handleFireHit(target, shooter, lvl);
         else if (element == MagicElement.WATER) handleWaterHit(target, shooter, lvl);
-        else if (element == MagicElement.EARTH) handleEarthHit(target, shooter, lvl);
+        else if (element == MagicElement.EARTH) handleEarthHit(target, shooter, lvl, earthTier);
         else if (element == MagicElement.AIR)   handleAirHit(target, shooter, lvl);
 
         if (shooter != null) awardMagicXp(shooter, MAGIC_XP_HIT);
@@ -861,38 +936,14 @@ public class MagicStaffListener implements Listener {
     //  handleEarthHit
     // ══════════════════════════════════════════════════════════════════════════
 
-    private void handleEarthHit(LivingEntity target, Player shooter, int lvl) {
+    private void handleEarthHit(LivingEntity target, Player shooter, int lvl, EarthBlockTier tier) {
+        // Particles matching the thrown block type
+        Material particleMat = (tier != null) ? tier.material : Material.DIRT;
         target.getWorld().spawnParticle(Particle.BLOCK,
             target.getLocation().add(0, 1, 0), 30, 0.3, 0.3, 0.3,
-            Material.DIRT.createBlockData());
+            particleMat.createBlockData());
 
-        // Place magic dirt at target's feet (tracked for fire combo)
-        Block feetBlock = target.getLocation().getBlock();
-        if (feetBlock.getType().isAir()) {
-            feetBlock.setType(Material.DIRT);
-            magicDirtBlocks.add(feetBlock.getLocation().toBlockLocation());
-            final Block fb = feetBlock;
-            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-                if (fb.getType() == Material.DIRT) fb.setType(Material.AIR);
-                magicDirtBlocks.remove(fb.getLocation().toBlockLocation());
-            }, 100L);
-        }
-
-        // Track earth hits; 2nd hit -> suffocate
-        int hits = 1;
-        if (target.hasMetadata(META_EARTH_HITS)) {
-            hits = (int) target.getMetadata(META_EARTH_HITS).get(0).value() + 1;
-        }
-        if (hits >= 2) {
-            target.removeMetadata(META_EARTH_HITS, plugin);
-            suffocateTarget(target, shooter, lvl);
-            if (shooter != null) awardMagicXp(shooter, MAGIC_XP_COMBO);
-            return;
-        }
-        target.setMetadata(META_EARTH_HITS, new FixedMetadataValue(plugin, hits));
-        plugin.getServer().getScheduler().runTaskLater(plugin, () ->
-            target.removeMetadata(META_EARTH_HITS, plugin), 200L);
-
+        // ── Element combos always take priority ───────────────────────────────
         // BLAZING + EARTH = SMOTHERED
         if (isBlazing(target)) {
             removeBlazing(target);
@@ -967,15 +1018,95 @@ public class MagicStaffListener implements Listener {
             return;
         }
 
+        // ── TIER SYSTEM (Level 10+): trap + suffocate ─────────────────────────
+        if (tier != null) {
+            // Place the thrown block at target's feet (also tracked for fire→lava combo)
+            Block feetBlock = target.getLocation().getBlock();
+            if (feetBlock.getType().isAir()) {
+                feetBlock.setType(tier.material);
+                magicDirtBlocks.add(feetBlock.getLocation().toBlockLocation());
+                final Block fb = feetBlock;
+                final EarthBlockTier t = tier;
+                plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                    if (fb.getType() == t.material) fb.setType(Material.AIR);
+                    magicDirtBlocks.remove(fb.getLocation().toBlockLocation());
+                    activeTraps.remove(target.getUniqueId());
+                    target.removeMetadata(META_EARTH_TRAPPED, plugin);
+                }, 100L); // 5s trap window
+            }
+
+            // 2nd hit while TRAPPED → SUFFOCATE
+            if (target.hasMetadata(META_EARTH_TRAPPED)) {
+                EarthBlockTier trapTier = activeTraps.getOrDefault(target.getUniqueId(), tier);
+                target.removeMetadata(META_EARTH_TRAPPED, plugin);
+                activeTraps.remove(target.getUniqueId());
+
+                target.damage(trapTier.suffocateDamage, shooter);
+                suffocateTarget(target, shooter, lvl);
+
+                int hearts = (int)(trapTier.suffocateDamage / 2);
+                if (shooter != null)
+                    shooter.sendActionBar("§2§f§lSUFFOCATED! §7" + trapTier.displayName +
+                            " §7crushed them! §8(§c-" + hearts + "❤§8)");
+                if (target instanceof Player tp)
+                    tp.sendTitle("§2§lSUFFOCATED", "§7Crushed by " + trapTier.displayName, 3, 40, 10);
+                if (shooter != null) awardMagicXp(shooter, MAGIC_XP_COMBO);
+                rollMindBomb(target, shooter);
+                return;
+            }
+
+            // 1st hit: TRAP
+            target.damage(tier.trapDamage, shooter);
+            target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 80, 2, false, true, true));
+            activeTraps.put(target.getUniqueId(), tier);
+            target.setMetadata(META_EARTH_TRAPPED, new FixedMetadataValue(plugin, System.currentTimeMillis() + 5000L));
+
+            int trapHearts = (int)(tier.trapDamage / 2);
+            if (shooter != null)
+                shooter.sendActionBar("§2§7" + tier.displayName + " §7trapped them! §8(§c-" + trapHearts +
+                        "❤§8 — hit again to §f§lSUFFOCATE§8!)");
+            if (target instanceof Player tp)
+                tp.sendActionBar("§2§7TRAPPED by " + tier.displayName + "§7! §8(Hit again = SUFFOCATE)");
+            if (shooter != null) awardMagicXp(shooter, MAGIC_XP_HIT);
+            rollMindBomb(target, shooter);
+            return;
+        }
+
+        // ── ORIGINAL SYSTEM (Level 1-9): 2-hit suffocate ─────────────────────
+        Block feetBlock = target.getLocation().getBlock();
+        if (feetBlock.getType().isAir()) {
+            feetBlock.setType(Material.DIRT);
+            magicDirtBlocks.add(feetBlock.getLocation().toBlockLocation());
+            final Block fb = feetBlock;
+            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                if (fb.getType() == Material.DIRT) fb.setType(Material.AIR);
+                magicDirtBlocks.remove(fb.getLocation().toBlockLocation());
+            }, 100L);
+        }
+
+        int hits = 1;
+        if (target.hasMetadata(META_EARTH_HITS)) {
+            hits = (int) target.getMetadata(META_EARTH_HITS).get(0).value() + 1;
+        }
+        if (hits >= 2) {
+            target.removeMetadata(META_EARTH_HITS, plugin);
+            suffocateTarget(target, shooter, lvl);
+            if (shooter != null) awardMagicXp(shooter, MAGIC_XP_COMBO);
+            return;
+        }
+        target.setMetadata(META_EARTH_HITS, new FixedMetadataValue(plugin, hits));
+        plugin.getServer().getScheduler().runTaskLater(plugin, () ->
+            target.removeMetadata(META_EARTH_HITS, plugin), 200L);
+
         // Normal earth hit
         double dmg = 2.0 + SkillBonusManager.magicDamageBonus(lvl) * 2;
         target.damage(dmg, shooter);
         target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 40, 0, false, true, true));
         if (shooter != null) {
             if (itemFactory.hasSpellComboBook(shooter)) {
-                shooter.sendActionBar("§2§7Earth hit! §8(" + (dmg/2) + " hearts) - hit wet target to make Muddy");
+                shooter.sendActionBar("§2§7Earth hit! §8(" + (dmg/2) + "❤) - hit §bWet§8 target to make §6Muddy");
             } else {
-                shooter.sendActionBar("§2§7Earth hit! §8(" + (dmg/2) + " hearts)");
+                shooter.sendActionBar("§2§7Earth hit! §8(" + (dmg/2) + "❤)");
             }
         }
         rollMindBomb(target, shooter);

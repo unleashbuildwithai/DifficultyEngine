@@ -133,7 +133,6 @@ public class CapeVisualTask extends BukkitRunnable {
             stand.setGravity(false);
             stand.setCanPickupItems(false);
             stand.setPersistent(false);        // won't save to world file
-            stand.setCustomNameVisible(true);
             stand.setMarker(true);             // no hitbox → no health bar popup
             stand.setBasePlate(false);
             stand.setArms(false);
@@ -141,8 +140,16 @@ public class CapeVisualTask extends BukkitRunnable {
             holograms.put(player.getUniqueId(), stand);
         }
 
-        // Update name and follow the player
-        stand.setCustomName(capeSymbolText(cape));
+        // ── Fix: hide the label when looking steeply down (prevents double-cape) ─
+        float pitch = player.getLocation().getPitch();
+        if (pitch > 55f) {
+            // Player is looking down — hide name to prevent it appearing in view
+            stand.setCustomNameVisible(false);
+            stand.setCustomName(null);
+        } else {
+            stand.setCustomNameVisible(true);
+            stand.setCustomName(capeSymbolText(cape));
+        }
 
         // Only teleport if moved more than ~0.3 blocks — reduces teleport spam
         Location sl = stand.getLocation();
@@ -280,6 +287,9 @@ public class CapeVisualTask extends BukkitRunnable {
         fish.setGravity(false);  // air-swim — no falling
         fish.setPersistent(false);
         fish.setInvulnerable(true);
+        fish.setSilent(true);
+        fish.setCustomNameVisible(false);     // hide name tag
+        fish.setCollidable(false);            // players walk through fish
         fish.addScoreboardTag(FISH_TAG);
 
         // Random tropical-fish appearance
@@ -315,6 +325,9 @@ public class CapeVisualTask extends BukkitRunnable {
         axolotl.setPersistent(false);
         axolotl.setInvulnerable(true);
         axolotl.setAdult();
+        axolotl.setSilent(true);
+        axolotl.setCustomNameVisible(false);  // hide name tag
+        axolotl.setCollidable(false);         // players walk through axolotl
         axolotl.addScoreboardTag(FISH_TAG);
 
         // Random colour variant

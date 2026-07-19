@@ -4,55 +4,44 @@ A **Paper 1.21** plugin that transforms vanilla Minecraft into a deep RPG experi
 
 ---
 
-## 🆕 Latest Update — Build `a7abf1a` (Rebuild & Restart Required)
+## 🆕 Latest Update — Build `July 2026` (Restart Required)
 
-> **Server admin:** Rebuild the JAR (`mvn clean package`) and replace your old `DifficultyEngine.jar` in `plugins/` before restarting.
+> **Server admin:** Replace `DifficultyEngine.jar` in `plugins/` and restart.
 
 ### What's New This Session
 
-#### 🪣 Rune Dust System — Full Overhaul
-- **Magic Cauldron crafting** — place a Cauldron + element ingredients in the crafting table:
-  - 🔥 `Cauldron + Lava Bucket + 4× Netherrack` → **16 Fire Rune Dust**
-  - 💧 `Cauldron + 2× Water Bucket + 4× Prismarine Shard` → **16 Water Rune Dust**
-  - 🌿 `Cauldron + Water Bucket + 4× Dirt` → **16 Earth Rune Dust**
-  - 💨 `Cauldron + Pufferfish + Water Bucket` → **16 Air Rune Dust**
-  - **Add 1 Diamond** to any of the above → **80 dust (5× bonus!)**
-- **Expanded mob loot tables** — harder mobs now drop significantly more Rune Dust:
-  - Wither → **20–30** 🔥 (guaranteed)
-  - Elder Guardian → **15–25** 💧 (guaranteed)
-  - Warden → **25–35** 🌿 (guaranteed)
-  - Evoker → **5–10** 💨 at 70%
-  - Breeze → **4–8** 💨 at 60%
-  - Magma Cubes now scale by size (large drops more than small)
+#### 🌿 Earth Block Throwing System (NEW!)
+- Earth magic completely reworked at **Magic Level 10+**
+- Carry a **throwable block** + matching **Earth Magic Page** in your inventory
+- **1st hit → TRAP**: Block placed under target's feet + trap damage + Slowness III
+- **2nd hit while trapped → SUFFOCATE**: Blocks over head + heavy damage
+- **8 block tiers** — higher tier = more damage:
+  | Block | Magic Lv | Trap Damage | Suffocate Damage |
+  |-------|----------|------------|-----------------|
+  | Dirt | 10 | 2 ❤ | 4 ❤ |
+  | Cobblestone | 15 | 3 ❤ | 6 ❤ |
+  | Stone | 25 | 5 ❤ | 8 ❤ |
+  | Iron Block | 30 | 7 ❤ | 11 ❤ |
+  | Gold Block | 50 | 9 ❤ | 14 ❤ |
+  | Obsidian | 60 | 12 ❤ | 18 ❤ |
+  | Nether Bricks | 75 | 15 ❤ | 22 ❤ |
+  | Ancient Debris | 90 | 18 ❤ | 27 ❤ |
+- Earth Magic Pages available in `/registry` (page 2) — one per block tier
+- All existing Earth combos (WET→MUDDY, BLAZING→SMOTHERED, etc.) still work and take priority
+- Block is consumed from inventory on each throw — real resource cost!
+- Level 1–9: old dirt bolt system still works as before
 
-#### 💨 Air Spell — No More Aimbot
-- Air staff now fires a **visible bolt in your crosshair direction** like Fire/Water/Earth.
-  All combo logic (Frozen death, Inferno Blast, etc.) still works — you just aim it yourself now.
+#### 📚 Book Fixes & Color Improvements
+- All yellow and white text removed from books and item lore — much easier to read
+- All books have been rewritten and reformatted — should work correctly now
+- Added "Earth Block Throwing" tutorial page to the Novice Magic Guide
+- Unicorn Slippers lore cleaned up
 
-#### 🎭 Cape Wardrobe — Dual Slot
-- **Wear armour AND a cape at the same time!** The `/cape` GUI now has two independent slots.
-- Cape is stored separately from the chestplate slot — no more conflicts.
-
-#### ✨ Spell × Block Interactions
-- Fire bolt → Water block = **evaporates** (steam cloud)
-- Earth bolt → Water block = **Quicksand** (Soul Sand, slows movement)
-- Air bolt → Quicksand = **SANDSTORM** (200-block radius, 15-min cap, dehydration BossBar)
-- Earth × 2 hits on same target = **SUFFOCATE** (buried in dirt for 5s)
-- Fire bolt → Slime = **Fire Slime** (sets players on fire on contact)
-- Water bolt → Slime = **15% chance** to split the slime
-
-#### ☁ Sandstorm
-- Triggered by Air bolt on Earth-created Quicksand (read the Spell Books!)
-- 200-block radius, sandy particles every 5 ticks, 0.5♥ damage/2s
-- **Hydration BossBar** (8 levels) — drain 1/2s in storm, drink Water Bottle to refill
-- First cast = 15s. Each re-cast **doubles** duration, capped at **15 minutes**
-
-#### 🐠 Fishing Cape Visual
-- Tropical Fish now **physically spawn and flop out** of the cape every 2 seconds
-- Axolotl cameo floats out every 6 seconds
-- Massively increased water particle counts
-
----
+#### 🎣 Fishing Cape Improvements
+- Fish and axolotl no longer show health bars or floating names above them
+- Fish/axolotl are now **passthrough** — you and mobs can walk right through them
+- Fixed **double-cape rendering** when looking steeply downward
+- Cape animals are silent (no splashing sounds)
 
 ---
 
@@ -65,17 +54,19 @@ A **Paper 1.21** plugin that transforms vanilla Minecraft into a deep RPG experi
    - [Getting Started with Magic](#getting-started-with-magic)
    - [Elemental Staffs](#elemental-staffs)
    - [Runes — What They Are and How to Get Them](#runes--what-they-are-and-how-to-get-them)
+   - [Earth Block Throwing System](#-earth-block-throwing-system)
    - [Why Magic Level Matters](#why-magic-level-matters)
    - [Spell Books & Pages — The Advanced Combo System](#spell-books--pages--the-advanced-combo-system)
    - [Full Combo Table](#full-combo-table)
-   - [New Element × Block Interactions](#new-element--block-interactions)
    - [Sandstorm System](#sandstorm-system)
-5. [Cape Wardrobe](#-cape-wardrobe)
-6. [Gold Currency](#-gold-currency)
-7. [Quest System](#-quest-system)
-8. [Party System](#-party-system)
-9. [Commands Reference](#-commands-reference)
-10. [Admin Commands](#-admin-commands)
+5. [Mage Gear](#-mage-gear)
+6. [Cape Wardrobe](#-cape-wardrobe)
+7. [Gold Currency](#-gold-currency)
+8. [VIP Shop](#-vip-shop)
+9. [Quest System](#-quest-system)
+10. [Party System](#-party-system)
+11. [Commands Reference](#-commands-reference--player)
+12. [Admin Commands](#-admin-commands)
 
 ---
 
@@ -134,28 +125,30 @@ The magic system is the most deep and rewarding part of DifficultyEngine. It rew
 
 ### Getting Started with Magic
 
-1. **Craft an Elemental Staff** at any crafting table:
-   - `Enchanted Shard` (Amethyst Shard with magic PDC) + `Element Ingredient` + `Stick`
-   - See the recipe book (green book in crafting table) for exact ingredients.
+1. **Get an Enchanted Shard** — drops ~5% from any hostile mob (it's a special Amethyst Shard with a magic tag).
 
-2. **Craft or find Runes** for your staff element.
+2. **Craft an Elemental Staff** at any crafting table:
+   - `Enchanted Shard` + `Element Ingredient` + `Stick`
+   - Search the recipe book (green book icon in crafting table) for the exact recipe.
+
+3. **Craft Runes** for your staff element:
+   - `4× base material → 8 runes` (see recipe book, search "rune")
    - Runes are consumed one per cast.
-   - `4× base material → 8 runes` (see recipe book).
 
-3. **Hold the staff** and **right-click** to cast. The bolt travels in the direction you are **looking** — aim with your crosshair.
+4. **Hold the staff** and **right-click** to cast. The bolt travels in the direction you are **looking** — aim with your crosshair.
 
-4. **Gain Magic XP** from casting, hitting targets, and triggering combos.
+5. **Gain Magic XP** from casting, hitting targets, and triggering combos.
 
 ---
 
 ### Elemental Staffs
 
-| Element | Staff Ingredient | Rune Ingredient | Bolt Effect |
+| Element | Shard + Ingredient + Stick | Rune from | Bolt Effect |
 |---|---|---|---|
-| 🔥 **Fire** | Blaze Rod | 4× Blaze Powder | Firebomb — SCORCHED (3s) |
-| 💧 **Water** | Prismarine Shard | 4× Clay Ball | Water bolt — WET (5-10s) |
-| 🌿 **Earth** | Dirt | 4× Sand | Earth bolt — slow + dirt block |
-| 💨 **Air** | Feather | 4× String | Air bolt — massive knockback |
+| 🔥 **Fire** | Enchanted Shard + Blaze Rod + Stick | 4× Blaze Powder → 8 runes | Fireball → SCORCHED |
+| 💧 **Water** | Enchanted Shard + Prismarine Shard + Stick | 4× Clay Ball → 8 runes | Water bolt → WET |
+| 🌿 **Earth** | Enchanted Shard + Dirt + Stick | 4× Sand → 8 runes | Block bolt → TRAP (Lv10+) |
+| 💨 **Air** | Enchanted Shard + Feather + Stick | 4× String → 8 runes | Air bolt → Knockback |
 
 ---
 
@@ -167,7 +160,7 @@ The magic system is the most deep and rewarding part of DifficultyEngine. It rew
 4× Rune Dust → 8 Runes   (at any crafting table)
 ```
 
-Keep a stack of Rune Dust in your inventory as a reserve. One stack of 64 dust = 128 runes = 128 casts!
+One stack of 64 dust = 128 runes = 128 casts!
 
 **No rune = no cast.** You'll see a message in your action bar telling you what to craft.
 
@@ -185,7 +178,7 @@ Keep a stack of Rune Dust in your inventory as a reserve. One stack of 64 dust =
 | Wither Skeleton | 25% | 1–3 |
 | Piglin Brute | 20% | 2–4 |
 | Strider | 10% | 1 |
-| **Wither** | **100%** | **20–30 🔥** |
+| **Wither (Boss)** | **100%** | **20–30 🔥** |
 
 ---
 
@@ -198,7 +191,7 @@ Keep a stack of Rune Dust in your inventory as a reserve. One stack of 64 dust =
 | Squid | 8% | 1 |
 | Glow Squid | 15% | 1–2 |
 | Axolotl | 10% | 1 |
-| **Elder Guardian** | **100%** | **15–25 💧** |
+| **Elder Guardian (Boss)** | **100%** | **15–25 💧** |
 
 ---
 
@@ -215,7 +208,7 @@ Keep a stack of Rune Dust in your inventory as a reserve. One stack of 64 dust =
 | Pillager | 25% | 1–2 |
 | Vindicator | 25% | 2–4 |
 | Ravager | 65% | 6–12 |
-| **Warden** | **100%** | **25–35 🌿** |
+| **Warden (Boss)** | **100%** | **25–35 🌿** |
 
 ---
 
@@ -235,7 +228,7 @@ Keep a stack of Rune Dust in your inventory as a reserve. One stack of 64 dust =
 
 Use a **Cauldron** as an ingredient at the crafting table to brew large batches of Rune Dust.
 
-> ⚗️ The Cauldron acts as your "magic cauldron" — place it in the crafting grid along with the specific element ingredients. The cauldron is consumed in the process.
+> ⚗️ The Cauldron is consumed in the process. Use it as a crafting ingredient alongside the element materials.
 
 #### Basic Recipe (no diamond) → **16 Rune Dust**
 
@@ -250,21 +243,43 @@ Use a **Cauldron** as an ingredient at the crafting table to brew large batches 
 
 Same as basic, but add `1× Diamond` to the crafting grid.
 
-> 💡 **Math tip:** 80 Rune Dust → 160 Runes → 160 casts! Diamonds are valuable, but this is worth it for serious mages.
->
-> 💡 **Note:** When using a Lava or Water Bucket in a recipe, you get back the Empty Bucket automatically. You only lose the contents (lava/water), not the bucket itself.
+> 💡 80 Rune Dust → 160 Runes → 160 casts!
+> 💡 Water/Lava Buckets return as empty buckets — you only lose the contents.
 
 ---
 
-### Rune Dust → Runes Conversion
+### 🌿 Earth Block Throwing System
 
-Once you have Rune Dust, convert it at any crafting table:
+At **Magic Level 10+**, the Earth staff transforms into a **block-throwing weapon**.
 
-```
-4× [Element] Rune Dust → 8× [Element] Runes
-```
+**Requirements to use:**
+1. Magic Level ≥ the block tier's minimum
+2. The matching block in your inventory (1 consumed per throw)
+3. The matching **Earth Magic Page** in your inventory (permanent, not consumed)
 
-This is the vanilla shapeless recipe — visible in the **recipe book** (green book in crafting table). Search for "rune".
+**How it works:**
+- **1st earth hit on a player** → Block placed under their feet (TRAP) + trap damage + Slowness III
+- **2nd earth hit while they're trapped** → Blocks placed over their head (SUFFOCATE) + heavy damage
+
+**Earth Magic Pages** are found in `/registry` (page 2). Each page unlocks a specific block tier.
+
+**Block Tier Table:**
+| Block | Magic Level Needed | Trap Damage | Suffocate Damage |
+|---|---|---|---|
+| 🟫 Dirt | Lv 10 | 2 ❤ | 4 ❤ |
+| 🪨 Cobblestone | Lv 15 | 3 ❤ | 6 ❤ |
+| ⬜ Stone | Lv 25 | 5 ❤ | 8 ❤ |
+| ⚙️ Iron Block | Lv 30 | 7 ❤ | 11 ❤ |
+| 🟡 Gold Block | Lv 50 | 9 ❤ | 14 ❤ |
+| 🌑 Obsidian | Lv 60 | 12 ❤ | 18 ❤ |
+| 🔴 Nether Bricks | Lv 75 | 15 ❤ | 22 ❤ |
+| 🟤 Ancient Debris | Lv 90 | 18 ❤ | 27 ❤ |
+
+**Important notes:**
+- Without the Earth Magic Page in your **inventory** (not in a chest), the block won't throw
+- The plugin always uses the **highest valid tier** available in your inventory
+- Earth combos (WET→MUDDY, BLAZING→SMOTHERED, STATUE→CRUMBLE) still activate first before the trap system
+- Below Level 10: old dirt bolt (slowness only) still works
 
 ---
 
@@ -272,16 +287,13 @@ This is the vanilla shapeless recipe — visible in the **recipe book** (green b
 
 > **Higher Magic level = faster casting = more powerful combos.**
 
-This is the single most important reason to grind Magic. The cooldown formula is:
-
+Cooldown formula:
 ```
-Cooldown = 3000ms − (level ÷ 99 × 2000ms) − (mage gear pieces × 250ms)
+Cooldown = 3000ms − (level ÷ 99 × 2000ms) − (mage gear bonus)
 Minimum cooldown: 500ms
 ```
 
-In plain numbers:
-
-| Magic Level | Base Cooldown | With Full Mage Gear (4 pieces) |
+| Magic Level | Base Cooldown | With Full Mage Set (4 pieces) |
 |---|---|---|
 | Lv 1 | 3.0 seconds | 2.0 seconds |
 | Lv 20 | 2.6 seconds | 1.6 seconds |
@@ -290,139 +302,94 @@ In plain numbers:
 | **Lv 99** | **1.0 second** | **0.5 seconds ← minimum!** |
 
 **Why this matters for combos:**
-
-Elemental combos work because status effects expire. For example:
 - **SCORCHED** lasts only **3 seconds** — you need to cast Fire again within 3s to trigger **BLAZING**.
 - **CHILLED** lasts only **2.5 seconds** — you need to cast Air within 2.5s to trigger **FROZEN**.
 
-At low Magic levels you physically **cannot chain these combos** because your cooldown is longer than the status window. At Level 99 with Mage Gear you are firing every **0.5 seconds** — well within every combo window.
-
-**Mage Gear** is craftable leather armour (LEATHER_PIECE + PURPLE_DYE + BLAZE_POWDER) that reduces your cooldown by 250ms per piece worn.
+At low levels you physically **cannot chain these combos** because your cooldown is longer than the status window. At Level 99 with Mage Gear you fire every **0.5 seconds** — well within every combo window.
 
 ---
 
 ### Spell Books & Pages — The Advanced Combo System
 
-> Spell Books teach you the **advanced block-interaction combos** that are too powerful to know by default. Find the pages by exploring and fighting.
-
-#### The Arcane Tome
-
-Use `/spellbook` to open your personal **Arcane Tome**. It shows all the spell pages you have unlocked so far (out of 37 total). Each unlocked page reveals one advanced spell combo in readable book form.
-
-At first your tome is empty — you know nothing beyond the basic 4 elements. As you find pages and unlock them, your tome fills with powerful knowledge.
-
-#### Spell Pages
+Use `/spellbook` to open your personal **Arcane Tome**. It shows all spell pages you've unlocked (out of 37 total).
 
 **How to get Spell Pages:**
-- Mobs have a **4% drop chance** for a Spell Page when killed.
-- Admins can give pages with `/spellpage [player]`.
-- Pages may also be found in chests (server-dependent loot).
-- Trading with other players (use `/trade`).
+- Mobs have a **4% drop chance** when killed
+- Admins can give pages with `/spellpage [player]`
+- Trade with other players using `/trade`
 
-**How to use a Spell Page:**
-1. Get a Spell Page item (looks like a written book).
-2. **Right-click** it.
-3. A random unlocked combo is revealed in your Arcane Tome.
-4. The page is consumed.
-
-**How many pages are there?**
-There are **37 total pages** covering all the advanced combos. `/spellbook` shows your count as `X / 37 pages unlocked`.
-
-#### What Do Pages Unlock?
-
-Pages unlock knowledge of **advanced block-interaction combos** including:
-- **Fire evaporates Water blocks** (fire bolt → placed water = steam burst)
-- **Earth on Water = Quicksand** (earth bolt → water block = soul sand that slows enemies)
-- **Air on Quicksand = Sandstorm** (the most powerful environmental combo — see below)
-- **Earth × Earth suffocation** (2 earth bolts on same target within 10s = buried alive)
-- **Higher-level elemental chains** that aren't active until learned
-
-> Think of pages like the OSRS Quest unlock system — you learn the recipe by reading it. Until you've read the page, you won't know the combo even exists.
+**How to use:**
+1. Get a Spell Page item (looks like a written book)
+2. **Right-click** it to consume and unlock a random combo in your tome
+3. Type `/spellbook` to read your unlocked combos
 
 ---
 
 ### Full Combo Table
 
-**Status effects on entities:**
-
-| Combo | Trigger | Result |
+| First Hit Status | Second Element | Result |
 |---|---|---|
-| Fire → dry | Normal hit | **SCORCHED** (3s window) |
-| Fire → SCORCHED | Hit scorched target | **BLAZING** (5s, intense burn) |
-| Fire → WET | Hit wet target | Extinguish (fire cancelled, steam) |
-| Fire → MUDDY | Hit muddy target | **STATUE** (8s, total immobile) |
-| Fire → CHILLED | Hit chilled target | Thaw (steam burst, small damage) |
-| Fire → FROZEN | Hit frozen target | Thaw Explosion (huge AoE damage) |
-| Water → dry | Normal hit | **WET** (5-10s) |
-| Water → SCORCHED | Hit scorched target | Steam Burst (bonus damage) |
-| Water → BLAZING | Hit blazing target | **STEAM EXPLOSION** (AoE knockback + damage) |
-| Earth → dry | Normal hit | Slowness (brief) + **dirt block at feet** |
-| Earth × 2 | 2nd earth hit within 10s | **SUFFOCATE** (buried in dirt 5s, Slowness 255) |
-| Earth → WET | Hit wet target | **MUDDY** (15-30s, Slowness IV) |
-| Earth → CHILLED | Hit chilled target | Cracked Ice (Blindness + heavy Slow + damage) |
-| Earth → STATUE | Hit statue target | Crumble (bonus damage, removes statue early) |
-| Air → dry | Normal hit | Heavy knockback |
-| Air → WET | Hit wet target | **CHILLED** (2.5s — *short window, act fast!*) |
-| Air → CHILLED | Hit chilled target | **FROZEN** (5s — Air = instant death!) |
-| Air → FROZEN | Hit frozen target | 💀 **INSTANT DEATH** (shattered) |
-| Air → STATUE | Hit statue target | 💀 **INSTANT DEATH** (crumbled) |
-| Air → MUDDY | Hit muddy target | **MUD LAUNCH** (massive upward catapult) |
-| Air → BLAZING | Hit blazing target | **INFERNO BLAST** (fire + huge knockback) |
-| Air → SCORCHED | Hit scorched target | **FANNED FLAMES** (extended fire) |
+| Normal | 🔥 Fire | **SCORCHED** (3s window) |
+| SCORCHED | 🔥 Fire | **BLAZING** (5s intense burn) |
+| WET | 🔥 Fire | Extinguish — fire cancelled, steam |
+| MUDDY | 🔥 Fire | **STATUE** (8s, total immobility) |
+| CHILLED | 🔥 Fire | Thaw (steam burst, small dmg) |
+| FROZEN | 🔥 Fire | **Thaw EXPLOSION** (AoE damage) |
+| Normal | 💧 Water | **WET** (5–10s) |
+| SCORCHED | 💧 Water | **Steam Burst** (bonus damage) |
+| BLAZING | 💧 Water | **STEAM EXPLOSION** (AoE knockback) |
+| FROZEN | 💧 Water | **SLUSH** (Slowness III + Blindness) |
+| MUDDY | 💧 Water | **FLOOD WASH** (mud cleared, WET again) |
+| Normal | 🌿 Earth | Slowness + dirt at feet |
+| TRAPPED | 🌿 Earth | **SUFFOCATE** (tier damage) |
+| WET | 🌿 Earth | **MUDDY** (15–30s, Slowness IV) |
+| CHILLED | 🌿 Earth | **CRACKED ICE** (Blindness + heavy slow) |
+| BLAZING | 🌿 Earth | **SMOTHERED** (extinguish + heavy dmg) |
+| STATUE | 🌿 Earth | **CRUMBLE** (bonus dmg, breaks statue) |
+| Normal | 💨 Air | Heavy knockback |
+| WET | 💨 Air | **CHILLED** (2.5s — act fast!) |
+| CHILLED | 💨 Air | **FROZEN** (5s — Air = instant death!) |
+| FROZEN | 💨 Air | 💀 **INSTANT DEATH** (shattered) |
+| STATUE | 💨 Air | 💀 **INSTANT DEATH** (crumbled) |
+| MUDDY | 💨 Air | **MUD LAUNCH** (massive upward catapult) |
+| BLAZING | 💨 Air | **INFERNO BLAST** (fire + huge knockback) |
+| SCORCHED | 💨 Air | **FANNED FLAMES** (extended fire) |
 
-**Mage Gear bonus (2+ pieces):**
-- 5% chance on any hit → **MIND BOMB** (Nausea + Blindness 5s)
-- 30% chance from Mind Bomb → **FALLEN** (crawl pose — press SPACE to get up)
-
----
-
-### New Element × Block Interactions
-
-These combos interact with **placed blocks in the world** rather than entities:
-
-| Combo | How | Result |
-|---|---|---|
-| Fire bolt → Water block | Shoot a water block | Block evaporates (steam particles, fire extinguish sound) |
-| Earth bolt → Water block | Shoot a water block | Block becomes **Quicksand** (Soul Sand) |
-| Air bolt → Quicksand block | Shoot the soul sand | Triggers **SANDSTORM** |
-| Earth bolt → any solid block | Shoots a wall/floor | Places a temp Dirt block on the hit face (auto-removes 30s) |
-
-> 💡 To create a water block to interact with, use the Water Staff: right-click a block with a Water Bucket in your inventory to place a 5-block water stream.
+**Mage Gear bonus (wear 2+ pieces):**
+- 5% chance on any combo hit → **MIND BOMB** (Nausea + Blindness 5s)
+- 30% chance from Mind Bomb → **FALLEN** (crawl — press SPACE to get up)
 
 ---
 
 ### Sandstorm System
 
-The **most powerful environmental spell** in the game. Chain: Water Staff → Earth bolt → Air bolt to unleash it.
+**Chain:** Water Staff → Earth bolt → Air bolt to unleash it.
 
-**How to trigger:**
-1. Use **Water Staff** (right-click a block with a Water Bucket) to place water.
-2. Shoot it with an **Earth bolt** → water becomes Quicksand (Soul Sand).
-3. Shoot the quicksand with an **Air bolt** → **SANDSTORM TRIGGERED!**
+1. Use **Water Staff** (right-click a block with Water Bucket) to place water
+2. Shoot water with **Earth bolt** → becomes Quicksand (Soul Sand)
+3. Shoot quicksand with **Air bolt** → **SANDSTORM!**
 
-**What it does:**
-- Covers a **200-block radius** around the quicksand block.
-- Fills the area with swirling **sandy particles** (sand, gravel, soul sand BLOCK particles) every 5 ticks.
-- Deals **0.5 ♥ damage every 2 seconds** to every player inside the radius.
-- All players in the storm see a **💧 Hydration BossBar** (8 levels).
+- 200-block radius, sandy particles every 5 ticks
+- 0.5 ♥ damage every 2 seconds inside the storm
+- **💧 Hydration BossBar** — drains in storm, drink Water Bottle to refill
+- Each re-cast **doubles** duration, capped at 15 minutes
 
-**Dehydration:**
-- Inside the storm, your Hydration drains **1 level every 2 seconds**.
-- At 0 Hydration: **Weakness I** effect applies.
-- **Drink a Water Bottle** to instantly restore full hydration.
-- The bar hides when you leave the storm area.
+---
 
-**Duration rules:**
-| Cast | Duration |
-|---|---|
-| First trigger | 15 seconds |
-| Cast again on same storm | Doubles (30s) |
-| Cast again | Doubles (1 min) |
-| Cast again | Doubles (2 min) |
-| … | … |
-| Cap | **15 minutes maximum** |
+## 🛡 Mage Gear
 
-Re-casting after the storm expires starts it fresh at 15 seconds.
+Craftable leather armour that reduces spell cooldown and boosts air power.
+
+| Tier | Magic Level | Cooldown/piece | Craft Ingredients |
+|---|---|---|---|
+| Apprentice | Lv 1 | −100ms | Leather piece + Purple Dye + String |
+| Mage | Lv 30 | −250ms | Leather piece + Purple Dye + Blaze Powder |
+| Alch Mage | Lv 60 | −350ms | Leather piece + Blue Dye + Blaze Powder + Eye of Ender |
+| Master Mage | Lv 90 | −500ms | Leather piece + Black Dye + Blaze Powder + Enchanted Shard + Dragon Breath |
+
+- Full 4-piece Master set: **−2000ms cooldown** (brings Lv99 cooldown to 500ms minimum)
+- Each piece also boosts Air gust power (full Master = 2× Air knockback)
+- Requires the matching Magic level to equip
 
 ---
 
@@ -430,16 +397,7 @@ Re-casting after the storm expires starts it fresh at 15 seconds.
 
 Use `/mycape` or `/cape` to open the **Cape Wardrobe** GUI.
 
-The wardrobe has **two independent slots**:
-
-| Slot | What it does |
-|---|---|
-| **Left (Armour slot)** | Your chestplate armour — any chestplate, fully independent |
-| **Right (Cape slot)** | Your skill cape — stored separately, particles + hologram shown on your back |
-
-> ✨ You can now wear **both armour and a cape simultaneously**.
-
-**Capes require Level 99** in their skill:
+Two independent slots — **wear armour AND a cape at the same time!**
 
 | Cape | Requirement | Visual Effect |
 |---|---|---|
@@ -447,9 +405,9 @@ The wardrobe has **two independent slots**:
 | Ranged Cape | 99 Ranged | Green enchant sparks |
 | Defence Cape | 99 Defence | Blue-white End Rod particles |
 | Prayer Cape | 99 Prayer | Floating enchant letters |
-| Magic Cape | 99 Magic | **Rainbow cycling dust sparkles** |
+| Magic Cape | 99 Magic | Rainbow cycling dust sparkles |
 | Woodcutting Cape | 99 Woodcutting | Happy Villager particles |
-| Fishing Cape | 99 Fishing | Water cascade + **tropical fish** + **axolotl cameos**! |
+| Fishing Cape | 99 Fishing | Water cascade + tropical fish + axolotl |
 | Farming Cape | 99 Farming | Composter + Happy Villager particles |
 | Max Cape | 99 in ALL skills | Firework + End Rod bursts |
 | Boss Cape | Defeat a Double Boss event | Soul Fire Flame + Soul particles |
@@ -460,11 +418,23 @@ Capes are saved per-player and persist through restarts.
 
 ## 💰 Gold Currency
 
-A custom in-game currency separate from vanilla items.
+A custom in-game currency.
 
-- Mobs drop Gold based on their difficulty and type.
-- Check balance: `/gold`
-- Gold can be traded between players using the Trade Stone system (`/trade`).
+- Mobs drop Gold based on difficulty and type
+- Check your balance: `/gold`
+- Trade gold with players: `/trade`
+
+---
+
+## 🛍 VIP Shop
+
+The **VIP Shop Keeper** is a villager NPC selling cosmetic items for Gold.
+
+| Item | Price | What it does |
+|---|---|---|
+| 🦄 Unicorn Slippers | 5,000 gp | Creates a rainbow particle trail at your feet while worn |
+
+Admins spawn the VIP keeper with `/vipshop spawn`.
 
 ---
 
@@ -472,9 +442,9 @@ A custom in-game currency separate from vanilla items.
 
 Use `/questbook` to open the Quest Book.
 
-- Quests involve killing specific mobs, gathering items, or achieving milestones.
-- Rewards: Gold, XP, special items.
-- Multiple quest types with progression tracking.
+- Quests: kill mobs, gather items, achieve milestones
+- Rewards: Gold, XP, special items
+- Multiple quest types with progression tracking
 
 ---
 
@@ -486,38 +456,58 @@ Group up with friends to share difficulty bonuses and rewards.
 - `/party invite <player>` — invite someone
 - `/party join <player>` — accept an invitation
 - `/party leave` — leave your party
-- Party HUD shows in the sidebar scoreboard.
-- Group Nightmare bonus triggers when 4+ Nightmare players are within 50 blocks.
+- Party HUD shows in the sidebar scoreboard
+- Group Nightmare bonus triggers with 4+ Nightmare players within 50 blocks
 
 ---
 
-## 📖 Commands Reference
+## 📖 Commands Reference — Player
 
-| Command | Description |
+| Command | What it does |
 |---|---|
-| `/difficulty` | Change your difficulty level |
-| `/hpbar` | Toggle mob HP bars |
-| `/sit` | Sit down |
-| `/skills` | Open the Skill Tree GUI |
-| `/mystats` or `/stats` | View your skill levels and XP |
-| `/cape` or `/mycape` | Open the Cape Wardrobe |
-| `/gold` | Check your gold balance |
-| `/questbook` | Open the Quest Book |
-| `/party` | Party management |
-| `/trade` | Open a trade with a nearby player |
-| `/spellbook` | Read your Arcane Tome (unlocked spell combos) |
-| `/registry` | Open the Item Registry (all craftable items) |
+| `/difficulty` | Change your difficulty (Easy / Normal / Hard / Nightmare) |
+| `/hpbar` | Toggle mob HP bars on/off above their heads |
+| `/sit` | Toggle right-click-to-sit on stairs and slabs |
+| `/skills` | Open the Skills GUI — see all your levels and XP |
+| `/mystats` or `/stats` | Same as `/skills` |
+| `/cape` or `/mycape` | Open the Cape Wardrobe (wear armour + cape at the same time!) |
+| `/gold` | Check your gold coin balance |
+| `/questbook` | Open your Quest Journal |
+| `/party invite <player>` | Invite a player to your party |
+| `/party join <player>` | Join someone's party |
+| `/party leave` | Leave your current party |
+| `/party info` | See current party members |
+| `/trade <player>` | Open a trade window with a nearby player |
+| `/spellbook` | Read your Arcane Tome — shows all unlocked spell combos |
+| `/registry` | Open the Item Registry — browse all custom items |
 
 ---
 
 ## 🛡 Admin Commands
 
-| Command | Description |
+| Command | What it does |
 |---|---|
-| `/gear` | Spawn gear for testing |
-| `/curecosmetic` | Remove cosmetic effects from yourself |
-| `/adminlight` | Toggle admin lighting |
-| `/spellpage [player]` | Give a Spell Page to a player (or yourself) |
+| `/gear` | Give yourself max-enchanted netherite god gear (testing) |
+| `/curecosmetic` | Remove all cosmetic effects from yourself |
+| `/adminlight` | Toggle a personal light source that follows you |
+| `/spellpage [player]` | Give a Spell Page to yourself or another player |
+| `/vipshop spawn` | Spawn the VIP Shop Keeper villager at your location |
+| `/registry` | Browse and spawn any custom item (requires op) |
+
+---
+
+## 📦 Other Drops & Items
+
+| Item | How to get | What it does |
+|---|---|---|
+| Enchanted Shard | ~5% from any hostile mob | Crafting ingredient for staffs & Master Mage Gear |
+| Spell Page | 4% from any mob | Right-click to unlock a combo in your Arcane Tome |
+| Spell Combo Book | 8% from mobs killed by staff | Carry it for combo hints in action bar |
+| Ancient Kill Tome | Double Boss event reward | Reveals instant-death combo hints |
+| Earth Magic Page (×8) | `/registry` page 2 | Required to throw each block tier with Earth staff |
+| Unicorn Slippers | VIP Shop — 5,000 gp | Rainbow trail at your feet |
+| Soulfur Potion | Craftable | Causes Nausea + Drunken Sway |
+| Turbo Minecart | `/registry` (admin only) | 3× faster minecart |
 
 ---
 
@@ -531,14 +521,12 @@ mvn clean package
 
 The shaded JAR will be in `target/DifficultyEngine-1.0.jar`.
 
-The `seperate/` folder contains the **SeparatePlug** — a completely independent PvP spirit plugin. Build it separately:
+The `seperate/` folder contains the **SeparatePlug** — an independent PvP spirit plugin. Build separately:
 
 ```bash
 cd seperate
 mvn clean package
 ```
-
-Both JARs can run on the same server with zero conflicts.
 
 ---
 
