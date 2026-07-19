@@ -240,7 +240,7 @@ public class SkillLvlCommand implements CommandExecutor, TabCompleter {
             case "ranged", "range", "archery"                   -> SkillType.RANGED;
             case "defence", "defense", "def"                    -> SkillType.DEFENCE;
             case "prayer", "pray"                               -> SkillType.PRAYER;
-            case "magic", "mage", "mage"                        -> SkillType.MAGIC;
+            case "magic", "mage"                                -> SkillType.MAGIC;
             case "woodcutting", "wood", "wc"                    -> SkillType.WOODCUTTING;
             case "fishing", "fish"                              -> SkillType.FISHING;
             case "farming", "farm"                              -> SkillType.FARMING;

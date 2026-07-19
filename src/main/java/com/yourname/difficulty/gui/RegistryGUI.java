@@ -11,30 +11,49 @@ import org.bukkit.inventory.meta.ItemMeta;
 import java.util.List;
 
 /**
- * RegistryGUI — A 54-slot chest inventory that mirrors every registered item.
+ * RegistryGUI — 54-slot chest GUI with 8 categorised pages.
  *
- * Layout (54 slots, 6 rows):
- *   Rows 0–4 (slots 0–44): items for the current page (max 45 per page)
- *   Row 5   (slots 45–53): navigation bar
- *     slot 45 = Previous Page button  (hidden on page 1)
- *     slot 49 = Page indicator (book)
- *     slot 53 = Next Page button      (hidden on last page)
+ * Pages:
+ *   1 — Core Items        (Soulfur Potion, Turbo Minecart, Shard, Magic Bag)
+ *   2 — Staffs & Runes   (4 staffs, 4 runes, 4 rune dusts, combo book, tome)
+ *   3 — Mage Gear        (4 tiers × 4 pieces + Ancient Kill Tome)
+ *   4 — Melee Gear       (4 tiers × 4 pieces + GunZ Sword)
+ *   5 — Ranged Gear      (4 tiers × 4 pieces + Dark Bow + Dragon Arrows)
+ *   6 — Earth Magic      (8 Earth Magic Pages, one per tier)
+ *   7 — Magic Books      (Novice → Master lore books)
+ *   8 — Capes & Cosmetics (skill capes, Unicorn Slippers, Rainbow Axolotl)
  *
- * Clicking any item in rows 0–4 gives the player a copy of that item.
- * Page navigation is handled by {@link RegistryGUIListener}.
+ * Title format:
+ *   Page 1 → "§8✦ §6Item Registry §8✦"
+ *   Page N → "§8✦ §6Item Registry §8✦ §8[N]"
+ *
+ * Nav row (slot 45–53):
+ *   45 = Prev arrow (hidden on page 1)
+ *   49 = Page label
+ *   53 = Next arrow (hidden on last page)
  */
 public class RegistryGUI {
 
-    /** Items per content page (rows 0-4). */
-    public static final int ITEMS_PER_PAGE = 45;
+    public static final int    PAGE_COUNT     = 8;
+    public static final int    ITEMS_PER_PAGE = 45;
+    private static final int   SIZE           = 54;
+    private static final int   SLOT_PREV      = 45;
+    private static final int   SLOT_LABEL     = 49;
+    private static final int   SLOT_NEXT      = 53;
 
-    public static final String TITLE_P1 = "§8✦ §6Item Registry §8✦";
-    public static final String TITLE_P2 = "§8✦ §6Item Registry §8§f‹2›";
+    private static final String TITLE_BASE = "§8✦ §6Item Registry §8✦";
 
-    private static final int SIZE          = 54;
-    private static final int SLOT_PREV     = 45;
-    private static final int SLOT_LABEL    = 49;
-    private static final int SLOT_NEXT     = 53;
+    private static final String[] PAGE_NAMES = {
+        "",                  // index 0 unused
+        "§7Core Items",
+        "§bStaffs & Runes",
+        "§5Mage Gear",
+        "§7Melee Gear",
+        "§eRanged Gear",
+        "§2Earth Magic",
+        "§6Magic Books",
+        "§dCapes & Cosmetics"
+    };
 
     private final ItemFactory itemFactory;
 
@@ -42,54 +61,55 @@ public class RegistryGUI {
         this.itemFactory = itemFactory;
     }
 
-    // ── Open page 1 ───────────────────────────────────────────────────────────
+    // ── Title helpers ─────────────────────────────────────────────────────────
 
-    public void open(Player player) {
-        openPage(player, 1);
+    public static String titleForPage(int page) {
+        return page == 1 ? TITLE_BASE : TITLE_BASE + " §8[" + page + "]";
     }
 
-    // ── Open a specific page ──────────────────────────────────────────────────
+    public static int pageFromTitle(String title) {
+        if (title == null) return -1;
+        if (TITLE_BASE.equals(title)) return 1;
+        String prefix = TITLE_BASE + " §8[";
+        if (title.startsWith(prefix) && title.endsWith("]")) {
+            try {
+                return Integer.parseInt(title.substring(prefix.length(), title.length() - 1));
+            } catch (NumberFormatException ignored) {}
+        }
+        return -1;
+    }
+
+    // ── Open ─────────────────────────────────────────────────────────────────
+
+    public void open(Player player) { openPage(player, 1); }
 
     public void openPage(Player player, int page) {
-        String title  = page == 1 ? TITLE_P1 : TITLE_P2;
-        List<ItemStack> items = page == 1
-            ? itemFactory.getPage1()
-            : itemFactory.getPage2();
+        if (page < 1 || page > PAGE_COUNT) page = 1;
+        String title = titleForPage(page);
+        List<ItemStack> items = itemFactory.getPageItems(page);
 
         Inventory inv = Bukkit.createInventory(null, SIZE, title);
 
-        // Fill content rows (0–44)
         for (int i = 0; i < items.size() && i < ITEMS_PER_PAGE; i++) {
             inv.setItem(i, items.get(i));
         }
 
         // ── Navigation row ────────────────────────────────────────────────────
-
-        // Filler glass for the rest of row 5
         ItemStack glass = filler();
         for (int s = 45; s < SIZE; s++) inv.setItem(s, glass);
 
-        // Previous page button (page 2 only)
-        if (page == 2) {
-            inv.setItem(SLOT_PREV, navButton(
-                "§a« Previous Page",
-                "§7Click to view §6Page 1§7:",
-                "§8  Core items, staffs, runes,",
-                "§8  mage gear & combo books."
-            ));
+        if (page > 1) {
+            inv.setItem(SLOT_PREV, navButton("§a« Previous",
+                "§7Go to §6Page " + (page - 1) + "§7:",
+                "§8  " + PAGE_NAMES[page - 1]));
         }
 
-        // Page indicator
         inv.setItem(SLOT_LABEL, pageLabel(page));
 
-        // Next page button (page 1 only)
-        if (page == 1) {
-            inv.setItem(SLOT_NEXT, navButton(
-                "§aNext Page »",
-                "§7Click to view §6Page 2§7:",
-                "§8  Lore books (novice → master)",
-                "§8  and all skill capes."
-            ));
+        if (page < PAGE_COUNT) {
+            inv.setItem(SLOT_NEXT, navButton("§aNext Page »",
+                "§7Go to §6Page " + (page + 1) + "§7:",
+                "§8  " + PAGE_NAMES[page + 1]));
         }
 
         player.openInventory(inv);
@@ -119,11 +139,17 @@ public class RegistryGUI {
         ItemStack it = new ItemStack(Material.BOOK);
         ItemMeta  m  = it.getItemMeta();
         if (m != null) {
-            m.setDisplayName("§6Item Registry §8— §ePage " + page + "§8/§e2");
+            m.setDisplayName("§6Item Registry §8— §ePage " + page + " §8/ §e" + PAGE_COUNT);
             m.setLore(List.of(
                 "§8" + "─".repeat(24),
-                "§7Page §e1§8: §7Core magic items",
-                "§7Page §e2§8: §7Lore books & capes",
+                "§7Page §e1§8: §7Core Items",
+                "§7Page §e2§8: §7Staffs & Runes",
+                "§7Page §e3§8: §5Mage Gear",
+                "§7Page §e4§8: §7Melee Gear",
+                "§7Page §e5§8: §eRanged Gear",
+                "§7Page §e6§8: §2Earth Magic Pages",
+                "§7Page §e7§8: §6Magic Books",
+                "§7Page §e8§8: §dCapes & Cosmetics",
                 "§8" + "─".repeat(24),
                 "§8Clicking any item gives you a copy.",
                 "§8[DifficultyEngine — Item Registry]"

@@ -27,6 +27,8 @@ import com.yourname.difficulty.listeners.MeleeGearEquipListener;
 import com.yourname.difficulty.listeners.RangedGearCraftListener;
 import com.yourname.difficulty.listeners.RangedGearEquipListener;
 import com.yourname.difficulty.listeners.RangedSpeedListener;
+import com.yourname.difficulty.items.EarthBlockTier;
+import com.yourname.difficulty.listeners.CustomItemCraftListener;
 import com.yourname.difficulty.listeners.MagicCauldronCraftListener;
 import com.yourname.difficulty.vip.VipShopListener;
 import com.yourname.difficulty.listeners.MinecartListener;
@@ -205,6 +207,11 @@ public class Main extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new MagicCauldronCraftListener(itemFactory), this);
 
+        // ── Custom Item crafting: Soulfur Potion, Turbo Minecart, Magic Bag, Earth Pages ─
+        // Also handles earth page recipe discovery on first pickup.
+        getServer().getPluginManager().registerEvents(
+                new CustomItemCraftListener(itemFactory, this), this);
+
         // ── Melee Gear crafting: replaces vanilla result with PDC item ──────────
         getServer().getPluginManager().registerEvents(
                 new MeleeGearCraftListener(itemFactory), this);
@@ -293,7 +300,7 @@ public class Main extends JavaPlugin {
         this.magicBagManager = new MagicBagManager(this, itemFactory);
         this.magicBagGUI     = new MagicBagGUI(magicBagManager);
         getServer().getPluginManager().registerEvents(
-                new MagicBagGUIListener(magicBagManager, magicBagGUI), this);
+                new MagicBagGUIListener(magicBagManager, magicBagGUI, this), this);
 
         // ── Register commands (null-safe) ─────────────────────────────────────
 
@@ -438,7 +445,7 @@ public class Main extends JavaPlugin {
                 sender.sendMessage("§cOnly players can open their Magic Bag.");
                 return true;
             }
-            magicBagGUI.open(player);
+            magicBagGUI.open(player, 0);
             return true;
         });
 
@@ -847,11 +854,122 @@ public class Main extends JavaPlugin {
         getServer().addRecipe(arcaneTomeR);
         allRecipeKeys.add(arcaneTomeRecipe);
 
+        // ── Soulfur Potion: Glass Bottle + Soul Sand + Blaze Powder + Nether Wart ─
+        // CustomItemCraftListener intercepts PrepareItemCraftEvent to swap in the
+        // PDC-tagged, colored Soulfur Potion.
+        NamespacedKey soulfurPotionRecipeKey = new NamespacedKey(this, "soulfur_potion_recipe");
+        ShapelessRecipe soulfurR = new ShapelessRecipe(soulfurPotionRecipeKey, new ItemStack(Material.POTION));
+        soulfurR.addIngredient(Material.GLASS_BOTTLE);
+        soulfurR.addIngredient(Material.SOUL_SAND);
+        soulfurR.addIngredient(Material.BLAZE_POWDER);
+        soulfurR.addIngredient(Material.NETHER_WART);
+        getServer().addRecipe(soulfurR);
+        allRecipeKeys.add(soulfurPotionRecipeKey);
+
+        // ── Turbo Minecart: Minecart + Powered Rail + Redstone + Gold Ingot ────
+        // CustomItemCraftListener intercepts PrepareItemCraftEvent to swap in the
+        // PDC-tagged Turbo Minecart.
+        NamespacedKey turboMinecartRecipeKey = new NamespacedKey(this, "turbo_minecart_recipe");
+        ShapelessRecipe turboR = new ShapelessRecipe(turboMinecartRecipeKey, new ItemStack(Material.MINECART));
+        turboR.addIngredient(Material.MINECART);
+        turboR.addIngredient(Material.POWERED_RAIL);
+        turboR.addIngredient(Material.REDSTONE);
+        turboR.addIngredient(Material.GOLD_INGOT);
+        getServer().addRecipe(turboR);
+        allRecipeKeys.add(turboMinecartRecipeKey);
+
+        // ── Magic Bag: Chest + Ender Pearl + Amethyst Shard + Purple Dye + String ─
+        // CustomItemCraftListener intercepts PrepareItemCraftEvent to swap in the
+        // PDC-tagged Magic Bag (CHEST with arcane storage GUI).
+        NamespacedKey magicBagRecipeKey = new NamespacedKey(this, "magic_bag_recipe");
+        ShapelessRecipe magicBagR = new ShapelessRecipe(magicBagRecipeKey, new ItemStack(Material.CHEST));
+        magicBagR.addIngredient(Material.CHEST);
+        magicBagR.addIngredient(Material.ENDER_PEARL);
+        magicBagR.addIngredient(Material.AMETHYST_SHARD);
+        magicBagR.addIngredient(Material.PURPLE_DYE);
+        magicBagR.addIngredient(Material.STRING);
+        getServer().addRecipe(magicBagR);
+        allRecipeKeys.add(magicBagRecipeKey);
+
+        // ── Earth Magic Pages: Book + Block Material + String (one per EarthBlockTier) ─
+        // NOTE: Earth Page recipes are intentionally NOT added to allRecipeKeys.
+        // They are only discovered via EntityPickupItemEvent in CustomItemCraftListener
+        // when a player picks up their first Earth Magic Page of that tier.
+        // This preserves the "fog-of-war" discovery mechanic for higher-tier pages.
+        for (EarthBlockTier tier : EarthBlockTier.values()) {
+            NamespacedKey pageRecipeKey = new NamespacedKey(this,
+                    "de_earth_page_recipe_" + tier.name().toLowerCase());
+            ShapelessRecipe pageR = new ShapelessRecipe(pageRecipeKey, new ItemStack(Material.BOOK));
+            pageR.addIngredient(Material.BOOK);
+            pageR.addIngredient(tier.material);
+            pageR.addIngredient(Material.STRING);
+            getServer().addRecipe(pageR);
+            // ↑ Registered for use but NOT added to allRecipeKeys → not auto-discovered on join
+        }
+
+        // ── Informational Magic Books ─────────────────────────────────────────
+        // These are pre-written WRITTEN_BOOK items — the full BookMeta is embedded
+        // in the recipe result directly (no PDC interceptor needed).
+
+        // Novice Magic Primer: Book + Paper + Feather
+        NamespacedKey novicePrimerKey = new NamespacedKey(this, "novice_magic_primer_recipe");
+        ShapelessRecipe novicePrimerR = new ShapelessRecipe(novicePrimerKey,
+                itemFactory.buildNoviceMagicPrimer());
+        novicePrimerR.addIngredient(Material.BOOK);
+        novicePrimerR.addIngredient(Material.PAPER);
+        novicePrimerR.addIngredient(Material.FEATHER);
+        getServer().addRecipe(novicePrimerR);
+        allRecipeKeys.add(novicePrimerKey);
+
+        // Mage's Primer: Book + Paper + Blaze Powder
+        NamespacedKey magesPrimerKey = new NamespacedKey(this, "mages_primer_recipe");
+        ShapelessRecipe magesPrimerR = new ShapelessRecipe(magesPrimerKey,
+                itemFactory.buildMagesPrimerBook());
+        magesPrimerR.addIngredient(Material.BOOK);
+        magesPrimerR.addIngredient(Material.PAPER);
+        magesPrimerR.addIngredient(Material.BLAZE_POWDER);
+        getServer().addRecipe(magesPrimerR);
+        allRecipeKeys.add(magesPrimerKey);
+
+        // Elemental Theory Book: Book + Amethyst Shard + Paper
+        NamespacedKey elementalTheoryKey = new NamespacedKey(this, "elemental_theory_recipe");
+        ShapelessRecipe elementalTheoryR = new ShapelessRecipe(elementalTheoryKey,
+                itemFactory.buildElementalTheoryBook());
+        elementalTheoryR.addIngredient(Material.BOOK);
+        elementalTheoryR.addIngredient(Material.AMETHYST_SHARD);
+        elementalTheoryR.addIngredient(Material.PAPER);
+        getServer().addRecipe(elementalTheoryR);
+        allRecipeKeys.add(elementalTheoryKey);
+
+        // Hidden Arts Book: Book + Nether Star + Paper  (rare — Nether Star gate)
+        NamespacedKey hiddenArtsKey = new NamespacedKey(this, "hidden_arts_recipe");
+        ShapelessRecipe hiddenArtsR = new ShapelessRecipe(hiddenArtsKey,
+                itemFactory.buildHiddenArtsBook());
+        hiddenArtsR.addIngredient(Material.BOOK);
+        hiddenArtsR.addIngredient(Material.NETHER_STAR);
+        hiddenArtsR.addIngredient(Material.PAPER);
+        getServer().addRecipe(hiddenArtsR);
+        allRecipeKeys.add(hiddenArtsKey);
+
+        // Mage Gear Guide: Book + Leather + Purple Dye
+        NamespacedKey mageGearGuideKey = new NamespacedKey(this, "mage_gear_guide_recipe");
+        ShapelessRecipe mageGearGuideR = new ShapelessRecipe(mageGearGuideKey,
+                itemFactory.buildMageGearGuide());
+        mageGearGuideR.addIngredient(Material.BOOK);
+        mageGearGuideR.addIngredient(Material.LEATHER);
+        mageGearGuideR.addIngredient(Material.PURPLE_DYE);
+        getServer().addRecipe(mageGearGuideR);
+        allRecipeKeys.add(mageGearGuideKey);
+
         int totalRecipes = allRecipeKeys.size();
         getLogger().info("DifficultyEngine: Registered " + totalRecipes + " crafting recipes.");
         getLogger().info("  Mage Gear:   LEATHER_PIECE + PURPLE_DYE + BLAZE_POWDER (4 tiers)");
         getLogger().info("  Melee Gear:  ARMOUR_PIECE + tier ingredient (Iron/Diamond/Netherite/Dragon)");
         getLogger().info("  Ranged Gear: ARMOUR_PIECE + tier ingredient (Leather/Chain/Netherite/Dragon)");
+        getLogger().info("  Soulfur Potion: GLASS_BOTTLE + SOUL_SAND + BLAZE_POWDER + NETHER_WART");
+        getLogger().info("  Turbo Minecart: MINECART + POWERED_RAIL + REDSTONE + GOLD_INGOT");
+        getLogger().info("  Magic Bag: CHEST + ENDER_PEARL + AMETHYST_SHARD + PURPLE_DYE + STRING");
+        getLogger().info("  Earth Pages: BOOK + <block material> + STRING (8 tiers, Lv10-90)");
         getLogger().info("  Open crafting table → recipe book to search for them.");
     }
 

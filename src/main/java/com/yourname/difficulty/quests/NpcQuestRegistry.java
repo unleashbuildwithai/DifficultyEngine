@@ -57,11 +57,11 @@ public final class NpcQuestRegistry {
         q.add(collect(19, "Gravel Pit",     "Digger Sam",        OW, GRAVEL,         64, 250).build());
         q.add(collect(20, "Green Dreams",   "Merchant Yara",     OW, EMERALD,         3, 600).build());
 
-        q.add(collect(21, "First Catch",    "Fisherman Lars",    OW, COD,            20, 350).build());
-        q.add(collect(22, "Deep Pull",      "Fisher Bea",        OW, SALMON,          5, 400).build());
-        q.add(collect(23, "Strange Catch",  "River Fisher",      OW, PUFFERFISH,      1, 300).build());
+        q.add(collect(21, "First Catch",    "Fisherman Lars",    OW, Material.COD,            20, 350).build());
+        q.add(collect(22, "Deep Pull",      "Fisher Bea",        OW, Material.SALMON,          5, 400).build());
+        q.add(collect(23, "Strange Catch",  "River Fisher",      OW, Material.PUFFERFISH,      1, 300).build());
         q.add(collect(24, "Daily Bread",    "Cook Elena",        OW, BREAD,          16, 350).build());
-        q.add(collect(25, "Morning Gather", "Farmer Rose",       OW, EGG,            16, 300).build());
+        q.add(collect(25, "Morning Gather", "Farmer Rose",       OW, Material.EGG,            16, 300).build());
         q.add(collect(26, "Dairy Run",      "Dairy Maid",        OW, MILK_BUCKET,     3, 350).build());
         q.add(collect(27, "Bee Good",       "Beekeeper Hilda",   OW, HONEY_BOTTLE,    3, 400).build());
         q.add(collect(28, "Apple Season",   "Orchard Keeper",    OW, APPLE,          16, 300).build());
@@ -88,7 +88,7 @@ public final class NpcQuestRegistry {
         q.add(collect(47, "Lapis Lore",     "Scholar Tessa",     OW, LAPIS_LAZULI,    8, 350).build());
         q.add(collect(48, "Web Weaver",     "Weaver Linn",       OW, STRING,         32, 300).build());
         q.add(collect(49, "Bone Stock",     "Butcher Hank",      OW, BONE,           16, 300).build());
-        q.add(collect(50, "Portal Prep",    "Portal Watcher",    OW, ENDER_PEARL,     5, 500).build());
+        q.add(collect(50, "Portal Prep",    "Portal Watcher",    OW, Material.ENDER_PEARL,     5, 500).build());
 
         // ══════════════════════════════════════════════════════════════════════
         //  MAIN QUESTS — NETHER (51 – 100)
@@ -160,7 +160,7 @@ public final class NpcQuestRegistry {
         q.add(collect(105,"Chorus Harvest","End Farmer",        EN, CHORUS_FRUIT,  16, 600).build());
         q.add(collect(106,"Purpur Palace", "End Builder",       EN, PURPUR_BLOCK,  32, 600).build());
         q.add(collect(107,"End Stone Pile","End Mason",         EN, END_STONE,     32, 500).build());
-        q.add(collect(108,"Pearl Pool",    "Pearl Trader",      EN, ENDER_PEARL,   16, 700).build());
+        q.add(collect(108,"Pearl Pool",    "Pearl Trader",      EN, Material.ENDER_PEARL,   16, 700).build());
         q.add(collect(109,"Wing Find",     "Wing Seeker",       EN, ELYTRA,         1,3000).build());
         q.add(collect(110,"Shell Craft",   "Shell Smith",       EN, SHULKER_SHELL,  4, 800).build());
 
@@ -173,40 +173,40 @@ public final class NpcQuestRegistry {
         q.add(collect(117,"City Loot",     "City Raider",       EN, SHULKER_SHELL,  8,1000).build());
         q.add(kill(118,  "Enderman Elite", "Void Master",       EN, ENDERMAN,      50,1000).build());
         q.add(kill(119,  "Shulker Siege",  "Shell Siege Master",EN, SHULKER,       20,1000).build());
-        q.add(collect(120,"Dragon Vial",   "Alchemy End",       EN, DRAGONS_BREATH, 4, 900).build());
+        q.add(collect(120,"Dragon Vial",   "Alchemy End",       EN, Material.DRAGON_BREATH, 4, 900).build());
 
-        q.add(collect(121,"Firework Prep", "Elytra Flier",      EN, FIREWORK_ROCKET, 4, 600).build());
+        q.add(collect(121,"Firework Prep", "Elytra Flier",      EN, Material.FIREWORK_ROCKET, 4, 600).build());
         q.add(collect(122,"End Bricks",    "End Bricklayer",    EN, END_STONE_BRICKS,16,550).build());
         q.add(collect(123,"Chorus Bloom",  "End Botanist",      EN, CHORUS_FLOWER,  4, 700).build());
         q.add(collect(124,"Phantom Cloak", "End Crafter",       EN, PHANTOM_MEMBRANE,4,700).build());
-        q.add(collect(125,"Spectral Stock","Spectral Archer",   EN, SPECTRAL_ARROW, 4, 650).build());
-        q.add(collect(126,"Pearl Storm",   "Pearl Storm Master",EN, ENDER_PEARL,   32,1000).build());
+        q.add(collect(125,"Spectral Stock","Spectral Archer",   EN, Material.SPECTRAL_ARROW, 4, 650).build());
+        q.add(collect(126,"Pearl Storm",   "Pearl Storm Master",EN, Material.ENDER_PEARL,   32,1000).build());
         q.add(kill(127,  "Mite Massacre",  "Mite Warden",       EN, ENDERMITE,     50, 700).build());
         q.add(collect(128,"Shell Box",     "Container Master",  EN, SHULKER_SHELL, 16,1500).build());
-        q.add(collect(129,"Crystal Art",   "Crystal Ritualist", EN, END_CRYSTAL,    4,1200).build());
-        q.add(collect(130,"End Complete",  "End Sage",          EN, ELYTRA,         1,2000).hidden(DRAGONS_BREATH,4,1000).build());
+        q.add(collect(129,"Crystal Art",   "Crystal Ritualist", EN, Material.END_CRYSTAL,    4,1200).build());
+        q.add(collect(130,"End Complete",  "End Sage",          EN, ELYTRA,         1,2000).hidden(Material.DRAGON_BREATH,4,1000).build());
 
         q.add(kill(131,  "Dark Spire",     "Dark Warden",       EN, ENDERMAN,      75,1500).build());
         q.add(collect(132,"Shell Master",  "Shell Master",      EN, SHULKER_SHELL, 32,2000).build());
         q.add(kill(133,  "Void Clear",     "Void Cleaner",      EN, SHULKER,       30,1500).build());
-        q.add(collect(134,"Dragon Blood",  "Alchemy End II",    EN, DRAGONS_BREATH, 8,1200).build());
+        q.add(collect(134,"Dragon Blood",  "Alchemy End II",    EN, Material.DRAGON_BREATH, 8,1200).build());
         q.add(kill(135,  "Final Dragon",   "Dragon Chronicler", EN, ENDER_DRAGON,   1,5000).build());
         q.add(collect(136,"Purpur Palace2","Master Builder",    EN, PURPUR_BLOCK,  64,1200).build());
-        q.add(collect(137,"Pearl Master",  "Pearl Master",      EN, ENDER_PEARL,   64,1500).build());
+        q.add(collect(137,"Pearl Master",  "Pearl Master",      EN, Material.ENDER_PEARL,   64,1500).build());
         q.add(kill(138,  "Ender Hundreds", "Void Centurion",    EN, ENDERMAN,     100,2000).build());
-        q.add(collect(139,"Dragon Trophy", "Trophy Hall",       EN, DRAGON_HEAD,    1,4000).hidden(DRAGONS_BREATH,8,2000).build());
+        q.add(collect(139,"Dragon Trophy", "Trophy Hall",       EN, DRAGON_HEAD,    1,4000).hidden(Material.DRAGON_BREATH,8,2000).build());
         q.add(collect(140,"End Stone Vault","End Vault Keeper", EN, END_STONE,     64, 700).build());
 
         q.add(kill(141,  "Shulker Hundred","Shell Century",     EN, SHULKER,       50,2000).build());
         q.add(collect(142,"Chorus Garden", "Garden Master",     EN, CHORUS_FLOWER, 16,1000).build());
-        q.add(collect(143,"Dragon Hoard",  "Dragon Hoarder",    EN, DRAGONS_BREATH,16,2000).build());
+        q.add(collect(143,"Dragon Hoard",  "Dragon Hoarder",    EN, Material.DRAGON_BREATH,16,2000).build());
         q.add(kill(144,  "Mite King",      "Mite King",         EN, ENDERMITE,    100,1000).build());
         q.add(collect(145,"End Collection","Collection Master", EN, ELYTRA,         1,3000).hidden(SHULKER_SHELL,16,1500).build());
         q.add(collect(146,"Purpur Throne", "Purpur King",       EN, PURPUR_BLOCK, 128,2000).build());
         q.add(kill(147,  "Void Legend",    "Void Legend",       EN, ENDERMAN,     200,5000).build());
         q.add(kill(148,  "Shell Legend",   "Shell Legend",      EN, SHULKER,       75,3000).build());
-        q.add(kill(149,  "Dragon Legend",  "Dragon Legend",     EN, ENDER_DRAGON,   1,8000).hidden(DRAGONS_BREATH,16,4000).build());
-        q.add(collect(150,"Quest Pinnacle","Grand Quest Master", EN, NETHER_STAR,   1,10000).hidden(DRAGONS_BREATH,16,5000).build());
+        q.add(kill(149,  "Dragon Legend",  "Dragon Legend",     EN, ENDER_DRAGON,   1,8000).hidden(Material.DRAGON_BREATH,16,4000).build());
+        q.add(collect(150,"Quest Pinnacle","Grand Quest Master", EN, NETHER_STAR,   1,10000).hidden(Material.DRAGON_BREATH,16,5000).build());
 
         // ══════════════════════════════════════════════════════════════════════
         //  SECRET QUESTS — OVERWORLD (151 – 200)
@@ -230,7 +230,7 @@ public final class NpcQuestRegistry {
         q.add(collect(165,"Sugar Rush",     "Baker Hermit",      OW, SUGAR,        32, 500).secret().hidden(CAKE,1,400).build());
         q.add(collect(166,"Rare Fruit",     "Jungle Guide",      OW, MELON_SLICE,  32, 500).secret().build());
         q.add(collect(167,"Cactus Cache",   "Desert Hermit",     OW, CACTUS,       64, 500).secret().sneak().build());
-        q.add(collect(168,"Snowball Fight", "Snow Hermit",       OW, SNOWBALL,     64, 400).secret().build());
+        q.add(collect(168,"Snowball Fight", "Snow Hermit",       OW, Material.SNOWBALL,     64, 400).secret().build());
         q.add(collect(169,"Ice Cold",       "Glacier Walker",    OW, PACKED_ICE,   16, 600).secret().build());
         q.add(collect(170,"Sponge Seeker",  "Deep Diver",        OW, SPONGE,        1,1000).secret().build());
 
@@ -247,7 +247,7 @@ public final class NpcQuestRegistry {
 
         q.add(collect(181,"Lush Moss",      "Moss Hermit",       OW, MOSS_BLOCK,   32, 500).secret().build());
         q.add(collect(182,"Spore Blossom",  "Nature Spirit",     OW, SPORE_BLOSSOM, 4, 600).secret().sneak().build());
-        q.add(collect(183,"Tropical Gift",  "Axolotl Keeper",    OW, TROPICAL_FISH, 5, 600).secret().build());
+        q.add(collect(183,"Tropical Gift",  "Axolotl Keeper",    OW, Material.TROPICAL_FISH, 5, 600).secret().build());
         q.add(collect(184,"Frog Spawn",     "Swamp Sage",        OW, FROGSPAWN,     1, 700).secret().sneak().build());
         q.add(kill(185,  "Guardian Secret", "Deep Warden",       OW, GUARDIAN,     30, 900).secret().build());
         q.add(kill(186,  "Elder Secret",    "Elder Warden",      OW, ELDER_GUARDIAN, 1,2000).secret().build());
@@ -330,60 +330,60 @@ public final class NpcQuestRegistry {
         //  SECRET QUESTS — END (251 – 300)
         // ══════════════════════════════════════════════════════════════════════
 
-        q.add(collect(251,"Dragon Breath",  "Dragon Sage Secret",EN, DRAGONS_BREATH, 8,2000).secret().build());
+        q.add(collect(251,"Dragon Breath",  "Dragon Sage Secret",EN, Material.DRAGON_BREATH, 8,2000).secret().build());
         q.add(kill(252,  "End Elite",       "End Elite Warden",  EN, ENDERMAN,     150,3000).secret().build());
         q.add(kill(253,  "Shell Master",    "Shell Grand Master",EN, SHULKER,       40,2000).secret().build());
         q.add(collect(254,"Dragon Head",    "Trophy Master",     EN, DRAGON_HEAD,    1,6000).secret().sneak().build());
         q.add(kill(255,  "Mite Queen",      "Mite Queen",        EN, ENDERMITE,    200,2000).secret().build());
         q.add(collect(256,"End Cake Party", "Party End Sage",    EN, CAKE,           1,1000).secret().sneak().build());
         q.add(collect(257,"Respawn Anchor", "Reckless Sage",     EN, RESPAWN_ANCHOR, 1,1500).secret().sneak().build());
-        q.add(kill(258,  "Dragon Slayer",   "Dragon Legendary",  EN, ENDER_DRAGON,   1,10000).secret().hidden(DRAGONS_BREATH,16,5000).build());
+        q.add(kill(258,  "Dragon Slayer",   "Dragon Legendary",  EN, ENDER_DRAGON,   1,10000).secret().hidden(Material.DRAGON_BREATH,16,5000).build());
         q.add(collect(259,"Lead Dragon",    "MyPet Tamer End",   EN, LEAD,           5,2000).secret().sneak().build());
         q.add(collect(260,"End Tower",      "Obsidian Placer",   EN, OBSIDIAN,      64,1200).secret().build());
 
-        q.add(collect(261,"Gateway Key",    "Void Gateway Sage", EN, ENDER_PEARL,   64,2000).secret().build());
+        q.add(collect(261,"Gateway Key",    "Void Gateway Sage", EN, Material.ENDER_PEARL,   64,2000).secret().build());
         q.add(kill(262,  "Shulker Legend",  "Shell Legend Scrt", EN, SHULKER,      100,5000).secret().hidden(SHULKER_SHELL,16,2500).build());
         q.add(collect(263,"Ship Loot",      "Ship Raider Secret",EN, ELYTRA,         1,4000).secret().hidden(DRAGON_HEAD,1,3000).build());
-        q.add(collect(264,"Void Walk Full", "Void Walker Master",EN, ENDER_PEARL,  128,3000).secret().build());
+        q.add(collect(264,"Void Walk Full", "Void Walker Master",EN, Material.ENDER_PEARL,  128,3000).secret().build());
         q.add(kill(265,  "Enderman God",    "End God Warden",    EN, ENDERMAN,     300,8000).secret().build());
         q.add(collect(266,"Purpur Throne",  "End King",          EN, PURPUR_BLOCK, 256,3000).secret().build());
         q.add(collect(267,"Full End Armor", "End Armor Master",  EN, ELYTRA,         1,5000).secret().hidden(SHULKER_SHELL,32,3000).build());
         q.add(collect(268,"Beacon of End",  "End Beacon Sage",   EN, NETHER_STAR,    1,5000).secret().sneak().build());
         q.add(kill(269,  "End Dungeon",     "Dungeon End Master",EN, SHULKER,       50,3000).secret().hidden(ELYTRA,1,3000).build());
-        q.add(collect(270,"Crystal Garden", "Crystal Garden",    EN, END_CRYSTAL,    8,3000).secret().build());
+        q.add(collect(270,"Crystal Garden", "Crystal Garden",    EN, Material.END_CRYSTAL,    8,3000).secret().build());
 
         q.add(collect(271,"Void Moss",      "End Botanist Scrt", EN, CHORUS_FLOWER, 32,2000).secret().sneak().build());
-        q.add(collect(272,"Dragon Alchemy", "End Alchemist",     EN, DRAGONS_BREATH,32,4000).secret().hidden(GHAST_TEAR,5,2000).build());
+        q.add(collect(272,"Dragon Alchemy", "End Alchemist",     EN, Material.DRAGON_BREATH,32,4000).secret().hidden(GHAST_TEAR,5,2000).build());
         q.add(kill(273,  "Mite Legend",     "Mite Legend",       EN, ENDERMITE,    500,5000).secret().build());
-        q.add(collect(274,"Elytra Mastery", "Elytra Grand Master",EN,FIREWORK_ROCKET,64,2000).secret().sneak().build());
+        q.add(collect(274,"Elytra Mastery", "Elytra Grand Master",EN,Material.FIREWORK_ROCKET,64,2000).secret().sneak().build());
         q.add(collect(275,"Obsidian Spire", "Spire Builder",     EN, OBSIDIAN,     128,2000).secret().build());
         q.add(collect(276,"Shell City",     "Shulker City",      EN, SHULKER_SHELL, 64,5000).secret().build());
-        q.add(kill(277,  "Dragon Massacre", "Dragon Baron",      EN, ENDER_DRAGON,   1,12000).secret().hidden(DRAGONS_BREATH,32,8000).build());
-        q.add(collect(278,"End Complete Set","End Completionist", EN, ELYTRA,         1,8000).secret().hidden(DRAGONS_BREATH,16,4000).build());
+        q.add(kill(277,  "Dragon Massacre", "Dragon Baron",      EN, ENDER_DRAGON,   1,12000).secret().hidden(Material.DRAGON_BREATH,32,8000).build());
+        q.add(collect(278,"End Complete Set","End Completionist", EN, ELYTRA,         1,8000).secret().hidden(Material.DRAGON_BREATH,16,4000).build());
         q.add(collect(279,"Void Citadel",   "Citadel Builder",   EN, PURPUR_BLOCK, 512,5000).secret().build());
         q.add(collect(280,"End God Set",    "End God",           EN, NETHERITE_INGOT,4,10000).secret().sneak().build());
 
         q.add(kill(281,  "End Warlord",     "End Warlord",       EN, ENDERMAN,     500,15000).secret().build());
-        q.add(collect(282,"Pearl Ocean",    "Pearl Ocean Sage",  EN, ENDER_PEARL,  256,5000).secret().hidden(SHULKER_SHELL,32,3000).build());
-        q.add(collect(283,"Dragon Scale",   "Cape Dragon Sage",  EN, DRAGONS_BREATH,64,10000).secret().hidden(ELYTRA,1,5000).build());
+        q.add(collect(282,"Pearl Ocean",    "Pearl Ocean Sage",  EN, Material.ENDER_PEARL,  256,5000).secret().hidden(SHULKER_SHELL,32,3000).build());
+        q.add(collect(283,"Dragon Scale",   "Cape Dragon Sage",  EN, Material.DRAGON_BREATH,64,10000).secret().hidden(ELYTRA,1,5000).build());
         q.add(kill(284,  "End Titan",       "End Titan",         EN, SHULKER,      200,10000).secret().hidden(SHULKER_SHELL,64,5000).build());
         q.add(collect(285,"End Stone Vault","Vault End Keeper",  EN, END_STONE,    256,3000).secret().build());
         q.add(collect(286,"MyPet Dragon",   "MyPet Sage End",    EN, LEAD,          10,5000).secret().sneak().build());
         q.add(kill(287,  "Void Champion",   "Void Champion",     EN, ENDERMITE,   1000,8000).secret().build());
-        q.add(collect(288,"Crystal Fort",   "Crystal Fort",      EN, END_CRYSTAL,   16,5000).secret().build());
-        q.add(collect(289,"Dragon Blood",   "Blood Sage End",    EN, DRAGONS_BREATH,128,15000).secret().build());
+        q.add(collect(288,"Crystal Fort",   "Crystal Fort",      EN, Material.END_CRYSTAL,   16,5000).secret().build());
+        q.add(collect(289,"Dragon Blood",   "Blood Sage End",    EN, Material.DRAGON_BREATH,128,15000).secret().build());
         q.add(collect(290,"End Emperor",    "End Emperor",       EN, PURPUR_BLOCK,1024,10000).secret().build());
 
-        q.add(kill(291,  "Dragon God",      "Dragon God",        EN, ENDER_DRAGON,   1,20000).secret().hidden(DRAGONS_BREATH,64,10000).build());
+        q.add(kill(291,  "Dragon God",      "Dragon God",        EN, ENDER_DRAGON,   1,20000).secret().hidden(Material.DRAGON_BREATH,64,10000).build());
         q.add(collect(292,"Shell God",      "Shell God",         EN, SHULKER_SHELL,128,8000).secret().build());
-        q.add(collect(293,"End Pearl God",  "Pearl God",         EN, ENDER_PEARL,  512,10000).secret().build());
+        q.add(collect(293,"End Pearl God",  "Pearl God",         EN, Material.ENDER_PEARL,  512,10000).secret().build());
         q.add(kill(294,  "Void God",        "Void God",          EN, ENDERMAN,    1000,20000).secret().build());
-        q.add(collect(295,"End Full Legend","Full Legend",       EN, ELYTRA,         1,15000).secret().hidden(DRAGONS_BREATH,128,8000).build());
+        q.add(collect(295,"End Full Legend","Full Legend",       EN, ELYTRA,         1,15000).secret().hidden(Material.DRAGON_BREATH,128,8000).build());
         q.add(kill(296,  "Dragon Legend",   "Dragon Legend Scrt",EN, ENDER_DRAGON,   1,25000).secret().sneak().build());
-        q.add(collect(297,"End Crystal God","End Crystal God",   EN, END_CRYSTAL,   32,10000).secret().build());
+        q.add(collect(297,"End Crystal God","End Crystal God",   EN, Material.END_CRYSTAL,   32,10000).secret().build());
         q.add(collect(298,"The Last Shell", "Shell Omega",       EN, SHULKER_SHELL,256,15000).secret().hidden(ELYTRA,1,8000).build());
-        q.add(collect(299,"Void Ascension", "Ascension Sage",    EN, DRAGONS_BREATH,256,20000).secret().hidden(NETHER_STAR,1,10000).build());
-        q.add(kill(300,  "The Omega",       "The Omega",         EN, ENDER_DRAGON,   1,50000).secret().hidden(DRAGONS_BREATH,256,25000).build());
+        q.add(collect(299,"Void Ascension", "Ascension Sage",    EN, Material.DRAGON_BREATH,256,20000).secret().hidden(NETHER_STAR,1,10000).build());
+        q.add(kill(300,  "The Omega",       "The Omega",         EN, ENDER_DRAGON,   1,50000).secret().hidden(Material.DRAGON_BREATH,256,25000).build());
 
         ALL = Collections.unmodifiableList(q);
     }

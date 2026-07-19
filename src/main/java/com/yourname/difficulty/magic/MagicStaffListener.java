@@ -128,7 +128,9 @@ public class MagicStaffListener implements Listener {
     @EventHandler(priority = EventPriority.NORMAL)
     public void onPlayerInteract(PlayerInteractEvent event) {
         Action action = event.getAction();
-        if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) return;
+        boolean isRightClick = (action == Action.RIGHT_CLICK_AIR || action == Action.RIGHT_CLICK_BLOCK);
+        boolean isLeftClick  = (action == Action.LEFT_CLICK_AIR  || action == Action.LEFT_CLICK_BLOCK);
+        if (!isRightClick && !isLeftClick) return;
 
         Player       player  = event.getPlayer();
         ItemStack    hand    = player.getInventory().getItemInMainHand();
@@ -138,6 +140,55 @@ public class MagicStaffListener implements Listener {
         event.setCancelled(true);
 
         int magicLevel = skillManager.getLevel(player.getUniqueId(), SkillType.MAGIC);
+
+        // ── Fire Staff Lv99: dual-click mode ──────────────────────────────────
+        // Left-click  → normal fireball
+        // Right-click → lightning strike (admin = no cooldown, no rune cost)
+        if (element == MagicElement.FIRE && magicLevel >= 99) {
+            if (isRightClick) {
+                // ── Lightning Strike ──────────────────────────────────────────
+                boolean isAdmin = player.hasPermission("difficultyengine.cape.admin");
+                if (!isAdmin) {
+                    long cooldownMs = getCooldownMs(player, magicLevel);
+                    if (!checkAndSetCooldown(player.getUniqueId(), MagicElement.FIRE, cooldownMs)) {
+                        long msLeft = msUntilReady(player.getUniqueId(), MagicElement.FIRE, cooldownMs);
+                        player.sendActionBar("§e⚡ §c[Fire Lv99] §8Lightning: §e"
+                                + String.format("%.1f", msLeft / 1000.0) + "s");
+                        return;
+                    }
+                    if (!consumeRune(player, MagicElement.FIRE)) {
+                        player.sendActionBar("§c✗ §7No §c🔥 Fire Rune §7for Lightning Strike!");
+                        return;
+                    }
+                }
+                awardMagicXp(player, MAGIC_XP_CAST);
+                castLightning(player, magicLevel);
+                return;
+            } else {
+                // ── Normal Fireball (left-click) ──────────────────────────────
+                long cooldownMs = getCooldownMs(player, magicLevel);
+                if (!checkAndSetCooldown(player.getUniqueId(), MagicElement.FIRE, cooldownMs)) {
+                    long msLeft = msUntilReady(player.getUniqueId(), MagicElement.FIRE, cooldownMs);
+                    player.sendActionBar("§c[Fire] §8cooldown: §e"
+                            + String.format("%.1f", msLeft / 1000.0) + "s");
+                    return;
+                }
+                if (!consumeRune(player, MagicElement.FIRE)) {
+                    player.sendActionBar("§c✗ §7No §c🔥 Fire Rune§7 — craft from §e4x NETHER_BRICK§7.");
+                    return;
+                }
+                awardMagicXp(player, MAGIC_XP_CAST);
+                if (guidedPlayers.add(player.getUniqueId())) {
+                    player.getInventory().addItem(itemFactory.buildMageGearGuide());
+                    player.sendMessage("§5✦ §7You received a §5Mage Gear Guide§7! Check your inventory.");
+                }
+                castFire(player, magicLevel);
+                return;
+            }
+        }
+
+        // ── All other elements: right-click only ──────────────────────────────
+        if (!isRightClick) return;
 
         if (element == MagicElement.AIR && !player.isOnGround()) {
             activateAirHover(player, magicLevel);
@@ -218,6 +269,63 @@ public class MagicStaffListener implements Listener {
 
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_BLAZE_SHOOT, 1.0f, 1.3f);
         player.sendActionBar("§c[Fire] §7Fireball launched! §8(Lv " + magicLevel + ")");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  FIRE Lv99 — LIGHTNING STRIKE
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Casts a lightning strike at the point the player is looking (up to 40 blocks).
+     * Damages + scorches all entities within 3 × 4 × 3 blocks of the strike.
+     *
+     * Admin players ({@code difficultyengine.cape.admin}) have no cooldown and
+     * no rune cost for this ability.
+     */
+    private void castLightning(Player player, int magicLevel) {
+        // ── Find target location (raytrace 40 blocks) ────────────────────────
+        RayTraceResult ray = player.getWorld().rayTraceBlocks(
+            player.getEyeLocation(), player.getLocation().getDirection(), 40,
+            FluidCollisionMode.NEVER, true);
+
+        Location strikeAt;
+        if (ray != null && ray.getHitBlock() != null) {
+            strikeAt = ray.getHitBlock().getLocation().add(0.5, 1.0, 0.5);
+        } else {
+            strikeAt = player.getEyeLocation()
+                .add(player.getLocation().getDirection().multiply(40));
+        }
+
+        // ── Visual strike (no block damage) ───────────────────────────────────
+        player.getWorld().strikeLightningEffect(strikeAt);
+
+        // ── Damage & scorch entities nearby ───────────────────────────────────
+        double baseDmg = 5.0 + (magicLevel / 99.0) * 7.0;
+        for (Entity e : player.getWorld().getNearbyEntities(strikeAt, 3, 4, 3)) {
+            if (!(e instanceof LivingEntity le)) continue;
+            if (e.equals(player)) continue;
+            le.damage(baseDmg, player);
+            applyScorched(le, 80);
+            le.setFireTicks(60);
+            le.getWorld().strikeLightningEffect(le.getLocation());
+            le.getWorld().spawnParticle(Particle.ELECTRIC_SPARK,
+                le.getLocation().add(0, 1, 0), 20, 0.3, 0.5, 0.3, 0.05);
+            if (le instanceof Player tp)
+                tp.sendActionBar("§e⚡ §c§lLIGHTNING STRIKE! §7Struck by Lv99 Fire magic! §8(-" + (int)(baseDmg/2) + "❤)");
+        }
+
+        // ── Sounds & particles ────────────────────────────────────────────────
+        player.getWorld().spawnParticle(Particle.ELECTRIC_SPARK, strikeAt, 60, 0.5, 2.0, 0.5, 0.1);
+        player.getWorld().spawnParticle(Particle.FLAME, strikeAt, 20, 0.4, 1.0, 0.4, 0.05);
+        player.getWorld().playSound(strikeAt, Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 1.5f, 0.9f);
+        player.getWorld().playSound(strikeAt, Sound.ENTITY_LIGHTNING_BOLT_IMPACT,  1.0f, 1.0f);
+
+        boolean isAdmin = player.hasPermission("difficultyengine.cape.admin");
+        if (isAdmin) {
+            player.sendActionBar("§e⚡ §c§l[ADMIN] LIGHTNING STRIKE! §8— No cooldown!");
+        } else {
+            player.sendActionBar("§e⚡ §c[Fire Lv99] §e§lLIGHTNING STRIKE! §8(" + (int)(baseDmg/2) + "❤ in 3-block radius)");
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════════

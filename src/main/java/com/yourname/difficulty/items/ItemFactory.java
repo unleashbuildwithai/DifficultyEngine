@@ -1413,6 +1413,138 @@ public class ItemFactory {
         return all;
     }
 
+    // ── Registry page router (8 categorised pages) ────────────────────────────
+
+    /**
+     * Returns the item list for the given registry page (1–8).
+     * Called by {@link com.yourname.difficulty.gui.RegistryGUI#openPage}.
+     *
+     *  1 — Core Items        (Soulfur Potion, Turbo Minecart, Shard, Magic Bag)
+     *  2 — Staffs & Runes   (4 staffs, 4 runes, 4 rune dusts, combo book, tome)
+     *  3 — Mage Gear        (4 tiers × 4 pieces + Ancient Kill Tome)
+     *  4 — Melee Gear       (4 tiers × 4 pieces + GunZ Sword)
+     *  5 — Ranged Gear      (4 tiers × 4 pieces + Dark Bow + Dragon Arrows)
+     *  6 — Earth Magic      (8 Earth Magic Pages, one per tier)
+     *  7 — Magic Books      (Novice → Master lore books)
+     *  8 — Capes & Cosmetics (skill capes, Unicorn Slippers, Rainbow Axolotl)
+     */
+    public List<ItemStack> getPageItems(int page) {
+        return switch (page) {
+            case 1 -> buildRegistryPage1();
+            case 2 -> buildRegistryPage2();
+            case 3 -> buildRegistryPage3();
+            case 4 -> buildRegistryPage4();
+            case 5 -> buildRegistryPage5();
+            case 6 -> buildRegistryPage6();
+            case 7 -> buildRegistryPage7();
+            case 8 -> buildRegistryPage8();
+            default -> java.util.Collections.emptyList();
+        };
+    }
+
+    private List<ItemStack> buildRegistryPage1() {
+        List<ItemStack> p = new ArrayList<>();
+        p.add(buildSoulfurPotion());
+        p.add(buildTurboMinecart());
+        p.add(buildEnchantedShard());
+        p.add(buildMagicBag());
+        return p;
+    }
+
+    private List<ItemStack> buildRegistryPage2() {
+        List<ItemStack> p = new ArrayList<>();
+        for (MagicElement el : MagicElement.values()) p.add(buildStaff(el));
+        for (MagicElement el : MagicElement.values()) p.add(buildRune(el, 8));
+        for (MagicElement el : MagicElement.values()) p.add(buildRuneDust(el, 1));
+        p.add(buildArcaneTomeDisplay());
+        p.add(buildSpellPageDisplay());
+        p.add(buildSpellComboBook());
+        return p;
+    }
+
+    private List<ItemStack> buildRegistryPage3() {
+        List<ItemStack> p = new ArrayList<>();
+        for (MageGearTier tier : MageGearTier.values()) {
+            p.add(buildMageGearPiece(tier, Material.LEATHER_HELMET,     "Hood"));
+            p.add(buildMageGearPiece(tier, Material.LEATHER_CHESTPLATE, "Robe Top"));
+            p.add(buildMageGearPiece(tier, Material.LEATHER_LEGGINGS,   "Robe Bottom"));
+            p.add(buildMageGearPiece(tier, Material.LEATHER_BOOTS,      "Boots"));
+        }
+        p.add(buildAncientKillTome());
+        return p;
+    }
+
+    private List<ItemStack> buildRegistryPage4() {
+        List<ItemStack> p = new ArrayList<>();
+        for (MeleeGearTier tier : MeleeGearTier.values()) {
+            Material helm  = (tier == MeleeGearTier.IRON)    ? Material.IRON_HELMET
+                           : (tier == MeleeGearTier.DIAMOND) ? Material.DIAMOND_HELMET
+                           : Material.NETHERITE_HELMET;
+            Material chest = (tier == MeleeGearTier.IRON)    ? Material.IRON_CHESTPLATE
+                           : (tier == MeleeGearTier.DIAMOND) ? Material.DIAMOND_CHESTPLATE
+                           : Material.NETHERITE_CHESTPLATE;
+            Material legs  = (tier == MeleeGearTier.IRON)    ? Material.IRON_LEGGINGS
+                           : (tier == MeleeGearTier.DIAMOND) ? Material.DIAMOND_LEGGINGS
+                           : Material.NETHERITE_LEGGINGS;
+            Material boots = (tier == MeleeGearTier.IRON)    ? Material.IRON_BOOTS
+                           : (tier == MeleeGearTier.DIAMOND) ? Material.DIAMOND_BOOTS
+                           : Material.NETHERITE_BOOTS;
+            p.add(buildMeleeGearPiece(tier, helm,  "Helmet"));
+            p.add(buildMeleeGearPiece(tier, chest, "Chestplate"));
+            p.add(buildMeleeGearPiece(tier, legs,  "Leggings"));
+            p.add(buildMeleeGearPiece(tier, boots, "Boots"));
+        }
+        p.add(buildGunZSword());
+        return p;
+    }
+
+    private List<ItemStack> buildRegistryPage5() {
+        List<ItemStack> p = new ArrayList<>();
+        for (RangedGearTier tier : RangedGearTier.values()) {
+            boolean isLeather = (tier == RangedGearTier.LEATHER);
+            boolean isChain   = (tier == RangedGearTier.CHAIN);
+            Material helm  = isLeather ? Material.LEATHER_HELMET     : isChain ? Material.CHAINMAIL_HELMET     : Material.NETHERITE_HELMET;
+            Material chest = isLeather ? Material.LEATHER_CHESTPLATE : isChain ? Material.CHAINMAIL_CHESTPLATE : Material.NETHERITE_CHESTPLATE;
+            Material legs  = isLeather ? Material.LEATHER_LEGGINGS   : isChain ? Material.CHAINMAIL_LEGGINGS   : Material.NETHERITE_LEGGINGS;
+            Material boots = isLeather ? Material.LEATHER_BOOTS      : isChain ? Material.CHAINMAIL_BOOTS      : Material.NETHERITE_BOOTS;
+            String helmName  = isLeather ? "Cap"   : isChain ? "Coif"  : "Helm";
+            String chestName = isLeather ? "Tunic" : isChain ? "Body"  : "Platebody";
+            String legsName  = isLeather ? "Chaps" : isChain ? "Chaps" : "Platelegs";
+            p.add(buildRangedGearPiece(tier, helm,  helmName));
+            p.add(buildRangedGearPiece(tier, chest, chestName));
+            p.add(buildRangedGearPiece(tier, legs,  legsName));
+            p.add(buildRangedGearPiece(tier, boots, "Boots"));
+        }
+        p.add(buildDarkBow());
+        p.add(buildDragonArrow(8));
+        p.add(buildDragonArrowTip(4));
+        return p;
+    }
+
+    private List<ItemStack> buildRegistryPage6() {
+        List<ItemStack> p = new ArrayList<>();
+        for (EarthBlockTier tier : EarthBlockTier.values()) p.add(buildEarthMagicPage(tier));
+        return p;
+    }
+
+    private List<ItemStack> buildRegistryPage7() {
+        List<ItemStack> p = new ArrayList<>();
+        p.add(buildNoviceMagicPrimer());
+        p.add(buildMagesPrimerBook());
+        p.add(buildElementalTheoryBook());
+        p.add(buildHiddenArtsBook());
+        p.add(buildMageGearGuide());
+        return p;
+    }
+
+    private List<ItemStack> buildRegistryPage8() {
+        List<ItemStack> p = new ArrayList<>();
+        p.addAll(capeManager.buildAllCapes());
+        p.add(buildUnicornSlippers());
+        p.add(buildRainbowAxolotl());
+        return p;
+    }
+
     // ── Key accessors ─────────────────────────────────────────────────────────
 
     public NamespacedKey getSoulfurPotionKey()        { return soulfurPotionKey; }
