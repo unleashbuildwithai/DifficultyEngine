@@ -48,6 +48,10 @@ public class ItemFactory {
     public static final String UNICORN_SLIPPERS_KEY  = "unicorn_slippers";
     /** Prefix for all earth-page PDC keys. */
     public static final String EARTH_PAGE_KEY_PREFIX = "de_earth_page_";
+    public static final String GUNZ_SWORD_KEY        = "gunz_sword";
+    public static final String DARK_BOW_KEY          = "dark_bow";
+    public static final String DRAGON_ARROW_KEY      = "dragon_arrow";
+    public static final String DRAGON_ARROW_TIP_KEY  = "dragon_arrow_tip";
 
     // ── NamespacedKeys ────────────────────────────────────────────────────────
     private final NamespacedKey soulfurPotionKey;
@@ -57,6 +61,10 @@ public class ItemFactory {
     private final NamespacedKey spellComboBookKey;
     private final NamespacedKey ancientKillTomeKey;
     private final NamespacedKey unicornSlippersKey;
+    private final NamespacedKey gunZSwordKey;
+    private final NamespacedKey darkBowKey;
+    private final NamespacedKey dragonArrowKey;
+    private final NamespacedKey dragonArrowTipKey;
     /** Per-tier PDC keys (MAGE tier maps to mageGearKey). */
     private final Map<MageGearTier, NamespacedKey> mageGearTierKeys = new EnumMap<>(MageGearTier.class);
 
@@ -80,6 +88,10 @@ public class ItemFactory {
         this.spellComboBookKey   = new NamespacedKey(plugin, SPELL_COMBO_BOOK_KEY);
         this.ancientKillTomeKey  = new NamespacedKey(plugin, ANCIENT_KILL_TOME_KEY);
         this.unicornSlippersKey  = new NamespacedKey(plugin, UNICORN_SLIPPERS_KEY);
+        this.gunZSwordKey        = new NamespacedKey(plugin, GUNZ_SWORD_KEY);
+        this.darkBowKey          = new NamespacedKey(plugin, DARK_BOW_KEY);
+        this.dragonArrowKey      = new NamespacedKey(plugin, DRAGON_ARROW_KEY);
+        this.dragonArrowTipKey   = new NamespacedKey(plugin, DRAGON_ARROW_TIP_KEY);
 
         // Tier-specific keys (MAGE reuses the universal key)
         for (MageGearTier tier : MageGearTier.values()) {
@@ -126,6 +138,12 @@ public class ItemFactory {
         registryPage1.add(buildAncientKillTome());
         registryPage1.add(buildArcaneTomeDisplay());
         registryPage1.add(buildSpellPageDisplay());
+
+        // Page 1 additions: special weapons
+        registryPage1.add(buildGunZSword());
+        registryPage1.add(buildDarkBow());
+        registryPage1.add(buildDragonArrow(8));
+        registryPage1.add(buildDragonArrowTip(4));
 
         // Page 2: books + capes + cosmetics
         registryPage2.add(buildNoviceMagicPrimer());
@@ -789,6 +807,166 @@ public class ItemFactory {
         if (item == null || !item.hasItemMeta()) return false;
         return item.getItemMeta().getPersistentDataContainer().has(unicornSlippersKey, PersistentDataType.BYTE);
     }
+
+    // ── GunZ Sword ────────────────────────────────────────────────────────────
+
+    /**
+     * The GunZ Sword — admin-only Level 99 Melee weapon with GunZ: The Duel
+     * style dashing. Double-tap WASD while holding to dash in that direction.
+     */
+    @SuppressWarnings("deprecation")
+    public ItemStack buildGunZSword() {
+        ItemStack item = new ItemStack(Material.NETHERITE_SWORD);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§4⚔ §lGunZ Sword");
+            meta.setUnbreakable(true);
+            meta.addEnchant(Enchantment.SHARPNESS,        5, true);
+            meta.addEnchant(Enchantment.UNBREAKING,       3, true);
+            meta.addEnchant(Enchantment.LOOTING,          3, true);
+            meta.addEnchant(Enchantment.FIRE_ASPECT,      2, true);
+            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS, ItemFlag.HIDE_UNBREAKABLE, ItemFlag.HIDE_ATTRIBUTES);
+            meta.setLore(List.of(
+                "§8" + "─".repeat(26),
+                "§4⚔ §cGunZ Sword §8— §4Admin Spawn Only",
+                "§8Requires: §aMelee Level 99",
+                "§8" + "─".repeat(26),
+                "§c✦ §7GunZ Dashing:",
+                "§7Double-tap §fWW §7→ Forward dash",
+                "§7Double-tap §fAA §7→ Left dash",
+                "§7Double-tap §fDD §7→ Right dash",
+                "§7Double-tap §fSS §7→ Backward dash",
+                "§8" + "─".repeat(26),
+                "§8Dash cooldown: 0.8s",
+                "§8[DifficultyEngine — GunZ Sword]"
+            ));
+            meta.getPersistentDataContainer().set(gunZSwordKey, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    public boolean isGunZSword(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer().has(gunZSwordKey, PersistentDataType.BYTE);
+    }
+
+    // ── Dark Bow ──────────────────────────────────────────────────────────────
+
+    /**
+     * The Dark Bow — Level 70 Ranged bow. 1% drop from the Warden.
+     * Normal shot: single arrow. With Dragon Arrows: purple trail effect.
+     * Special (SNEAK + right-click): 2 homing arrows at −35% damage each.
+     * Requires 2 Dragon Arrows for the special shot.
+     */
+    public ItemStack buildDarkBow() {
+        ItemStack item = new ItemStack(Material.BOW);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§4🏹 Dark Bow");
+            meta.setUnbreakable(true);
+            meta.addEnchant(Enchantment.POWER,     5, true);
+            meta.addEnchant(Enchantment.UNBREAKING, 3, true);
+            meta.addEnchant(Enchantment.PUNCH,      2, true);
+            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS, ItemFlag.HIDE_UNBREAKABLE, ItemFlag.HIDE_ATTRIBUTES);
+            meta.setLore(List.of(
+                "§8" + "─".repeat(26),
+                "§4🏹 §cDark Bow",
+                "§8Requires: §aRanged Level 70",
+                "§8Drop: §c1% §8from Warden",
+                "§8" + "─".repeat(26),
+                "§7Normal shot: single arrow",
+                "§7With Dragon Arrows: §5purple trail",
+                "§8" + "─".repeat(26),
+                "§c✦ §4Special §8(§fSNEAK§8 + §fRight-click§8):",
+                "§7Fires §c2 homing arrows§7 instantly.",
+                "§7Each at §c-35% §7damage — but dual-hit!",
+                "§7Costs 2 Dragon Arrows. §83s cooldown.",
+                "§8" + "─".repeat(26),
+                "§8Combo: Normal → Special → Normal",
+                "§8[DifficultyEngine — Dark Bow]"
+            ));
+            meta.getPersistentDataContainer().set(darkBowKey, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    public boolean isDarkBow(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer().has(darkBowKey, PersistentDataType.BYTE);
+    }
+
+    // ── Dragon Arrow ──────────────────────────────────────────────────────────
+
+    /**
+     * Dragon Arrow — crafted from Dragon Arrow Tips (dropped by Ender Dragon).
+     * Used with the Dark Bow for enhanced effects and homing special shots.
+     */
+    public ItemStack buildDragonArrow(int count) {
+        ItemStack item = new ItemStack(Material.SPECTRAL_ARROW, Math.max(1, count));
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§5✦ Dragon Arrow");
+            meta.setLore(List.of(
+                "§8" + "─".repeat(22),
+                "§7An arrow tipped with dragon essence.",
+                "§5✦ §7Used with the §4Dark Bow§7.",
+                "§8" + "─".repeat(22),
+                "§7Normal shot: §5purple trail §7+ glow on hit",
+                "§7Special shot: §c2× homing §8(needs 2)",
+                "§8" + "─".repeat(22),
+                "§6Craft: §74× Dragon Arrow Tips §8→ §54 Dragon Arrows",
+                "§8[DifficultyEngine — Dragon Arrow]"
+            ));
+            meta.getPersistentDataContainer().set(dragonArrowKey, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    public boolean isDragonArrow(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer().has(dragonArrowKey, PersistentDataType.BYTE);
+    }
+
+    // ── Dragon Arrow Tip ──────────────────────────────────────────────────────
+
+    /**
+     * Dragon Arrow Tip — drops from the Ender Dragon (8-16 per kill).
+     * Craft 4 tips → 4 Dragon Arrows at any crafting table.
+     */
+    public ItemStack buildDragonArrowTip(int count) {
+        ItemStack item = new ItemStack(Material.PRISMARINE_CRYSTALS, Math.max(1, count));
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§5⚡ Dragon Arrow Tip");
+            meta.addEnchant(Enchantment.UNBREAKING, 1, true);
+            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+            meta.setLore(List.of(
+                "§8" + "─".repeat(22),
+                "§7A crystallised dragon scale,",
+                "§7forged into an arrow tip.",
+                "§8" + "─".repeat(22),
+                "§8Drop: §5Ender Dragon §8(8–16 per kill)",
+                "§6Craft: §74× Tips §8→ §54× Dragon Arrows",
+                "§8[DifficultyEngine — Dragon Arrow Tip]"
+            ));
+            meta.getPersistentDataContainer().set(dragonArrowTipKey, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    public boolean isDragonArrowTip(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer().has(dragonArrowTipKey, PersistentDataType.BYTE);
+    }
+
+    public NamespacedKey getDragonArrowKey()    { return dragonArrowKey; }
+    public NamespacedKey getDragonArrowTipKey() { return dragonArrowTipKey; }
+    public NamespacedKey getGunZSwordKey()      { return gunZSwordKey; }
+    public NamespacedKey getDarkBowKey()        { return darkBowKey; }
 
     // ── Earth Magic Pages ─────────────────────────────────────────────────────
 

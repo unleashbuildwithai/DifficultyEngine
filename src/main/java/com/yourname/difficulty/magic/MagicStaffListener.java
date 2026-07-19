@@ -1020,20 +1020,19 @@ public class MagicStaffListener implements Listener {
 
         // ── TIER SYSTEM (Level 10+): trap + suffocate ─────────────────────────
         if (tier != null) {
-            // Place the thrown block at target's feet (also tracked for fire→lava combo)
+            // Place the thrown block at target's feet (also tracked for fire→lava combo).
+            // Blocks are PERMANENT — players can use Silk Touch to recover expensive blocks.
             Block feetBlock = target.getLocation().getBlock();
             if (feetBlock.getType().isAir()) {
                 feetBlock.setType(tier.material);
                 magicDirtBlocks.add(feetBlock.getLocation().toBlockLocation());
-                final Block fb = feetBlock;
-                final EarthBlockTier t = tier;
-                plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-                    if (fb.getType() == t.material) fb.setType(Material.AIR);
-                    magicDirtBlocks.remove(fb.getLocation().toBlockLocation());
-                    activeTraps.remove(target.getUniqueId());
-                    target.removeMetadata(META_EARTH_TRAPPED, plugin);
-                }, 100L); // 5s trap window
             }
+            // Clean up trap state after 5s (the block stays, but the "trapped" debuff expires)
+            final UUID targetId = target.getUniqueId();
+            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                activeTraps.remove(targetId);
+                target.removeMetadata(META_EARTH_TRAPPED, plugin);
+            }, 100L);
 
             // 2nd hit while TRAPPED → SUFFOCATE
             if (target.hasMetadata(META_EARTH_TRAPPED)) {
@@ -1073,15 +1072,11 @@ public class MagicStaffListener implements Listener {
         }
 
         // ── ORIGINAL SYSTEM (Level 1-9): 2-hit suffocate ─────────────────────
+        // Dirt placed at feet is permanent (Silk Touch recoverable).
         Block feetBlock = target.getLocation().getBlock();
         if (feetBlock.getType().isAir()) {
             feetBlock.setType(Material.DIRT);
             magicDirtBlocks.add(feetBlock.getLocation().toBlockLocation());
-            final Block fb = feetBlock;
-            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-                if (fb.getType() == Material.DIRT) fb.setType(Material.AIR);
-                magicDirtBlocks.remove(fb.getLocation().toBlockLocation());
-            }, 100L);
         }
 
         int hits = 1;

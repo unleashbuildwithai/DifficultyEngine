@@ -10,6 +10,8 @@ import com.yourname.difficulty.gui.RegistryGUIListener;
 import com.yourname.difficulty.items.ItemFactory;
 import com.yourname.difficulty.listeners.BossEventListener;
 import com.yourname.difficulty.listeners.CapeVisualTask;
+import com.yourname.difficulty.listeners.DarkBowListener;
+import com.yourname.difficulty.listeners.GunZSwordListener;
 import com.yourname.difficulty.listeners.DifficultyEngine;
 import com.yourname.difficulty.listeners.GroupDifficultyListener;
 import com.yourname.difficulty.listeners.LevelProtectionListener;
@@ -196,6 +198,14 @@ public class Main extends JavaPlugin {
         // ── Rune mob drops (Air, Fire, Water, Earth from specific mobs) ────────
         getServer().getPluginManager().registerEvents(
                 new RuneDropListener(itemFactory), this);
+
+        // ── GunZ Sword: double-tap WASD dashing (Lv99 Melee) ──────────────────
+        getServer().getPluginManager().registerEvents(
+                new GunZSwordListener(itemFactory, skillManager, this), this);
+
+        // ── Dark Bow: homing arrows + Dragon Arrow drops ───────────────────────
+        getServer().getPluginManager().registerEvents(
+                new DarkBowListener(itemFactory, skillManager, this), this);
 
         // ── Spell Book system (Arcane Tome + Spell Pages) ──────────────────────
         this.spellBookManager = new SpellBookManager(this);
@@ -422,6 +432,14 @@ public class Main extends JavaPlugin {
             getServer().addRecipe(recipe);
             allRecipeKeys.add(key);
         }
+
+        // ── Dragon Arrow: 4× Dragon Arrow Tips → 4 Dragon Arrows ─────────────
+        NamespacedKey dragonArrowRecipe = new NamespacedKey(this, "dragon_arrow_recipe");
+        ItemStack dragonArrowResult = itemFactory.buildDragonArrow(4);
+        ShapelessRecipe dragonArrowR = new ShapelessRecipe(dragonArrowRecipe, dragonArrowResult);
+        dragonArrowR.addIngredient(4, Material.PRISMARINE_CRYSTALS); // Dragon Arrow Tips by material
+        getServer().addRecipe(dragonArrowR);
+        allRecipeKeys.add(dragonArrowRecipe);
 
         // ── Mage Gear recipes: LEATHER_PIECE + PURPLE_DYE + BLAZE_POWDER ──────
         // MageGearCraftListener intercepts PrepareItemCraftEvent to replace the
