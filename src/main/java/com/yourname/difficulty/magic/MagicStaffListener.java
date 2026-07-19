@@ -6,6 +6,7 @@ import com.yourname.difficulty.skills.SkillBonusManager;
 import com.yourname.difficulty.skills.SkillLevel;
 import com.yourname.difficulty.skills.SkillManager;
 import com.yourname.difficulty.skills.SkillType;
+import org.bukkit.Color;
 import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -396,14 +397,17 @@ public class MagicStaffListener implements Listener {
         projectileShooters.put(bolt.getUniqueId(), player.getUniqueId());
         projectileLevels.put(bolt.getUniqueId(), magicLevel);
 
+        // AIR bolt uses vivid CYAN particles — visually distinct from all other elements
         plugin.getServer().getScheduler().runTaskTimer(plugin, task -> {
             if (!bolt.isValid()) { task.cancel(); return; }
-            bolt.getWorld().spawnParticle(Particle.CLOUD,   bolt.getLocation(), 5, 0.10, 0.10, 0.10, 0.06);
-            bolt.getWorld().spawnParticle(Particle.ENCHANT, bolt.getLocation(), 3, 0.10, 0.10, 0.10, 0.12);
+            bolt.getWorld().spawnParticle(Particle.END_ROD, bolt.getLocation(), 4, 0.08, 0.08, 0.08, 0.018);
+            bolt.getWorld().spawnParticle(Particle.DUST,    bolt.getLocation(), 3, 0.07, 0.07, 0.07, 0,
+                    new Particle.DustOptions(Color.fromRGB(0, 220, 255), 1.4f));
+            bolt.getWorld().spawnParticle(Particle.CLOUD,   bolt.getLocation(), 2, 0.06, 0.06, 0.06, 0.03);
         }, 0L, 1L);
 
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_PHANTOM_FLAP, 1.0f, 1.8f);
-        player.sendActionBar("§7[Air] §7Air bolt fired! §8(Lv " + magicLevel + ")");
+        player.sendActionBar("§f[Air] §f⚡ Air bolt fired! §8(Lv " + magicLevel + ")");
 
         // Air gust also sweeps nearby magic dirt blocks
         for (int dy = 0; dy <= 1; dy++) {

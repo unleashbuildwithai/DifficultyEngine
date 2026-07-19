@@ -243,7 +243,9 @@ public class ItemFactory {
         if (meta != null) {
             meta.setDisplayName(element.staffName);
             meta.setCustomModelData(element.staffCMD);
+            // Deep, always-visible enchantment glow — guaranteed regardless of held/inventory state
             meta.addEnchant(Enchantment.UNBREAKING, 3, true);
+            meta.setEnchantmentGlintOverride(true);
             meta.addItemFlags(ItemFlag.HIDE_ENCHANTS, ItemFlag.HIDE_ATTRIBUTES);
             meta.setLore(buildStaffLore(element));
             meta.getPersistentDataContainer().set(staffKeys.get(element), PersistentDataType.BYTE, (byte) 1);
@@ -413,6 +415,8 @@ public class ItemFactory {
         if (meta != null) {
             meta.setDisplayName(element.runeName);
             meta.setCustomModelData(element.runeCMD);
+            // Vibrant enchantment glint — runes glow even without an enchantment tag
+            meta.setEnchantmentGlintOverride(true);
             meta.setLore(List.of(
                 "§8" + "─".repeat(22),
                 "§7Consumed when casting with the",

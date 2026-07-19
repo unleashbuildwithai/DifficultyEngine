@@ -63,18 +63,26 @@ public class VipShopListener implements Listener {
     private final GoldManager goldManager;
     private final NamespacedKey vipVillagerKey;
 
-    /** Rainbow cycling — 7 colours per complete rainbow loop. */
-    private static final Color[] RAINBOW = {
-        Color.fromRGB(255, 0,   0),   // red
-        Color.fromRGB(255, 127, 0),   // orange
-        Color.fromRGB(255, 255, 0),   // yellow
-        Color.fromRGB(0,   255, 0),   // green
-        Color.fromRGB(0,   200, 255), // cyan
-        Color.fromRGB(0,   0,   255), // blue
-        Color.fromRGB(180, 0,   255)  // purple
-    };
+    /**
+     * Rainbow ring — 12 vivid colours evenly spaced around the HSB hue wheel.
+     * More colours = smoother, more vibrant ring. Each colour is fully saturated
+     * (S=1, B=1) so they are as vibrant as possible.
+     */
+    private static final Color[] RAINBOW = buildVibrantRainbow(12);
+    /** Per-player rotation tick counter for the spinning ring effect. */
     private final Map<UUID, Integer> rainbowIndex = new HashMap<>();
     private BukkitTask rainbowTask;
+
+    /** Builds N fully-saturated rainbow colours evenly spaced around the hue wheel. */
+    private static Color[] buildVibrantRainbow(int count) {
+        Color[] colors = new Color[count];
+        for (int i = 0; i < count; i++) {
+            float hue = (float) i / count;
+            java.awt.Color awt = java.awt.Color.getHSBColor(hue, 1.0f, 1.0f);
+            colors[i] = Color.fromRGB(awt.getRed(), awt.getGreen(), awt.getBlue());
+        }
+        return colors;
+    }
 
     public VipShopListener(JavaPlugin plugin, ItemFactory itemFactory, GoldManager goldManager) {
         this.plugin         = plugin;
@@ -156,24 +164,45 @@ public class VipShopListener implements Listener {
     //  UNICORN SLIPPERS RAINBOW EFFECT
     // ══════════════════════════════════════════════════════════════════════════
 
+    /**
+     * Spawns a smooth, rotating rainbow ring at the player's feet.
+     *
+     * Every 3 ticks all 12 rainbow colours are placed simultaneously at evenly-
+     * spaced points around a circle of radius 0.50 blocks.  A slow rotation is
+     * applied (0.3 radians per tick ≈ one full spin every ~21 ticks / 1.05 s)
+     * so the ring looks like it is spinning around the player.
+     *
+     * Particle size is 1.8 (large, vivid) with near-zero spread so each dot
+     * lands exactly on the ring — no random "asterisk" splatter.
+     */
     private void startRainbowTask() {
         rainbowTask = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
             for (Player player : plugin.getServer().getOnlinePlayers()) {
                 ItemStack boots = player.getInventory().getBoots();
                 if (!itemFactory.isUnicornSlippers(boots)) continue;
 
-                int idx = rainbowIndex.getOrDefault(player.getUniqueId(), 0);
-                Color color = RAINBOW[idx % RAINBOW.length];
-                rainbowIndex.put(player.getUniqueId(), (idx + 1) % RAINBOW.length);
+                int tick = rainbowIndex.getOrDefault(player.getUniqueId(), 0);
+                rainbowIndex.put(player.getUniqueId(), tick + 1);
 
-                Location loc = player.getLocation().add(0, 0.1, 0);
-                player.getWorld().spawnParticle(
-                    Particle.DUST,
-                    loc, 6,
-                    0.25, 0.05, 0.25,
-                    0.0,
-                    new Particle.DustOptions(color, 1.2f)
-                );
+                // Base angle rotates smoothly each tick
+                double baseAngle = tick * 0.30;
+                Location center  = player.getLocation().clone().add(0, 0.12, 0);
+                double   radius  = 0.50;
+
+                // Spawn ALL colours at once — one dot per colour around the circle
+                for (int i = 0; i < RAINBOW.length; i++) {
+                    double angle = baseAngle + (2.0 * Math.PI * i / RAINBOW.length);
+                    double dx    = Math.cos(angle) * radius;
+                    double dz    = Math.sin(angle) * radius;
+                    Location dot = center.clone().add(dx, 0.0, dz);
+                    player.getWorld().spawnParticle(
+                        Particle.DUST,
+                        dot, 2,
+                        0.02, 0.02, 0.02,   // almost no spread — precise ring placement
+                        0.0,
+                        new Particle.DustOptions(RAINBOW[i], 1.8f) // large vibrant dots
+                    );
+                }
             }
         }, 5L, 3L);
     }

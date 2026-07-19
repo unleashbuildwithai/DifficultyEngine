@@ -12,6 +12,7 @@ import com.yourname.difficulty.listeners.BossEventListener;
 import com.yourname.difficulty.listeners.CapeVisualTask;
 import com.yourname.difficulty.listeners.DarkBowListener;
 import com.yourname.difficulty.listeners.GunZSwordListener;
+import com.yourname.difficulty.listeners.MagicGlowTask;
 import com.yourname.difficulty.listeners.DifficultyEngine;
 import com.yourname.difficulty.listeners.GroupDifficultyListener;
 import com.yourname.difficulty.listeners.LevelProtectionListener;
@@ -369,6 +370,9 @@ public class Main extends JavaPlugin {
         // Cape visual particles + floating hologram symbol — every 10 ticks (0.5 s)
         this.capeVisualTask = new CapeVisualTask(skillCapeManager, capeDataManager, this);
         capeVisualTask.runTaskTimer(this, 10L, 10L);
+
+        // Magic Item Glow — element-specific ambient particles for held staffs — every 4 ticks
+        new MagicGlowTask(itemFactory, this).runTaskTimer(this, 5L, 4L);
 
         for (Player p : getServer().getOnlinePlayers()) {
             difficultyManager.syncNightmareTag(p, difficultyManager.getDifficulty(p.getUniqueId()));

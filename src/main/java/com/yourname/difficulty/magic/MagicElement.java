@@ -53,8 +53,8 @@ public enum MagicElement {
         "air_staff",   "air_rune",
         Material.FEATHER,           Material.PAPER,
         Material.PHANTOM_MEMBRANE,  Material.FEATHER,
-        "§7💨 Air Staff",            "§7💨 Air Rune",
-        "§7", 2004, 3004
+        "§f⚡ Air Staff",            "§f⚡ Air Rune",
+        "§f", 2004, 3004
     );
 
     // ── Fields ────────────────────────────────────────────────────────────────

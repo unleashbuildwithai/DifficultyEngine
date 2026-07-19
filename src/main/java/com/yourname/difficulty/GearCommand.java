@@ -1,6 +1,7 @@
 package com.yourname.difficulty;
 
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.command.Command;
@@ -8,12 +9,9 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.EquipmentSlotGroup;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
-
-import java.nio.charset.StandardCharsets;
-import java.util.UUID;
 
 /**
  * /gear — Admin-only command that equips a player with max-enchanted
@@ -104,17 +102,18 @@ public class GearCommand implements CommandExecutor {
                 e(Enchantment.DEPTH_STRIDER,    3));
 
         // ADD_SCALAR(9.0): final speed = base × (1 + 9) = 10× walk speed
+        // Paper 1.21 API: use NamespacedKey + EquipmentSlotGroup (replaces UUID + EquipmentSlot)
         // Modifier only applies while boots are worn — no listener needed
         ItemMeta bootsMeta = boots.getItemMeta();
         if (bootsMeta != null) {
-            UUID modId = UUID.nameUUIDFromBytes(
-                    "de_gear_speed".getBytes(StandardCharsets.UTF_8));
             bootsMeta.addAttributeModifier(
                     Attribute.GENERIC_MOVEMENT_SPEED,
-                    new AttributeModifier(modId, "de_gear_speed",
+                    new AttributeModifier(
+                            new NamespacedKey("difficultyengine", "de_gear_speed"),
                             9.0,
                             AttributeModifier.Operation.ADD_SCALAR,
-                            EquipmentSlot.FEET));
+                            EquipmentSlotGroup.FEET
+                    ));
             boots.setItemMeta(bootsMeta);
         }
 
