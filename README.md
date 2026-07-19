@@ -10,7 +10,27 @@ A **Paper 1.21** plugin that transforms vanilla Minecraft into a deep RPG experi
 
 ### What's New This Session
 
-#### 🌿 Earth Block Throwing System (NEW!)
+#### ⚔ GunZ Sword — Level 99 Melee Weapon (NEW!)
+- Admin-spawnable netherite sword with **GunZ: The Duel**-style dashing
+- **Requires Melee Level 99** to wield
+- **Double-tap WASD** while holding to dash in any direction:
+  - `WW` → Forward dash
+  - `AA` → Left dash
+  - `DD` → Right dash
+  - `SS` → Backward dash
+- 0.8-second dash cooldown — weave through combat at blinding speed
+- Comes fully enchanted (Sharpness, Knockback, Fire Aspect, Unbreaking, Looting)
+
+#### 🏹 Dark Bow + Dragon Arrows (NEW!)
+- **Dark Bow** — Level 70 Ranged weapon with a **1% drop from the Warden**
+- Normal shot: single arrow (with Dragon Arrows: **purple particle trail**)
+- **Special shot** (SNEAK + Right-click): fires **2 homing arrows** simultaneously, each at −35% damage but dual-hit — costs 2 Dragon Arrows, 3 s cooldown
+- **Dragon Arrow** — crafted from Dragon Arrow Tips (dropped by the Ender Dragon)
+  - 8–16 Dragon Arrow Tips drop per Ender Dragon kill
+  - Craft: `4× Dragon Arrow Tips → 4 Dragon Arrows` (shapeless at any crafting table)
+- Tips display with an enchantment glint and purple trail when fired from the Dark Bow
+
+#### 🌿 Earth Block Throwing System
 - Earth magic completely reworked at **Magic Level 10+**
 - Carry a **throwable block** + matching **Earth Magic Page** in your inventory
 - **1st hit → TRAP**: Block placed under target's feet + trap damage + Slowness III
@@ -29,13 +49,6 @@ A **Paper 1.21** plugin that transforms vanilla Minecraft into a deep RPG experi
 - Earth Magic Pages available in `/registry` (page 2) — one per block tier
 - All existing Earth combos (WET→MUDDY, BLAZING→SMOTHERED, etc.) still work and take priority
 - Block is consumed from inventory on each throw — real resource cost!
-- Level 1–9: old dirt bolt system still works as before
-
-#### 📚 Book Fixes & Color Improvements
-- All yellow and white text removed from books and item lore — much easier to read
-- All books have been rewritten and reformatted — should work correctly now
-- Added "Earth Block Throwing" tutorial page to the Novice Magic Guide
-- Unicorn Slippers lore cleaned up
 
 #### 🎣 Fishing Cape Improvements
 - Fish and axolotl no longer show health bars or floating names above them
@@ -145,10 +158,10 @@ The magic system is the most deep and rewarding part of DifficultyEngine. It rew
 
 | Element | Shard + Ingredient + Stick | Rune from | Bolt Effect |
 |---|---|---|---|
-| 🔥 **Fire** | Enchanted Shard + Blaze Rod + Stick | 4× Blaze Powder → 8 runes | Fireball → SCORCHED |
-| 💧 **Water** | Enchanted Shard + Prismarine Shard + Stick | 4× Clay Ball → 8 runes | Water bolt → WET |
-| 🌿 **Earth** | Enchanted Shard + Dirt + Stick | 4× Sand → 8 runes | Block bolt → TRAP (Lv10+) |
-| 💨 **Air** | Enchanted Shard + Feather + Stick | 4× String → 8 runes | Air bolt → Knockback |
+| 🔥 **Fire** | Enchanted Shard + Blaze Rod + Stick | 4× Nether Brick → 8 runes | Fireball → SCORCHED |
+| 💧 **Water** | Enchanted Shard + Prismarine Shard + Stick | 4× Ice → 8 runes | Water bolt → WET |
+| 🌿 **Earth** | Enchanted Shard + Emerald + Stick | 4× Clay Ball → 8 runes | Block bolt → TRAP (Lv10+) |
+| 💨 **Air** | Enchanted Shard + Phantom Membrane + Stick | 4× Feather → 8 runes | Air bolt → Knockback |
 
 ---
 
@@ -496,7 +509,58 @@ Group up with friends to share difficulty bonuses and rewards.
 
 ---
 
-## 📦 Other Drops & Items
+## ⚔ Special Weapons
+
+### GunZ Sword
+
+An admin-spawnable Level 99 Melee netherite sword with **GunZ: The Duel**-style momentum dashing.
+
+| Stat | Value |
+|---|---|
+| Required Level | Melee 99 |
+| How to get | Admin spawn via `/registry` |
+| Dash cooldown | 0.8 seconds |
+
+**Controls:**
+- **Double-tap W** → Forward dash
+- **Double-tap A** → Left dash
+- **Double-tap D** → Right dash
+- **Double-tap S** → Backward dash
+
+Each dash flings you in that direction — chain them in combat to dodge and strike from unexpected angles.
+
+---
+
+### 🏹 Dark Bow
+
+A Level 70 Ranged bow that drops from the **Warden** (1% chance).
+
+| Stat | Value |
+|---|---|
+| Required Level | Ranged 70 |
+| Drop source | Warden — 1% |
+| Special cooldown | 3 seconds |
+
+**How to use:**
+- **Normal draw & release**: fires a single arrow. With Dragon Arrows loaded: adds a **purple particle trail** and applies a Glowing effect on hit.
+- **SNEAK + Right-click**: fires **2 homing arrows** instantly at −35% damage each (but both can hit — equal or greater total damage). Costs **2 Dragon Arrows**.
+
+---
+
+### 🐉 Dragon Arrows
+
+Crafted from **Dragon Arrow Tips**, which drop from the **Ender Dragon** (8–16 tips per kill).
+
+| Item | Craft / Drop |
+|---|---|
+| Dragon Arrow Tip | Ender Dragon — 8–16 per kill |
+| Dragon Arrow (4×) | `4× Dragon Arrow Tips` → shapeless craft |
+
+Dragon Arrows are used as ammunition for the Dark Bow. Load them like normal arrows.
+
+---
+
+##  Other Drops & Items
 
 | Item | How to get | What it does |
 |---|---|---|
@@ -505,6 +569,10 @@ Group up with friends to share difficulty bonuses and rewards.
 | Spell Combo Book | 8% from mobs killed by staff | Carry it for combo hints in action bar |
 | Ancient Kill Tome | Double Boss event reward | Reveals instant-death combo hints |
 | Earth Magic Page (×8) | `/registry` page 2 | Required to throw each block tier with Earth staff |
+| GunZ Sword | Admin spawn (`/registry`) | Lv 99 Melee — GunZ-style WASD dashing |
+| Dark Bow | 1% drop from Warden | Lv 70 Ranged — homing special shot |
+| Dragon Arrow Tip | Ender Dragon (8–16/kill) | Craft into Dragon Arrows |
+| Dragon Arrow (4×) | Craft: 4× Tips → 4 Arrows | Used with Dark Bow for purple trail + homing |
 | Unicorn Slippers | VIP Shop — 5,000 gp | Rainbow trail at your feet |
 | Soulfur Potion | Craftable | Causes Nausea + Drunken Sway |
 | Turbo Minecart | `/registry` (admin only) | 3× faster minecart |
