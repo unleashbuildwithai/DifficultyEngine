@@ -88,7 +88,8 @@ public class Main extends JavaPlugin {
     private PartyListener  partyListener;
     private QuestGUI       questGUI;
     private TradeListener  tradeListener;
-    private VipShopListener vipShopListener;
+    private VipShopListener    vipShopListener;
+    private GunZSwordListener  gunZSwordListener;
     // ── Magic Bag ──────────────────────────────────────────────────────────────
     private MagicBagManager    magicBagManager;
     private MagicBagGUI        magicBagGUI;
@@ -207,8 +208,8 @@ public class Main extends JavaPlugin {
                 new RuneDropListener(itemFactory), this);
 
         // ── GunZ Sword: double-tap WASD dashing (Lv99 Melee) ──────────────────
-        getServer().getPluginManager().registerEvents(
-                new GunZSwordListener(itemFactory, skillManager, this), this);
+        this.gunZSwordListener = new GunZSwordListener(itemFactory, skillManager, this);
+        getServer().getPluginManager().registerEvents(gunZSwordListener, this);
 
         // ── Dark Bow: homing arrows + Dragon Arrow drops ───────────────────────
         getServer().getPluginManager().registerEvents(
@@ -447,6 +448,7 @@ public class Main extends JavaPlugin {
         if (goldManager       != null) goldManager.saveAll();
         if (questManager      != null) questManager.saveAll();
         if (vipShopListener   != null) vipShopListener.shutdown();
+        if (gunZSwordListener != null) gunZSwordListener.shutdown();
         if (magicBagManager   != null) magicBagManager.saveAll();
         for (Player p : getServer().getOnlinePlayers()) {
             SkillBonusManager.removeDefenceHpBonus(p);

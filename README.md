@@ -1,603 +1,349 @@
-# ⚔ DifficultyEngine
+# DifficultyEngine
 
-A **Paper 1.21** plugin that transforms vanilla Minecraft into a deep RPG experience with dynamic mob difficulty scaling, a full elemental magic system, OSRS-style skills, capes, quests, parties, and more.
-
----
-
-## 🆕 Latest Update — Build `July 2026` (Restart Required)
-
-> **Server admin:** Replace `DifficultyEngine.jar` in `plugins/` and restart.
-
-### What's New This Session
-
-#### ⚔ GunZ Sword — Level 99 Melee Weapon (NEW!)
-- Admin-spawnable netherite sword with **GunZ: The Duel**-style dashing
-- **Requires Melee Level 99** to wield
-- **Double-tap WASD** while holding to dash in any direction:
-  - `WW` → Forward dash
-  - `AA` → Left dash
-  - `DD` → Right dash
-  - `SS` → Backward dash
-- 0.8-second dash cooldown — weave through combat at blinding speed
-- Comes fully enchanted (Sharpness, Knockback, Fire Aspect, Unbreaking, Looting)
-
-#### 🏹 Dark Bow + Dragon Arrows (NEW!)
-- **Dark Bow** — Level 70 Ranged weapon with a **1% drop from the Warden**
-- Normal shot: single arrow (with Dragon Arrows: **purple particle trail**)
-- **Special shot** (SNEAK + Right-click): fires **2 homing arrows** simultaneously, each at −35% damage but dual-hit — costs 2 Dragon Arrows, 3 s cooldown
-- **Dragon Arrow** — crafted from Dragon Arrow Tips (dropped by the Ender Dragon)
-  - 8–16 Dragon Arrow Tips drop per Ender Dragon kill
-  - Craft: `4× Dragon Arrow Tips → 4 Dragon Arrows` (shapeless at any crafting table)
-- Tips display with an enchantment glint and purple trail when fired from the Dark Bow
-
-#### 🌿 Earth Block Throwing System
-- Earth magic completely reworked at **Magic Level 10+**
-- Carry a **throwable block** + matching **Earth Magic Page** in your inventory
-- **1st hit → TRAP**: Block placed under target's feet + trap damage + Slowness III
-- **2nd hit while trapped → SUFFOCATE**: Blocks over head + heavy damage
-- **8 block tiers** — higher tier = more damage:
-  | Block | Magic Lv | Trap Damage | Suffocate Damage |
-  |-------|----------|------------|-----------------|
-  | Dirt | 10 | 2 ❤ | 4 ❤ |
-  | Cobblestone | 15 | 3 ❤ | 6 ❤ |
-  | Stone | 25 | 5 ❤ | 8 ❤ |
-  | Iron Block | 30 | 7 ❤ | 11 ❤ |
-  | Gold Block | 50 | 9 ❤ | 14 ❤ |
-  | Obsidian | 60 | 12 ❤ | 18 ❤ |
-  | Nether Bricks | 75 | 15 ❤ | 22 ❤ |
-  | Ancient Debris | 90 | 18 ❤ | 27 ❤ |
-- Earth Magic Pages available in `/registry` (page 2) — one per block tier
-- All existing Earth combos (WET→MUDDY, BLAZING→SMOTHERED, etc.) still work and take priority
-- Block is consumed from inventory on each throw — real resource cost!
-
-#### 🎣 Fishing Cape Improvements
-- Fish and axolotl no longer show health bars or floating names above them
-- Fish/axolotl are now **passthrough** — you and mobs can walk right through them
-- Fixed **double-cape rendering** when looking steeply downward
-- Cape animals are silent (no splashing sounds)
+A feature-rich Paper 1.21 plugin that layers an OSRS-inspired skill system, dynamic difficulty scaling, elemental magic, custom weapons, skill capes, a Magic Bag, and more onto vanilla Minecraft.
 
 ---
 
-## 📋 Table of Contents
-
-1. [Installation](#-installation)
-2. [Difficulty System](#-difficulty-system)
-3. [Skills & Levelling](#-skills--levelling)
-4. [🔮 Magic System — Full Guide](#-magic-system--full-guide)
-   - [Getting Started with Magic](#getting-started-with-magic)
-   - [Elemental Staffs](#elemental-staffs)
-   - [Runes — What They Are and How to Get Them](#runes--what-they-are-and-how-to-get-them)
-   - [Earth Block Throwing System](#-earth-block-throwing-system)
-   - [Why Magic Level Matters](#why-magic-level-matters)
-   - [Spell Books & Pages — The Advanced Combo System](#spell-books--pages--the-advanced-combo-system)
-   - [Full Combo Table](#full-combo-table)
-   - [Sandstorm System](#sandstorm-system)
-5. [Mage Gear](#-mage-gear)
-6. [Cape Wardrobe](#-cape-wardrobe)
-7. [Gold Currency](#-gold-currency)
-8. [VIP Shop](#-vip-shop)
-9. [Quest System](#-quest-system)
-10. [Party System](#-party-system)
-11. [Commands Reference](#-commands-reference--player)
-12. [Admin Commands](#-admin-commands)
+## Table of Contents
+1. [Commands](#commands)
+2. [Difficulty System](#difficulty-system)
+3. [Skill System](#skill-system)
+4. [Skill Capes](#skill-capes)
+5. [Magic Bag](#magic-bag)
+6. [Elemental Magic](#elemental-magic)
+7. [Mage Gear](#mage-gear)
+8. [GunZ Sword](#gunz-sword)
+9. [Dark Bow & Dragon Arrows](#dark-bow--dragon-arrows)
+10. [Boss Events](#boss-events)
+11. [Gold Currency](#gold-currency)
+12. [Quest System](#quest-system)
+13. [Party System](#party-system)
+14. [VIP Shop](#vip-shop)
+15. [Miscellaneous Items](#miscellaneous-items)
+16. [Resource Pack (Cape Icons)](#resource-pack-cape-icons)
+17. [Permissions](#permissions)
+18. [Data Files](#data-files)
 
 ---
 
-## 🔧 Installation
+## Commands
 
-1. Drop `DifficultyEngine.jar` into your server's `plugins/` folder.
-2. Requires **Paper 1.21** (or compatible fork).
-3. No other dependencies.
-4. Start the server — data folders are created automatically.
+| Command | Alias | Description |
+|---|---|---|
+| `/difficulty [level]` | `/diff` | View or set personal difficulty (peaceful/easy/medium/hard/nightmare) |
+| `/hpbar` | — | Toggle live HP display above mobs |
+| `/sit [on\|off]` | — | Toggle right-click-to-sit on slabs & stairs |
+| `/registry` | — | Open the 2-page Item Registry GUI |
+| `/skills [player]` | — | View skill levels |
+| `/mystats` | `/stats` | Open personal skill GUI |
+| `/cape` | `/mycape` | Open Cape Wardrobe GUI |
+| `/magicbag` | `/bag`, `/mbag` | Open Magic Bag GUI |
+| `/givebag [player]` | — | Give a Magic Bag **(Admin)** |
+| `/gold` | — | Check gold coin balance |
+| `/questbook` | — | Open Quest Journal |
+| `/party [invite\|leave\|kick\|info]` | — | Manage party |
+| `/trade [player]` | — | Open trade session |
+| `/spellbook` | — | Read Arcane Tome (unlocked spell combos) |
+| `/spellpage [player]` | — | Give a Spell Page **(Admin)** |
+| `/gear [player]` | — | Give max netherite gear **(Admin)** |
+| `/curecosmetic [player]` | — | Remove cosmetic effects **(Admin)** |
+| `/adminlight` | — | Toggle personal admin light **(Admin)** |
+| `/vipshop spawn` | — | Spawn VIP Shop Keeper NPC **(Admin)** |
 
 ---
 
-## ⚡ Difficulty System
+## Difficulty System
 
-Mobs scale in difficulty based on each player's settings:
+Players choose a personal difficulty that scales mob stats (health, damage, speed) and affects gold/XP rewards.
 
-| Difficulty | Mob HP | Mob Damage | Drops |
-|---|---|---|---|
-| Easy | ×1 | ×1 | Normal |
-| Normal | ×1.5 | ×1.25 | +25% |
-| Hard | ×2 | ×1.5 | +50% |
-| Nightmare | ×3 | ×2 | +100% |
+| Level | Multiplier | Tag |
+|---|---|---|
+| Peaceful | 0.5× | Gray |
+| Easy | 0.75× | Green |
+| Medium | 1.0× | Yellow |
+| Hard | 1.5× | Orange |
+| Nightmare | 3.0× | Red |
 
-- **Group Nightmare Bonus**: 4+ Nightmare players within 50 blocks → mobs become ×10 difficulty with massive drop bonuses.
-- Use `/difficulty` to change your difficulty at any time.
-- Use `/hpbar` to toggle HP bars above mobs.
+**Group Nightmare**: If 4+ Nightmare players are within 50 blocks, all mobs scale to **×10** difficulty and drop bonus rewards.
 
 ---
 
-## 📈 Skills & Levelling
+## Skill System
 
-All skills go from **Level 1 → 99**. XP is earned naturally through gameplay.
+Eight OSRS-inspired skills each reaching Level 99:
 
-| Skill | How to Level |
+| Skill | XP Source |
 |---|---|
-| **Melee** | Deal melee damage |
-| **Ranged** | Deal bow/crossbow damage |
-| **Defence** | Take damage from mobs |
-| **Prayer** | Right-click bones on dirt to bury |
-| **Magic** | Cast spells, land hits, trigger combos |
-| **Woodcutting** | Chop trees |
-| **Fishing** | Fish |
-| **Farming** | Harvest crops |
+| Melee | Dealing melee damage |
+| Ranged | Dealing ranged damage |
+| Defence | Taking damage / blocking |
+| Prayer | Burying bones on dirt (right-click) |
+| Magic | Casting elemental spells |
+| Woodcutting | Chopping trees |
+| Fishing | Catching fish |
+| Farming | Harvesting crops |
 
-Use `/skills` or `/mystats` to see your current levels and XP.
-
-**Level 99 in any skill** unlocks that skill's **Cape** (see Cape Wardrobe below).
-
----
-
-## 🔮 Magic System — Full Guide
-
-The magic system is the most deep and rewarding part of DifficultyEngine. It rewards **skill, timing, and knowledge of combos**. A low-level mage is slow and basic. A high-level mage is a devastating spell-chain machine.
+- Use `/mystats` to track progress
+- Level 99 in a skill awards the corresponding **Skill Cape**
+- Level 99 in **all** skills awards the **Max Cape**
 
 ---
 
-### Getting Started with Magic
+## Skill Capes
 
-1. **Get an Enchanted Shard** — drops ~5% from any hostile mob (it's a special Amethyst Shard with a magic tag).
+Skill capes are ELYTRA items stored in the **Cape Wardrobe** (separate from the chestplate slot — wear both!).
 
-2. **Craft an Elemental Staff** at any crafting table:
-   - `Enchanted Shard` + `Element Ingredient` + `Stick`
-   - Search the recipe book (green book icon in crafting table) for the exact recipe.
+### Opening / Equipping
+- `/cape` → opens the Cape Wardrobe GUI
+- Drag a cape into the slot, or shift-click it to equip
+- Old cape is returned to your inventory on swap
 
-3. **Craft Runes** for your staff element:
-   - `4× base material → 8 runes` (see recipe book, search "rune")
-   - Runes are consumed one per cast.
+### Visual Effects (ambient particles every 0.5 s)
+| Cape | Particle Symbol | Extra |
+|---|---|---|
+| ⚔ Melee | Crimson **sword** shape | CRIT sparks |
+| 🏹 Ranged | Green **bow + arrow** | ENCHANTED_HIT sparks |
+| 🛡 Defence | Blue **kite shield** | END_ROD glow |
+| ✟ Prayer | Warm-white **latin cross** | ENCHANT letters |
+| ✦ Magic | **Six-pointed star** (rainbow cycling) | Rainbow DUST |
+| 🪓 Woodcutting | Forest-green **axe** | HAPPY_VILLAGER |
+| 🐟 Fishing | Water cascade + tropical fish + axolotl cameo | — |
+| 🛒 Farming | Gold-brown **minecart** | COMPOSTER |
+| ☠ Boss Cape | Soul-flame cloud | SOUL particles |
+| ★ Max Cape | Firework burst | END_ROD |
 
-4. **Hold the staff** and **right-click** to cast. The bolt travels in the direction you are **looking** — aim with your crosshair.
+**Fishing Cape — Axolotl Cameo**: Every 10 s, either a pixel-art axolotl appears (pink DUST particles) **or** a real axolotl entity floats inside an invisible water-bubble (FALLING_WATER + UNDERWATER + SPLASH particles), 50/50 chance.
 
-5. **Gain Magic XP** from casting, hitting targets, and triggering combos.
+### Swap Bug Fix
+Hologram name tags and health-bar indicators are instantly removed when swapping capes — no more ghost labels floating in the world.
 
----
-
-### Elemental Staffs
-
-| Element | Shard + Ingredient + Stick | Rune from | Bolt Effect |
-|---|---|---|---|
-| 🔥 **Fire** | Enchanted Shard + Blaze Rod + Stick | 4× Nether Brick → 8 runes | Fireball → SCORCHED |
-| 💧 **Water** | Enchanted Shard + Prismarine Shard + Stick | 4× Ice → 8 runes | Water bolt → WET |
-| 🌿 **Earth** | Enchanted Shard + Emerald + Stick | 4× Clay Ball → 8 runes | Block bolt → TRAP (Lv10+) |
-| 💨 **Air** | Enchanted Shard + Phantom Membrane + Stick | 4× Feather → 8 runes | Air bolt → Knockback |
-
----
-
-### Rune Dust — The Crafting Material
-
-**Rune Dust** is the crafting ingredient for all Elemental Runes. Kill specific mobs or craft it at a Magic Cauldron.
-
+### Resource Pack (Cape Icons)
+Run `python gen_resourcepack.py` to generate `DifficultyEngine-RP.zip` which replaces the elytra-wings inventory icon with flat skill-coloured cape silhouettes. Add to `server.properties`:
 ```
-4× Rune Dust → 8 Runes   (at any crafting table)
+resource-pack=<hosted URL to DifficultyEngine-RP.zip>
+resource-pack-sha1=a909a9117c6fc1d4e0350f4a6861a68540d3985e
+resource-pack-required=false
 ```
 
-One stack of 64 dust = 128 runes = 128 casts!
-
-**No rune = no cast.** You'll see a message in your action bar telling you what to craft.
-
 ---
 
-### 🔥 Fire Rune Dust — Mob Loot Table
+## Magic Bag
 
-| Mob | Drop Chance | Dust Amount |
+A portable 32-slot arcane storage item that auto-sorts magic items into 4 colour-coded sections.
+
+### Getting It
+- `/registry` → Page 2 → click **✦ Magic Bag**
+- Admin: `/givebag [player]`
+
+### Opening It
+- **Right-click** the chest-shaped bag item → opens the 4-section GUI
+
+### Sections
+| Section | Colour | Stores |
 |---|---|---|
-| Blaze | 40% | 2–5 |
-| Magma Cube (Large) | 30% | 2–4 |
-| Magma Cube (Medium) | 20% | 1–2 |
-| Magma Cube (Small) | 10% | 1 |
-| Ghast | 35% | 3–6 |
-| Wither Skeleton | 25% | 1–3 |
-| Piglin Brute | 20% | 2–4 |
-| Strider | 10% | 1 |
-| **Wither (Boss)** | **100%** | **20–30 🔥** |
+| 🔮 Runes & Dust | Purple | Fire/Water/Earth/Air Runes + Rune Dust |
+| ⚗ Staffs & Gear | Blue | Elemental Staffs, all Mage Gear tiers, GunZ Sword, Dark Bow, Dragon Arrows |
+| 📜 Spell Books | Cyan | Spell Combo Book, Ancient Kill Tome, Arcane Tome, Spell Pages, Earth Pages |
+| 🌿 Ingredients | Green | Enchanted Shards, Soulfur Potions |
+
+### Auto-Collect (both directions)
+While carrying the Magic Bag, magic items are automatically redirected:
+- **Shift-click FROM a chest** → goes to bag (not inventory)
+- **Shift-click FROM inventory while a chest is open** → goes to bag (not the chest)
+
+Non-magic items are never touched.
+
+### Inside the GUI
+- **Shift-click** an item → returns it to your inventory
+- **⟳ Sort button** (HOPPER) → sorts each section by stack quantity (desc)
+- Items placed manually are validated against the section they belong to
 
 ---
 
-### 💧 Water Rune Dust — Mob Loot Table
+## Elemental Magic
 
-| Mob | Drop Chance | Dust Amount |
+Four elemental staffs cast spells that apply status effects and unlock powerful **combos**.
+
+### Staffs
+
+| Staff | Key Ingredient | Cast |
 |---|---|---|
-| Drowned | 20% | 1–2 |
-| Guardian | 40% | 2–5 |
-| Squid | 8% | 1 |
-| Glow Squid | 15% | 1–2 |
-| Axolotl | 10% | 1 |
-| **Elder Guardian (Boss)** | **100%** | **15–25 💧** |
+| 🔥 Fire Staff | Blaze Rod + Shard + Stick | Fireball → **Scorched** |
+| 💧 Water Staff | Water Bucket + Shard + Stick | Water bolt → **Wet** |
+| 🌍 Earth Staff | Clay Ball + Shard + Stick | Slow + Trap (block) |
+| 💨 Air Staff | Feather + Shard + Stick | Knockback gust / Hover (hold in air) |
+
+Each cast consumes 1 Rune. Craft runes: 4× ingredient → 8 runes.
+
+### Key Combos
+- **Freeze chain**: Water→Wet → Air→Chilled → Air→**FROZEN** (5 s) → ??? (see Ancient Kill Tome)
+- **Statue trap**: Water→Wet → Earth→Muddy → Fire→**STATUE** (8 s) → ???
+- **Thaw Explosion**: Fire on FROZEN → massive AoE burst
+- **Inferno Vortex**: Fire on BLAZING → double damage fire ticks
+
+### Earth Block Throwing (Magic Lv 10+)
+Carry an Earth Magic Page + a throwable block. First Earth hit: traps target. Second: suffocates. Higher-tier blocks deal more damage.
 
 ---
 
-### 🌿 Earth Rune Dust — Mob Loot Table
+## Mage Gear
 
-| Mob | Drop Chance | Dust Amount |
-|---|---|---|
-| Zombie | 15% | 1 |
-| Husk | 20% | 1–2 |
-| Zombie Villager | 12% | 1 |
-| Spider | 12% | 1 |
-| Cave Spider | 18% | 1–2 |
-| Creeper | 20% | 2–3 |
-| Pillager | 25% | 1–2 |
-| Vindicator | 25% | 2–4 |
-| Ravager | 65% | 6–12 |
-| **Warden (Boss)** | **100%** | **25–35 🌿** |
+Leather armour sets that reduce spell cooldowns and amplify Air gust power. 4 tiers:
 
----
+| Tier | Level | Ingredients | Cooldown / Piece | Air Power |
+|---|---|---|---|---|
+| Apprentice | Lv 1 | Leather + Purple Dye + String | −100 ms | ×0.75 |
+| Mage | Lv 30 | Leather + Purple Dye + Blaze Powder | −250 ms | ×1.25 |
+| Alch | Lv 60 | Leather + Blue Dye + Blaze Powder + Eye of Ender | −350 ms | ×1.625 |
+| Master | Lv 90 | Leather + Black Dye + Blaze Powder + Enchanted Shard + Dragon Breath | −500 ms | ×2.0 |
 
-### 💨 Air Rune Dust — Mob Loot Table
+Full 4-piece Master set: **−2000 ms cooldown**, **×2.0 air knockback**.
 
-| Mob | Drop Chance | Dust Amount |
-|---|---|---|
-| Bat | 5% | 1 |
-| Phantom | 35% | 2–4 |
-| Vex | 30% | 2–3 |
-| Breeze | 60% | 4–8 |
-| **Evoker** | **70%** | **5–10 💨** |
+**Mind Bomb** (2+ pieces): 5% chance on combo hits to inflict Nausea + Blindness 5 s, 30% to knock down the target (press SPACE to recover).
 
 ---
 
-### 🪣 Magic Cauldron — Bulk Crafting
+## GunZ Sword
 
-Use a **Cauldron** as an ingredient at the crafting table to brew large batches of Rune Dust.
+Admin-spawnable Netherite Sword (Lv 99 Melee required). Equipped from `/gear` or `/registry`.
 
-> ⚗️ The Cauldron is consumed in the process. Use it as a crafting ingredient alongside the element materials.
+### Double-Tap Dashing
+Hold the GunZ Sword in hand and **double-tap** any movement key:
 
-#### Basic Recipe (no diamond) → **16 Rune Dust**
-
-| Element | Ingredients |
+| Double-tap | Dash Direction |
 |---|---|
-| 🔥 Fire | `Cauldron` + `Lava Bucket` + `4× Netherrack` |
-| 💧 Water | `Cauldron` + `2× Water Bucket` + `4× Prismarine Shard` |
-| 🌿 Earth | `Cauldron` + `Water Bucket` + `4× Dirt` |
-| 💨 Air | `Cauldron` + `Pufferfish` + `Water Bucket` |
+| **W W** | Forward |
+| **S S** | Backward |
+| **A A** | Left |
+| **D D** | Right |
 
-#### Premium Recipe (add 1 Diamond) → **80 Rune Dust** *(5× more!)*
+**Detection**: A per-tick position sampler (every 1 tick / 50 ms) tracks direction changes. A double-tap is detected when the same direction is pressed, released (≥60 ms hold), and pressed again within 320 ms. Sprint events are NOT used — no false triggers from normal sprinting.
 
-Same as basic, but add `1× Diamond` to the crafting grid.
-
-> 💡 80 Rune Dust → 160 Runes → 160 casts!
-> 💡 Water/Lava Buckets return as empty buckets — you only lose the contents.
-
----
-
-### 🌿 Earth Block Throwing System
-
-At **Magic Level 10+**, the Earth staff transforms into a **block-throwing weapon**.
-
-**Requirements to use:**
-1. Magic Level ≥ the block tier's minimum
-2. The matching block in your inventory (1 consumed per throw)
-3. The matching **Earth Magic Page** in your inventory (permanent, not consumed)
-
-**How it works:**
-- **1st earth hit on a player** → Block placed under their feet (TRAP) + trap damage + Slowness III
-- **2nd earth hit while they're trapped** → Blocks placed over their head (SUFFOCATE) + heavy damage
-
-**Earth Magic Pages** are found in `/registry` (page 2). Each page unlocks a specific block tier.
-
-**Block Tier Table:**
-| Block | Magic Level Needed | Trap Damage | Suffocate Damage |
-|---|---|---|---|
-| 🟫 Dirt | Lv 10 | 2 ❤ | 4 ❤ |
-| 🪨 Cobblestone | Lv 15 | 3 ❤ | 6 ❤ |
-| ⬜ Stone | Lv 25 | 5 ❤ | 8 ❤ |
-| ⚙️ Iron Block | Lv 30 | 7 ❤ | 11 ❤ |
-| 🟡 Gold Block | Lv 50 | 9 ❤ | 14 ❤ |
-| 🌑 Obsidian | Lv 60 | 12 ❤ | 18 ❤ |
-| 🔴 Nether Bricks | Lv 75 | 15 ❤ | 22 ❤ |
-| 🟤 Ancient Debris | Lv 90 | 18 ❤ | 27 ❤ |
-
-**Important notes:**
-- Without the Earth Magic Page in your **inventory** (not in a chest), the block won't throw
-- The plugin always uses the **highest valid tier** available in your inventory
-- Earth combos (WET→MUDDY, BLAZING→SMOTHERED, STATUE→CRUMBLE) still activate first before the trap system
-- Below Level 10: old dirt bolt (slowness only) still works
+- **800 ms cooldown** between dashes
+- Dash propels ~3.6 blocks with a small upward arc
+- CRIT + ENCHANTED_HIT particles + sweep sound on trigger
 
 ---
 
-### Why Magic Level Matters
+## Dark Bow & Dragon Arrows
 
-> **Higher Magic level = faster casting = more powerful combos.**
+**Dark Bow** — 1% drop from Warden (Lv 70 Ranged required):
+- Normal shot: single arrow (with Dragon Arrow: purple trail + glow)
+- **Special** (sneak + right-click): fires 2 homing arrows at −35% damage each. Costs 2 Dragon Arrows, 3 s cooldown.
 
-Cooldown formula:
+**Dragon Arrow Tip** — drops from Ender Dragon (8–16 per kill)  
+**Dragon Arrow** — craft: 4× Dragon Arrow Tips → 4× Dragon Arrows
+
+---
+
+## Boss Events
+
+~1% chance on any mob spawn for a **Double Boss** event:
+- Two boss variants spawn with augmented stats
+- Players who defeat both **without anyone dying** earn the **Boss Cape**
+- Boss mobs also drop the **Ancient Kill Tome** (reveals instant-death combos)
+
+---
+
+## Gold Currency
+
+Gold coins drop from mobs (quantity scales with difficulty). Check balance with `/gold`.
+
+Gold is used in the VIP Shop and trade system.
+
+---
+
+## Quest System
+
+Open with `/questbook`. Kill-based quests award gold and skill XP. Quest progress saves automatically.
+
+---
+
+## Party System
+
+`/party invite <player>` — invite a player  
+`/party leave` — leave your party  
+Parties share a scoreboard HUD showing member difficulty and HP.
+
+Party members within 50 blocks with Nightmare difficulty trigger the **Group Nightmare** ×10 buff.
+
+---
+
+## VIP Shop
+
+A custom villager NPC that sells cosmetics for gold coins:
+- **Unicorn Slippers** — 5,000 gp. Leaves a rainbow particle trail at feet when worn.
+- Spawn the keeper: `/vipshop spawn`
+
+---
+
+## Miscellaneous Items
+
+| Item | How to Get | Effect |
+|---|---|---|
+| Enchanted Shard | ~5% drop from any mob | Crafts staffs & Master Mage Gear |
+| Soulfur Potion | `/registry` | Causes Nausea + Drunken Sway, repeated doses darken vision |
+| Turbo Minecart | `/registry` | 3× faster rail cart |
+| Spell Combo Book | 8% drop from mob killed by staff | Passive: shows combo hints in action bar |
+| Spell Page | 4% drop from any mob | Right-click to unlock a random Arcane Tome page |
+| Earth Magic Page (tiers) | `/registry` | Carry to unlock Earth block throwing |
+
+---
+
+## Resource Pack (Cape Icons)
+
+The plugin ships with a resource pack generator (`gen_resourcepack.py`) that creates `DifficultyEngine-RP.zip`.
+
+The pack replaces the elytra item icon in inventory with flat, skill-coloured **cape silhouettes** (16×16 px, gold clasp) using `custom_model_data` overrides for IDs 1001–1010. No wings in the inventory — just capes.
+
+**To regenerate**:
+```bash
+PYTHONIOENCODING=utf-8 python gen_resourcepack.py
 ```
-Cooldown = 3000ms − (level ÷ 99 × 2000ms) − (mage gear bonus)
-Minimum cooldown: 500ms
-```
 
-| Magic Level | Base Cooldown | With Full Mage Set (4 pieces) |
+**To serve**: host the ZIP and add to `server.properties` (see above).
+
+---
+
+## Permissions
+
+| Node | Default | Description |
 |---|---|---|
-| Lv 1 | 3.0 seconds | 2.0 seconds |
-| Lv 20 | 2.6 seconds | 1.6 seconds |
-| Lv 50 | 2.0 seconds | 1.0 seconds |
-| Lv 75 | 1.5 seconds | 0.5 seconds ← minimum! |
-| **Lv 99** | **1.0 second** | **0.5 seconds ← minimum!** |
-
-**Why this matters for combos:**
-- **SCORCHED** lasts only **3 seconds** — you need to cast Fire again within 3s to trigger **BLAZING**.
-- **CHILLED** lasts only **2.5 seconds** — you need to cast Air within 2.5s to trigger **FROZEN**.
-
-At low levels you physically **cannot chain these combos** because your cooldown is longer than the status window. At Level 99 with Mage Gear you fire every **0.5 seconds** — well within every combo window.
+| `difficultyengine.use` | true | Standard player commands |
+| `difficultyengine.gear` | op | `/gear` on self |
+| `difficultyengine.gear.others` | op | `/gear` on others |
+| `difficultyengine.registry` | op | `/registry` |
+| `difficultyengine.turbocart` | op | Obtain Turbo Minecart from registry |
+| `difficultyengine.cape.admin` | op | Bypass cape level requirements + set skills to 99 |
 
 ---
 
-### Spell Books & Pages — The Advanced Combo System
+## Data Files
 
-Use `/spellbook` to open your personal **Arcane Tome**. It shows all spell pages you've unlocked (out of 37 total).
+All data is stored under `plugins/DifficultyEngine/`:
 
-**How to get Spell Pages:**
-- Mobs have a **4% drop chance** when killed
-- Admins can give pages with `/spellpage [player]`
-- Trade with other players using `/trade`
-
-**How to use:**
-1. Get a Spell Page item (looks like a written book)
-2. **Right-click** it to consume and unlock a random combo in your tome
-3. Type `/spellbook` to read your unlocked combos
-
----
-
-### Full Combo Table
-
-| First Hit Status | Second Element | Result |
-|---|---|---|
-| Normal | 🔥 Fire | **SCORCHED** (3s window) |
-| SCORCHED | 🔥 Fire | **BLAZING** (5s intense burn) |
-| WET | 🔥 Fire | Extinguish — fire cancelled, steam |
-| MUDDY | 🔥 Fire | **STATUE** (8s, total immobility) |
-| CHILLED | 🔥 Fire | Thaw (steam burst, small dmg) |
-| FROZEN | 🔥 Fire | **Thaw EXPLOSION** (AoE damage) |
-| Normal | 💧 Water | **WET** (5–10s) |
-| SCORCHED | 💧 Water | **Steam Burst** (bonus damage) |
-| BLAZING | 💧 Water | **STEAM EXPLOSION** (AoE knockback) |
-| FROZEN | 💧 Water | **SLUSH** (Slowness III + Blindness) |
-| MUDDY | 💧 Water | **FLOOD WASH** (mud cleared, WET again) |
-| Normal | 🌿 Earth | Slowness + dirt at feet |
-| TRAPPED | 🌿 Earth | **SUFFOCATE** (tier damage) |
-| WET | 🌿 Earth | **MUDDY** (15–30s, Slowness IV) |
-| CHILLED | 🌿 Earth | **CRACKED ICE** (Blindness + heavy slow) |
-| BLAZING | 🌿 Earth | **SMOTHERED** (extinguish + heavy dmg) |
-| STATUE | 🌿 Earth | **CRUMBLE** (bonus dmg, breaks statue) |
-| Normal | 💨 Air | Heavy knockback |
-| WET | 💨 Air | **CHILLED** (2.5s — act fast!) |
-| CHILLED | 💨 Air | **FROZEN** (5s — Air = instant death!) |
-| FROZEN | 💨 Air | 💀 **INSTANT DEATH** (shattered) |
-| STATUE | 💨 Air | 💀 **INSTANT DEATH** (crumbled) |
-| MUDDY | 💨 Air | **MUD LAUNCH** (massive upward catapult) |
-| BLAZING | 💨 Air | **INFERNO BLAST** (fire + huge knockback) |
-| SCORCHED | 💨 Air | **FANNED FLAMES** (extended fire) |
-
-**Mage Gear bonus (wear 2+ pieces):**
-- 5% chance on any combo hit → **MIND BOMB** (Nausea + Blindness 5s)
-- 30% chance from Mind Bomb → **FALLEN** (crawl — press SPACE to get up)
-
----
-
-### Sandstorm System
-
-**Chain:** Water Staff → Earth bolt → Air bolt to unleash it.
-
-1. Use **Water Staff** (right-click a block with Water Bucket) to place water
-2. Shoot water with **Earth bolt** → becomes Quicksand (Soul Sand)
-3. Shoot quicksand with **Air bolt** → **SANDSTORM!**
-
-- 200-block radius, sandy particles every 5 ticks
-- 0.5 ♥ damage every 2 seconds inside the storm
-- **💧 Hydration BossBar** — drains in storm, drink Water Bottle to refill
-- Each re-cast **doubles** duration, capped at 15 minutes
-
----
-
-## 🛡 Mage Gear
-
-Craftable leather armour that reduces spell cooldown and boosts air power.
-
-| Tier | Magic Level | Cooldown/piece | Craft Ingredients |
-|---|---|---|---|
-| Apprentice | Lv 1 | −100ms | Leather piece + Purple Dye + String |
-| Mage | Lv 30 | −250ms | Leather piece + Purple Dye + Blaze Powder |
-| Alch Mage | Lv 60 | −350ms | Leather piece + Blue Dye + Blaze Powder + Eye of Ender |
-| Master Mage | Lv 90 | −500ms | Leather piece + Black Dye + Blaze Powder + Enchanted Shard + Dragon Breath |
-
-- Full 4-piece Master set: **−2000ms cooldown** (brings Lv99 cooldown to 500ms minimum)
-- Each piece also boosts Air gust power (full Master = 2× Air knockback)
-- Requires the matching Magic level to equip
-
----
-
-## 🎭 Cape Wardrobe
-
-Use `/mycape` or `/cape` to open the **Cape Wardrobe** GUI.
-
-Two independent slots — **wear armour AND a cape at the same time!**
-
-| Cape | Requirement | Visual Effect |
-|---|---|---|
-| Melee Cape | 99 Melee | Red crit sparks |
-| Ranged Cape | 99 Ranged | Green enchant sparks |
-| Defence Cape | 99 Defence | Blue-white End Rod particles |
-| Prayer Cape | 99 Prayer | Floating enchant letters |
-| Magic Cape | 99 Magic | Rainbow cycling dust sparkles |
-| Woodcutting Cape | 99 Woodcutting | Happy Villager particles |
-| Fishing Cape | 99 Fishing | Water cascade + tropical fish + axolotl |
-| Farming Cape | 99 Farming | Composter + Happy Villager particles |
-| Max Cape | 99 in ALL skills | Firework + End Rod bursts |
-| Boss Cape | Defeat a Double Boss event | Soul Fire Flame + Soul particles |
-
-Capes are saved per-player and persist through restarts.
-
----
-
-## 💰 Gold Currency
-
-A custom in-game currency.
-
-- Mobs drop Gold based on difficulty and type
-- Check your balance: `/gold`
-- Trade gold with players: `/trade`
-
----
-
-## 🛍 VIP Shop
-
-The **VIP Shop Keeper** is a villager NPC selling cosmetic items for Gold.
-
-| Item | Price | What it does |
-|---|---|---|
-| 🦄 Unicorn Slippers | 5,000 gp | Creates a rainbow particle trail at your feet while worn |
-
-Admins spawn the VIP keeper with `/vipshop spawn`.
-
----
-
-## 📜 Quest System
-
-Use `/questbook` to open the Quest Book.
-
-- Quests: kill mobs, gather items, achieve milestones
-- Rewards: Gold, XP, special items
-- Multiple quest types with progression tracking
-
----
-
-## 👥 Party System
-
-Group up with friends to share difficulty bonuses and rewards.
-
-- `/party create` — form a party
-- `/party invite <player>` — invite someone
-- `/party join <player>` — accept an invitation
-- `/party leave` — leave your party
-- Party HUD shows in the sidebar scoreboard
-- Group Nightmare bonus triggers with 4+ Nightmare players within 50 blocks
-
----
-
-## 📖 Commands Reference — Player
-
-| Command | What it does |
+| File/Folder | Contents |
 |---|---|
-| `/difficulty` | Change your difficulty (Easy / Normal / Hard / Nightmare) |
-| `/hpbar` | Toggle mob HP bars on/off above their heads |
-| `/sit` | Toggle right-click-to-sit on stairs and slabs |
-| `/skills` | Open the Skills GUI — see all your levels and XP |
-| `/mystats` or `/stats` | Same as `/skills` |
-| `/cape` or `/mycape` | Open the Cape Wardrobe (wear armour + cape at the same time!) |
-| `/gold` | Check your gold coin balance |
-| `/questbook` | Open your Quest Journal |
-| `/party invite <player>` | Invite a player to your party |
-| `/party join <player>` | Join someone's party |
-| `/party leave` | Leave your current party |
-| `/party info` | See current party members |
-| `/trade <player>` | Open a trade window with a nearby player |
-| `/spellbook` | Read your Arcane Tome — shows all unlocked spell combos |
-| `/registry` | Open the Item Registry — browse all custom items |
+| `difficulty/<uuid>.yml` | Per-player difficulty level |
+| `skills/<uuid>.yml` | Per-player skill XP/levels |
+| `capes/<uuid>.yml` | Equipped cape per player |
+| `bags/<uuid>.yml` | Magic Bag contents per player |
+| `spellbook/<uuid>.yml` | Unlocked Arcane Tome pages |
+| `gold/<uuid>.yml` | Gold coin balances |
+| `quests/<uuid>.yml` | Quest progress |
 
 ---
 
-## 🛡 Admin Commands
+## Building
 
-| Command | What it does |
-|---|---|
-| `/gear` | Give yourself max-enchanted netherite god gear (testing) |
-| `/curecosmetic` | Remove all cosmetic effects from yourself |
-| `/adminlight` | Toggle a personal light source that follows you |
-| `/spellpage [player]` | Give a Spell Page to yourself or another player |
-| `/vipshop spawn` | Spawn the VIP Shop Keeper villager at your location |
-| `/registry` | Browse and spawn any custom item (requires op) |
-
----
-
-## ⚔ Special Weapons
-
-### GunZ Sword
-
-An admin-spawnable Level 99 Melee netherite sword with **GunZ: The Duel**-style momentum dashing.
-
-| Stat | Value |
-|---|---|
-| Required Level | Melee 99 |
-| How to get | Admin spawn via `/registry` |
-| Dash cooldown | 0.8 seconds |
-
-**Controls:**
-- **Double-tap W** → Forward dash
-- **Double-tap A** → Left dash
-- **Double-tap D** → Right dash
-- **Double-tap S** → Backward dash
-
-Each dash flings you in that direction — chain them in combat to dodge and strike from unexpected angles.
-
----
-
-### 🏹 Dark Bow
-
-A Level 70 Ranged bow that drops from the **Warden** (1% chance).
-
-| Stat | Value |
-|---|---|
-| Required Level | Ranged 70 |
-| Drop source | Warden — 1% |
-| Special cooldown | 3 seconds |
-
-**How to use:**
-- **Normal draw & release**: fires a single arrow. With Dragon Arrows loaded: adds a **purple particle trail** and applies a Glowing effect on hit.
-- **SNEAK + Right-click**: fires **2 homing arrows** instantly at −35% damage each (but both can hit — equal or greater total damage). Costs **2 Dragon Arrows**.
-
----
-
-### 🐉 Dragon Arrows
-
-Crafted from **Dragon Arrow Tips**, which drop from the **Ender Dragon** (8–16 tips per kill).
-
-| Item | Craft / Drop |
-|---|---|
-| Dragon Arrow Tip | Ender Dragon — 8–16 per kill |
-| Dragon Arrow (4×) | `4× Dragon Arrow Tips` → shapeless craft |
-
-Dragon Arrows are used as ammunition for the Dark Bow. Load them like normal arrows.
-
----
-
-##  Other Drops & Items
-
-| Item | How to get | What it does |
-|---|---|---|
-| Enchanted Shard | ~5% from any hostile mob | Crafting ingredient for staffs & Master Mage Gear |
-| Spell Page | 4% from any mob | Right-click to unlock a combo in your Arcane Tome |
-| Spell Combo Book | 8% from mobs killed by staff | Carry it for combo hints in action bar |
-| Ancient Kill Tome | Double Boss event reward | Reveals instant-death combo hints |
-| Earth Magic Page (×8) | `/registry` page 2 | Required to throw each block tier with Earth staff |
-| GunZ Sword | Admin spawn (`/registry`) | Lv 99 Melee — GunZ-style WASD dashing |
-| Dark Bow | 1% drop from Warden | Lv 70 Ranged — homing special shot |
-| Dragon Arrow Tip | Ender Dragon (8–16/kill) | Craft into Dragon Arrows |
-| Dragon Arrow (4×) | Craft: 4× Tips → 4 Arrows | Used with Dark Bow for purple trail + homing |
-| Unicorn Slippers | VIP Shop — 5,000 gp | Rainbow trail at your feet |
-| Soulfur Potion | Craftable | Causes Nausea + Drunken Sway |
-| Turbo Minecart | `/registry` (admin only) | 3× faster minecart |
-
----
-
-## 🏗 Building from Source
+Requires Maven and Java 21+.
 
 ```bash
-git clone https://github.com/unleashbuildwithai/DifficultyEngine.git
-cd DifficultyEngine
-mvn clean package
+# Windows (Maven on Desktop)
+"C:\Users\Owner\Desktop\maven\apache-maven-3.9.9\bin\mvn.cmd" clean package
+
+# Copy to server
+copy target\DifficultyEngine-1.0.jar "C:\...\server\plugins\"
 ```
 
-The shaded JAR will be in `target/DifficultyEngine-1.0.jar`.
-
-The `seperate/` folder contains the **SeparatePlug** — an independent PvP spirit plugin. Build separately:
-
-```bash
-cd seperate
-mvn clean package
-```
-
----
-
-## 📄 License
-
-MIT — free to use, modify, and distribute.
+GitHub: https://github.com/unleashbuildwithai/DifficultyEngine

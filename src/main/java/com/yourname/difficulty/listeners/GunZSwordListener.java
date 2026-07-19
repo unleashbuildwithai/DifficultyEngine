@@ -2,17 +2,14 @@ package com.yourname.difficulty.listeners;
 
 import com.yourname.difficulty.items.ItemFactory;
 import com.yourname.difficulty.skills.SkillManager;
-import com.yourname.difficulty.skills.SkillType;
+import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerToggleSprintEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
 
 import java.util.EnumMap;
@@ -23,124 +20,163 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * GunZSwordListener — Implements GunZ: The Duel style dashing mechanics
- * for the Lv99 Melee GunZ Sword.
+ * GunZSwordListener — GunZ: The Duel double-tap dashing for the GunZ Sword.
  *
- * ── Dashing ───────────────────────────────────────────────────────────────────
- *  Double-tap a movement direction while holding the GunZ Sword to dash:
- *  • WW (double-tap forward / sprint start) → Forward dash
- *  • AA (rapid left strafe start)           → Left dash
- *  • DD (rapid right strafe start)          → Right dash
- *  • SS (rapid backward movement start)     → Backward dash
+ * ── Algorithm ─────────────────────────────────────────────────────────────────
+ * A per-tick sampler (every 1 tick / 50 ms) records each player's position.
+ * The position delta between two consecutive ticks is projected into
+ * player-local (WASD) space, giving a stable direction reading that is immune
+ * to the noise of PlayerMoveEvent and to sprint-key vs double-tap ambiguity.
  *
- *  Dashes share an 800ms cooldown. Each dash propels the player ~3 blocks
- *  in the chosen direction with a small upward arc.
+ * Double-tap detection:
+ *   1. Player presses key   → direction becomes active (START recorded)
+ *   2. Player releases key  → direction becomes inactive (STOP recorded,
+ *                             only if the key was held ≥ MIN_HOLD_MS)
+ *   3. Player presses again → if gap between STOP and this new START is
+ *                             between MIN_GAP_MS and DOUBLE_TAP_WINDOW_MS,
+ *                             dash is triggered.
  *
- * ── Controls ─────────────────────────────────────────────────────────────────
- *  Forward dash: start sprinting (double-tap W in vanilla Minecraft)
- *  Side/Back dash: the plugin detects rapid repeated lateral movement
- *                  (stop + restart in same direction within 350ms)
+ * Each of W / A / S / D is tracked fully independently.
+ * No sprint events are used — this eliminates the "any sprint = dash" bug.
  */
 public class GunZSwordListener implements Listener {
 
-    /** Direction relative to the player's facing. */
+    /** Direction in player-local space. */
     private enum Dir { W, A, S, D }
 
-    private static final long DOUBLE_TAP_WINDOW_MS = 350L; // max gap between taps
-    private static final long DASH_COOLDOWN_MS      = 800L; // cooldown between any dashes
+    /** How far the player must move per tick to count as "pressing" a key. */
+    private static final double MOVE_THRESHOLD = 0.07;
+
+    /** A key must be held for at least this long before releasing it counts as a "tap". */
+    private static final long MIN_HOLD_MS = 60L;
+
+    /** A re-press must come at least this long after the stop (avoids diagonal noise). */
+    private static final long MIN_GAP_MS = 40L;
+
+    /** Maximum gap between the first key-release and the second press for a double-tap. */
+    private static final long DOUBLE_TAP_WINDOW_MS = 320L;
+
+    /** Cooldown between any two dashes (ms). */
+    private static final long DASH_COOLDOWN_MS = 800L;
 
     private final ItemFactory  itemFactory;
     private final SkillManager skillManager;
     private final JavaPlugin   plugin;
+    private       BukkitTask   samplerTask;
 
-    // ── Per-player direction tracking ─────────────────────────────────────────
-    /** Which directions the player was moving last tick. */
-    private final Map<UUID, Set<Dir>>          previousDirs = new HashMap<>();
-    /** When each direction last ended (player stopped moving that way). */
-    private final Map<UUID, Map<Dir, Long>>    dirEndedAt   = new HashMap<>();
-    /** When the player's last dash occurred. */
-    private final Map<UUID, Long>              dashCooldown = new HashMap<>();
+    // ── Per-player tracking ───────────────────────────────────────────────────
+
+    /** Direction set active on the previous sampler tick. */
+    private final Map<UUID, Set<Dir>>              prevDirs    = new HashMap<>();
+    /** Absolute position on the previous sampler tick (for delta calculation). */
+    private final Map<UUID, Location>              prevLocs    = new HashMap<>();
+    /** Timestamp when each direction last became ACTIVE (key pressed). */
+    private final Map<UUID, EnumMap<Dir, Long>>    startTimes  = new HashMap<>();
+    /** Timestamp when each direction last became INACTIVE (key released). */
+    private final Map<UUID, EnumMap<Dir, Long>>    stopTimes   = new HashMap<>();
+    /** Last dash timestamp per player. */
+    private final Map<UUID, Long>                  dashCooldown = new HashMap<>();
 
     public GunZSwordListener(ItemFactory itemFactory, SkillManager skillManager, JavaPlugin plugin) {
         this.itemFactory  = itemFactory;
         this.skillManager = skillManager;
         this.plugin       = plugin;
+
+        // Start the per-tick sampler immediately
+        samplerTask = plugin.getServer().getScheduler()
+                .runTaskTimer(plugin, this::sample, 2L, 1L);
     }
 
-    // ── Forward dash — detected via sprint toggle ─────────────────────────────
-
-    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
-    public void onSprint(PlayerToggleSprintEvent event) {
-        if (!event.isSprinting()) return;
-        Player player = event.getPlayer();
-        if (!isHoldingGunZSword(player)) return;
-        triggerDash(player, Dir.W);
+    /** Cancel the sampler on plugin disable. */
+    public void shutdown() {
+        if (samplerTask != null) samplerTask.cancel();
     }
 
-    // ── Lateral + backward dash — detected via movement direction edge ─────────
+    // ── Per-tick sampler ──────────────────────────────────────────────────────
 
-    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
-    public void onMove(PlayerMoveEvent event) {
-        // Only process if position actually changed
-        if (event.getTo() == null) return;
-        double dx = event.getTo().getX() - event.getFrom().getX();
-        double dz = event.getTo().getZ() - event.getFrom().getZ();
-        if (dx * dx + dz * dz < 0.0004) return; // ignore tiny or pure head-rotation moves
-
-        Player player = event.getPlayer();
-        if (!isHoldingGunZSword(player)) {
-            previousDirs.remove(player.getUniqueId());
-            dirEndedAt.remove(player.getUniqueId());
-            return;
-        }
-
-        // ── Convert world delta to player-relative (WASD) components ──────────
-        float yaw    = player.getLocation().getYaw();
-        double sinY  = Math.sin(Math.toRadians(yaw));
-        double cosY  = Math.cos(Math.toRadians(yaw));
-
-        // relForward > 0 = player moving forward (W), < 0 = backward (S)
-        // relRight   > 0 = player moving right (D), < 0 = left (A)
-        double relForward = dx * (-sinY) + dz * cosY;
-        double relRight   = dx * cosY   + dz * sinY;
-
-        // ── Determine which directions are active this tick ────────────────────
-        Set<Dir> currentDirs = new HashSet<>();
-        if (relForward >  0.015) currentDirs.add(Dir.W);
-        if (relForward < -0.015) currentDirs.add(Dir.S);
-        if (relRight   >  0.015) currentDirs.add(Dir.D);
-        if (relRight   < -0.015) currentDirs.add(Dir.A);
-
-        UUID uid = player.getUniqueId();
-        Set<Dir> prev    = previousDirs.getOrDefault(uid, new HashSet<>());
-        Map<Dir, Long> ended = dirEndedAt.computeIfAbsent(uid, k -> new EnumMap<>(Dir.class));
-
+    private void sample() {
         long now = System.currentTimeMillis();
 
-        // ── Detect directions that just STOPPED ───────────────────────────────
-        for (Dir d : prev) {
-            if (!currentDirs.contains(d)) {
-                ended.put(d, now); // record when this direction ended
-            }
-        }
+        for (Player player : plugin.getServer().getOnlinePlayers()) {
+            UUID uid = player.getUniqueId();
 
-        // ── Detect directions that just STARTED — check for double-tap ────────
-        for (Dir d : currentDirs) {
-            if (!prev.contains(d) && d != Dir.W) { // W is handled by sprint event
-                Long endTime = ended.get(d);
-                if (endTime != null) {
-                    long gap = now - endTime;
-                    if (gap > 20 && gap < DOUBLE_TAP_WINDOW_MS) {
-                        // Double-tap detected!
-                        triggerDash(player, d);
-                        ended.remove(d);
+            if (!isHoldingGunZSword(player)) {
+                // Clean up stale state
+                prevDirs.remove(uid);
+                prevLocs.remove(uid);
+                startTimes.remove(uid);
+                stopTimes.remove(uid);
+                continue;
+            }
+
+            Location currLoc = player.getLocation().clone();
+            Location prevLoc = prevLocs.get(uid);
+            prevLocs.put(uid, currLoc);
+
+            if (prevLoc == null) {
+                prevDirs.put(uid, new HashSet<>());
+                continue;
+            }
+
+            // ── Compute per-tick position delta ───────────────────────────────
+            double dx = currLoc.getX() - prevLoc.getX();
+            double dz = currLoc.getZ() - prevLoc.getZ();
+
+            // Project world delta into player-local space using the current yaw
+            float  yaw  = currLoc.getYaw();
+            double sinY = Math.sin(Math.toRadians(yaw));
+            double cosY = Math.cos(Math.toRadians(yaw));
+
+            double fwd   =  dx * (-sinY) + dz * cosY;   // > 0 = forward (W)
+            double right =  dx *   cosY  + dz * sinY;   // > 0 = right   (D)
+
+            // ── Classify active directions ─────────────────────────────────────
+            Set<Dir> current = new HashSet<>(4);
+            if (fwd   >  MOVE_THRESHOLD) current.add(Dir.W);
+            if (fwd   < -MOVE_THRESHOLD) current.add(Dir.S);
+            if (right >  MOVE_THRESHOLD) current.add(Dir.D);
+            if (right < -MOVE_THRESHOLD) current.add(Dir.A);
+
+            Set<Dir>           prev  = prevDirs.getOrDefault(uid, new HashSet<>());
+            EnumMap<Dir, Long> stops  = stopTimes.computeIfAbsent(uid, k -> new EnumMap<>(Dir.class));
+            EnumMap<Dir, Long> starts = startTimes.computeIfAbsent(uid, k -> new EnumMap<>(Dir.class));
+
+            // ── Directions that just STOPPED ──────────────────────────────────
+            for (Dir d : prev) {
+                if (!current.contains(d)) {
+                    Long startAt = starts.get(d);
+                    // Only count the release if the key was held long enough
+                    if (startAt != null && (now - startAt) >= MIN_HOLD_MS) {
+                        stops.put(d, now);
+                    }
+                    starts.remove(d);
+                }
+            }
+
+            // ── Directions that just STARTED ──────────────────────────────────
+            for (Dir d : current) {
+                if (!prev.contains(d)) {
+                    Long stopAt = stops.get(d);
+                    if (stopAt != null) {
+                        long gap = now - stopAt;
+                        if (gap >= MIN_GAP_MS && gap <= DOUBLE_TAP_WINDOW_MS) {
+                            // ✅ Double-tap!
+                            stops.remove(d);
+                            starts.remove(d);
+                            triggerDash(player, d);
+                        }
+                    }
+                    // Record start of this key press (even if no dash triggered)
+                    starts.put(d, now);
+                    // Clear any stale stop record once the key is pressed
+                    if (!stops.containsKey(d)) {
+                        stops.remove(d); // already absent — no-op, just clarity
                     }
                 }
             }
-        }
 
-        // Update previous directions
-        previousDirs.put(uid, new HashSet<>(currentDirs));
+            prevDirs.put(uid, new HashSet<>(current));
+        }
     }
 
     // ── Dash execution ────────────────────────────────────────────────────────
@@ -149,7 +185,6 @@ public class GunZSwordListener implements Listener {
         UUID uid = player.getUniqueId();
         long now = System.currentTimeMillis();
 
-        // Cooldown check
         if (now - dashCooldown.getOrDefault(uid, 0L) < DASH_COOLDOWN_MS) return;
         dashCooldown.put(uid, now);
 
@@ -158,38 +193,38 @@ public class GunZSwordListener implements Listener {
         if (facing.lengthSquared() < 0.001) return;
         facing.normalize();
 
-        // Right vector (90° clockwise of facing in XZ plane)
+        // Right vector: 90° clockwise of facing in XZ plane
         Vector right = new Vector(facing.getZ(), 0, -facing.getX());
 
-        double speed = 1.15; // blocks of distance
+        double speed = 1.2;
         Vector dashVec = switch (dir) {
             case W -> facing.clone().multiply(speed);
             case S -> facing.clone().multiply(-speed * 0.85);
             case A -> right.clone().multiply(-speed);
             case D -> right.clone().multiply(speed);
         };
-        dashVec.setY(0.18); // small upward arc — GunZ style
+        dashVec.setY(0.20); // slight upward arc — GunZ style
 
         player.setVelocity(dashVec);
 
-        // ── Visual & sound ────────────────────────────────────────────────────
-        String dirLabel = switch (dir) {
-            case W -> "▶▶";
-            case S -> "◀◀";
-            case A -> "▲ LEFT";
-            case D -> "RIGHT ▲";
+        // Wipe stale start/stop state so the dash doesn't immediately re-trigger
+        startTimes.getOrDefault(uid, new EnumMap<>(Dir.class)).remove(dir);
+        stopTimes.getOrDefault(uid,  new EnumMap<>(Dir.class)).remove(dir);
+
+        // ── Visuals & sound ───────────────────────────────────────────────────
+        Location loc = player.getLocation().add(0, 1, 0);
+        player.getWorld().spawnParticle(Particle.CRIT,          loc, 20, 0.35, 0.35, 0.35, 0.28);
+        player.getWorld().spawnParticle(Particle.ENCHANTED_HIT, loc,  9, 0.20, 0.20, 0.20, 0.18);
+        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_PLAYER_ATTACK_SWEEP, 1.0f, 1.8f);
+        player.getWorld().playSound(player.getLocation(), Sound.ITEM_ARMOR_EQUIP_NETHERITE, 0.6f, 2.0f);
+
+        String label = switch (dir) {
+            case W -> "▶▶ FORWARD";
+            case S -> "◀◀ BACK";
+            case A -> "◁ LEFT";
+            case D -> "RIGHT ▷";
         };
-
-        player.getWorld().spawnParticle(Particle.CRIT,
-            player.getLocation().add(0, 1, 0), 18, 0.35, 0.35, 0.35, 0.25);
-        player.getWorld().spawnParticle(Particle.ENCHANTED_HIT,
-            player.getLocation().add(0, 1, 0), 8, 0.2, 0.2, 0.2, 0.15);
-        player.getWorld().playSound(player.getLocation(),
-            Sound.ENTITY_PLAYER_ATTACK_SWEEP, 1.0f, 1.8f);
-        player.getWorld().playSound(player.getLocation(),
-            Sound.ITEM_ARMOR_EQUIP_NETHERITE, 0.6f, 2.0f);
-
-        player.sendActionBar("§7⚡ §f§lDASH §8" + dirLabel);
+        player.sendActionBar("§7⚡ §f§lDASH §c" + label);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
