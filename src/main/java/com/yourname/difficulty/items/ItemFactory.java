@@ -52,6 +52,7 @@ public class ItemFactory {
     public static final String DARK_BOW_KEY          = "dark_bow";
     public static final String DRAGON_ARROW_KEY      = "dragon_arrow";
     public static final String DRAGON_ARROW_TIP_KEY  = "dragon_arrow_tip";
+    public static final String MAGIC_BAG_KEY         = "magic_bag";
 
     // ── NamespacedKeys ────────────────────────────────────────────────────────
     private final NamespacedKey soulfurPotionKey;
@@ -65,6 +66,7 @@ public class ItemFactory {
     private final NamespacedKey darkBowKey;
     private final NamespacedKey dragonArrowKey;
     private final NamespacedKey dragonArrowTipKey;
+    private final NamespacedKey magicBagKey;
     /** Per-tier PDC keys (MAGE tier maps to mageGearKey). */
     private final Map<MageGearTier, NamespacedKey> mageGearTierKeys = new EnumMap<>(MageGearTier.class);
 
@@ -92,6 +94,7 @@ public class ItemFactory {
         this.darkBowKey          = new NamespacedKey(plugin, DARK_BOW_KEY);
         this.dragonArrowKey      = new NamespacedKey(plugin, DRAGON_ARROW_KEY);
         this.dragonArrowTipKey   = new NamespacedKey(plugin, DRAGON_ARROW_TIP_KEY);
+        this.magicBagKey         = new NamespacedKey(plugin, MAGIC_BAG_KEY);
 
         // Tier-specific keys (MAGE reuses the universal key)
         for (MageGearTier tier : MageGearTier.values()) {
@@ -157,6 +160,8 @@ public class ItemFactory {
         for (EarthBlockTier tier : EarthBlockTier.values()) {
             registryPage2.add(buildEarthMagicPage(tier));
         }
+        // Magic Bag — portable 4-section arcane storage
+        registryPage2.add(buildMagicBag());
     }
 
     // ── Soulfur Potion ────────────────────────────────────────────────────────
@@ -1026,6 +1031,48 @@ public class ItemFactory {
         return earthPageKeys.get(tier);
     }
 
+    // ── Magic Bag ─────────────────────────────────────────────────────────────
+
+    /**
+     * Builds the Magic Bag item — a CHEST with PDC tag.
+     * Right-clicking it opens a 4-section GUI for storing magic items.
+     * The same PDC key is used by MagicBagManager for identification.
+     */
+    public ItemStack buildMagicBag() {
+        ItemStack item = new ItemStack(Material.CHEST);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§5✦ §dMagic Bag §5✦");
+            meta.addEnchant(Enchantment.UNBREAKING, 1, true);
+            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS, ItemFlag.HIDE_ATTRIBUTES);
+            meta.setLore(List.of(
+                "§8" + "─".repeat(28),
+                "§7A bag woven from arcane threads.",
+                "§7Stores up to §d32 §7magic items",
+                "§7across §54 §7organised sections.",
+                "§8" + "─".repeat(28),
+                "§5🔮 §7Section 1: §dRunes & Dust",
+                "§9⚗ §7Section 2: §dStaffs & Mage Gear",
+                "§b📜 §7Section 3: §dSpell Books & Pages",
+                "§2🌿 §7Section 4: §dIngredients & Misc",
+                "§8" + "─".repeat(28),
+                "§7Right-click to open. §eShift-click magic",
+                "§7items from chests to auto-sort into bag.",
+                "§8[DifficultyEngine — Magic Bag]"
+            ));
+            meta.getPersistentDataContainer().set(magicBagKey, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    /** Returns true if the item is a Magic Bag. */
+    public boolean isMagicBag(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer()
+                   .has(magicBagKey, PersistentDataType.BYTE);
+    }
+
     // ── Cape delegation ───────────────────────────────────────────────────────
 
     public SkillType getCapeSkill(ItemStack item)  { return capeManager.getCapeSkill(item); }
@@ -1065,4 +1112,5 @@ public class ItemFactory {
     public NamespacedKey getAncientKillTomeKey()       { return ancientKillTomeKey; }
     public NamespacedKey getUnicornSlippersKey()       { return unicornSlippersKey; }
     public NamespacedKey getMageGearKey()              { return mageGearKey; }
+    public NamespacedKey getMagicBagKey()              { return magicBagKey; }
 }

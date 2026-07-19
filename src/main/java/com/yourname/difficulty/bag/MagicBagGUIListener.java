@@ -22,12 +22,12 @@ import java.util.Comparator;
 /**
  * MagicBagGUIListener — handles all interaction with the Magic Bag.
  *
- * ── Right-click magic bag item → open GUI
- * ── Inventory close → save contents
- * ── Click inside GUI → enforce section restrictions + sort button
- * ── Shift-click magic item from chest → auto-route into bag
- * ── Player join → load bag from disk
- * ── Player quit → save bag to disk
+ * ── Right-click Magic Bag item              → open GUI
+ * ── Inventory close                         → save contents
+ * ── Click inside bag GUI                    → enforce section order + sort
+ * ── Shift-click magic item from any chest   → auto-route into bag section
+ * ── Player join                             → load bag from disk
+ * ── Player quit                             → save bag to disk
  */
 public class MagicBagGUIListener implements Listener {
 
@@ -39,7 +39,7 @@ public class MagicBagGUIListener implements Listener {
         this.bagGUI     = bagGUI;
     }
 
-    // ── Auto-load / save on join / quit ───────────────────────────────────
+    // ── Auto-load / save on join / quit ───────────────────────────────────────
 
     @EventHandler(priority = EventPriority.LOW)
     public void onJoin(PlayerJoinEvent event) {
@@ -51,7 +51,7 @@ public class MagicBagGUIListener implements Listener {
         bagManager.saveAsync(event.getPlayer().getUniqueId());
     }
 
-    // ── Right-click the bag item to open it ───────────────────────────────
+    // ── Right-click the bag item to open the GUI ──────────────────────────────
 
     @EventHandler(priority = EventPriority.NORMAL)
     public void onUse(PlayerInteractEvent event) {
@@ -65,20 +65,19 @@ public class MagicBagGUIListener implements Listener {
         bagGUI.open(event.getPlayer());
     }
 
-    // ── Save when the bag GUI is closed ───────────────────────────────────
+    // ── Save when the bag GUI is closed ───────────────────────────────────────
 
     @EventHandler(priority = EventPriority.NORMAL)
     public void onClose(InventoryCloseEvent event) {
         if (!(event.getPlayer() instanceof Player player)) return;
         if (!MagicBagGUI.TITLE.equals(event.getView().getTitle())) return;
 
-        // Read items out of the GUI back into the bag array
         ItemStack[] bag = bagManager.getBag(player.getUniqueId());
         bagGUI.readItems(event.getInventory(), bag);
         bagManager.saveAsync(player.getUniqueId());
     }
 
-    // ── Bag GUI click handling ────────────────────────────────────────────
+    // ── Bag GUI click handling ────────────────────────────────────────────────
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onBagClick(InventoryClickEvent event) {
@@ -91,59 +90,59 @@ public class MagicBagGUIListener implements Listener {
                 && event.getClickedInventory().equals(event.getView().getTopInventory());
 
         if (!isTopInv) {
-            // ── Player's bottom inventory ─────────────────────────────────
             handleBottomClick(player, event);
             return;
         }
 
-        // ── Top (bag) inventory ───────────────────────────────────────────
+        // ── Top (bag) inventory ───────────────────────────────────────────────
         int slot = event.getSlot();
 
         // Sort button
         if (slot == MagicBagGUI.SORT_SLOT) {
             sortBag(player, event.getView().getTopInventory());
-            player.sendMessage("§e⟳ §7Magic Bag sorted by quantity!");
+            player.sendMessage("§e⟳ §7Magic Bag sorted!");
             return;
         }
 
-        // Is this a valid item slot?
+        // Glass pane / non-item slot?
         int bagIndex = MagicBagGUI.guiSlotToBagIndex(slot);
-        if (bagIndex < 0) return; // glass pane — ignore
+        if (bagIndex < 0) return;
 
-        // Standard left/right click: swap cursor ↔ slot
+        // Left / right click — allow swap only if cursor item fits this section
         if (event.getClick() == ClickType.LEFT || event.getClick() == ClickType.RIGHT) {
-            ItemStack cursor = event.getCursor();
+            ItemStack cursor  = event.getCursor();
             ItemStack current = event.getCurrentItem();
 
-            boolean cursorEmpty   = cursor == null || cursor.getType().isAir();
-            boolean currentEmpty  = current == null || current.getType().isAir();
+            boolean cursorEmpty  = cursor == null || cursor.getType().isAir();
+            boolean currentEmpty = current == null || current.getType().isAir();
 
             if (cursorEmpty && currentEmpty) return;
 
-            int section = MagicBagGUI.guiSlotToSection(slot);
-
             if (!cursorEmpty) {
-                // Putting an item INTO the bag — enforce section classification
+                // Enforce section restriction
                 int itemSection = bagManager.classifyItem(cursor);
-                if (itemSection != section) {
-                    player.sendMessage("§c✗ §7That item belongs in §"
-                            + sectionColor(itemSection) + MagicBagManager.sectionLabel(itemSection)
-                            + "§7, not §" + sectionColor(section)
-                            + MagicBagManager.sectionLabel(section) + "§7.");
+                int guiSection  = MagicBagGUI.guiSlotToSection(slot);
+
+                if (itemSection < 0) {
+                    player.sendMessage("§c✗ §7That item doesn't belong in the Magic Bag.");
+                    return;
+                }
+                if (itemSection != guiSection) {
+                    player.sendMessage("§c✗ §7That belongs in §"
+                            + sectionColor(itemSection)
+                            + MagicBagManager.sectionLabel(itemSection)
+                            + "§7, not §" + sectionColor(guiSection)
+                            + MagicBagManager.sectionLabel(guiSection) + "§7.");
                     return;
                 }
             }
-
-            // Perform the swap
-            event.setCancelled(false);
+            event.setCancelled(false); // allow the vanilla swap
         }
 
-        // Shift-click from top: move to player inventory
+        // Shift-click from top: move item back to player inventory
         if (event.getClick() == ClickType.SHIFT_LEFT || event.getClick() == ClickType.SHIFT_RIGHT) {
             ItemStack current = event.getCurrentItem();
             if (current == null || current.getType().isAir()) return;
-
-            // Give item to player
             player.getInventory().addItem(current.clone());
             event.getView().getTopInventory().setItem(slot, new ItemStack(Material.AIR));
         }
@@ -152,7 +151,6 @@ public class MagicBagGUIListener implements Listener {
     @EventHandler(priority = EventPriority.NORMAL)
     public void onBagDrag(InventoryDragEvent event) {
         if (!MagicBagGUI.TITLE.equals(event.getView().getTitle())) return;
-        // Cancel drags that touch glass slots
         for (int raw : event.getRawSlots()) {
             if (raw < MagicBagGUI.SIZE && MagicBagGUI.guiSlotToBagIndex(raw) < 0) {
                 event.setCancelled(true);
@@ -161,64 +159,58 @@ public class MagicBagGUIListener implements Listener {
         }
     }
 
-    // ── Bottom-inventory click (shift-click to bag) ───────────────────────
+    // ── Bottom-inventory click (shift-click into bag while bag GUI open) ───────
 
     private void handleBottomClick(Player player, InventoryClickEvent event) {
         if (event.getClick() != ClickType.SHIFT_LEFT
                 && event.getClick() != ClickType.SHIFT_RIGHT) {
-            // Regular click inside player inv while bag is open — allow normally
-            event.setCancelled(false);
+            event.setCancelled(false); // allow normal clicks in player inv
             return;
         }
 
         ItemStack clicked = event.getCurrentItem();
         if (clicked == null || clicked.getType().isAir()) return;
 
-        // Try to put it in the correct bag section
-        if (bagManager.classifyItem(clicked) >= 0) {
+        int section = bagManager.classifyItem(clicked);
+        if (section >= 0) {
+            // It's a magic item — route to bag
             event.setCancelled(true);
             if (bagManager.addToBag(player.getUniqueId(), clicked)) {
                 event.setCurrentItem(new ItemStack(Material.AIR));
-                // Refresh GUI display
                 bagGUI.populateItems(event.getView().getTopInventory(),
                         bagManager.getBag(player.getUniqueId()));
-                int section = bagManager.classifyItem(clicked) < 0 ? 0
-                        : bagManager.classifyItem(clicked.clone());
-                player.sendMessage("§d✦ §7Item auto-sorted to §"
-                        + sectionColor(bagManager.classifyItem(clicked.clone()))
-                        + MagicBagManager.sectionLabel(
-                            bagManager.classifyItem(clicked.clone())) + "§7.");
+                player.sendMessage("§d✦ §7Item sorted to §"
+                        + sectionColor(section)
+                        + MagicBagManager.sectionLabel(section) + "§7.");
             } else {
                 player.sendMessage("§c✗ §7That bag section is full!");
-                event.setCancelled(false); // let it go to player inv normally
+                event.setCancelled(false);
             }
         } else {
-            // Not a magic item — shift-click goes normally to player inventory
-            event.setCancelled(false);
+            event.setCancelled(false); // not a magic item, allow normal shift
         }
     }
 
-    // ── Auto-collect from chests ──────────────────────────────────────────
+    // ── Auto-collect from chests (shift-click in any container) ───────────────
 
     /**
-     * When a player shift-clicks a magic item from a regular chest (or any
-     * container), and they have a Magic Bag in their inventory, the item is
-     * auto-routed into the bag instead of the player's main inventory.
+     * When a player shift-clicks a magic item from a chest while holding their
+     * Magic Bag, the item is routed directly into the correct bag section instead
+     * of the player's main inventory.  The bag GUI need not be open.
      */
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onChestShiftClick(InventoryClickEvent event) {
-        // Only fire for non-bag GUIs (the bag GUI has its own handler above)
+        // Skip if the bag GUI itself is open (handled by onBagClick above)
         if (MagicBagGUI.TITLE.equals(event.getView().getTitle())) return;
         if (!(event.getWhoClicked() instanceof Player player)) return;
 
         // Only shift-clicks from the top (container) inventory
         if (event.getClickedInventory() == null) return;
-        boolean fromTop = event.getClickedInventory().equals(event.getView().getTopInventory());
-        if (!fromTop) return;
+        if (!event.getClickedInventory().equals(event.getView().getTopInventory())) return;
         if (event.getClick() != ClickType.SHIFT_LEFT
                 && event.getClick() != ClickType.SHIFT_RIGHT) return;
 
-        // Must be a container type (chest, barrel, hopper…)
+        // Must be a container type
         InventoryType topType = event.getView().getTopInventory().getType();
         if (topType != InventoryType.CHEST
                 && topType != InventoryType.BARREL
@@ -229,24 +221,44 @@ public class MagicBagGUIListener implements Listener {
         ItemStack clicked = event.getCurrentItem();
         if (clicked == null || clicked.getType().isAir()) return;
 
-        // Is it a magic item AND does the player have a magic bag?
-        if (bagManager.classifyItem(clicked) < 0) return;
-        if (!playerHasBag(player)) return;
+        int section = bagManager.classifyItem(clicked);
+        if (section < 0) return;        // not a magic item
+        if (!playerHasBag(player)) return; // player doesn't carry a bag
 
-        // Redirect to the bag
         event.setCancelled(true);
         ItemStack toAdd = clicked.clone();
         if (bagManager.addToBag(player.getUniqueId(), toAdd)) {
             event.setCurrentItem(new ItemStack(Material.AIR));
-            player.sendMessage("§d✦ §7" + itemName(clicked) + " §7→ §dMagic Bag §8("
-                    + MagicBagManager.sectionLabel(bagManager.classifyItem(clicked)) + "§8)");
+            player.sendMessage("§d✦ §7" + itemName(clicked) + " §8→ §dMagic Bag §8("
+                    + MagicBagManager.sectionLabel(section) + "§8)");
         } else {
             event.setCancelled(false);
             player.sendMessage("§c✗ §7Magic Bag section full — item went to inventory.");
         }
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────
+    // ── Sort button action ────────────────────────────────────────────────────
+
+    private void sortBag(Player player, org.bukkit.inventory.Inventory topInv) {
+        ItemStack[] bag = bagManager.getBag(player.getUniqueId());
+
+        for (int s = 0; s < MagicBagManager.SECTION_COUNT; s++) {
+            int start = s * MagicBagManager.SLOTS_PER_SECTION;
+            ItemStack[] section = Arrays.copyOfRange(bag, start,
+                    start + MagicBagManager.SLOTS_PER_SECTION);
+
+            // Sort: non-empty first (desc amount), nulls at back
+            Arrays.sort(section, Comparator.comparingInt(
+                    it -> (it == null || it.getType().isAir()) ? 0 : -it.getAmount()));
+
+            System.arraycopy(section, 0, bag, start, MagicBagManager.SLOTS_PER_SECTION);
+        }
+
+        bagGUI.populateItems(topInv, bag);
+        bagManager.saveAsync(player.getUniqueId());
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private boolean playerHasBag(Player player) {
         for (ItemStack it : player.getInventory().getContents()) {
@@ -263,37 +275,11 @@ public class MagicBagGUIListener implements Listener {
 
     private static char sectionColor(int section) {
         return switch (section) {
-            case 0 -> '5';   // purple
-            case 1 -> '9';   // blue
-            case 2 -> 'b';   // cyan
-            case 3 -> '2';   // green
-            default -> '7';  // gray
+            case 0  -> '5';   // purple
+            case 1  -> '9';   // blue
+            case 2  -> 'b';   // cyan
+            case 3  -> '2';   // green
+            default -> '7';   // gray
         };
-    }
-
-    // ── Sort button action ────────────────────────────────────────────────
-
-    /**
-     * Sorts each section of the bag individually by stack amount (desc),
-     * then updates the open GUI to reflect the new order.
-     */
-    private void sortBag(Player player, org.bukkit.inventory.Inventory topInv) {
-        ItemStack[] bag = bagManager.getBag(player.getUniqueId());
-
-        for (int s = 0; s < MagicBagManager.SECTION_COUNT; s++) {
-            int start = s * MagicBagManager.SLOTS_PER_SECTION;
-            ItemStack[] section = Arrays.copyOfRange(bag, start,
-                    start + MagicBagManager.SLOTS_PER_SECTION);
-
-            Arrays.sort(section, Comparator.comparingInt(
-                    it -> (it == null || it.getType().isAir()) ? 0 : -it.getAmount()));
-
-            for (int j = 0; j < MagicBagManager.SLOTS_PER_SECTION; j++) {
-                bag[start + j] = section[j];
-            }
-        }
-
-        bagGUI.populateItems(topInv, bag);
-        bagManager.saveAsync(player.getUniqueId());
     }
 }
