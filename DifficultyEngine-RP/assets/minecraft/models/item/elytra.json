@@ -1,0 +1,68 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "minecraft:item/elytra"
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "custom_model_data": 1001
+      },
+      "model": "difficultyengine:item/cape_melee"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 1002
+      },
+      "model": "difficultyengine:item/cape_ranged"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 1003
+      },
+      "model": "difficultyengine:item/cape_defence"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 1004
+      },
+      "model": "difficultyengine:item/cape_prayer"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 1005
+      },
+      "model": "difficultyengine:item/cape_magic"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 1006
+      },
+      "model": "difficultyengine:item/cape_woodcutting"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 1007
+      },
+      "model": "difficultyengine:item/cape_fishing"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 1008
+      },
+      "model": "difficultyengine:item/cape_farming"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 1009
+      },
+      "model": "difficultyengine:item/cape_max"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 1010
+      },
+      "model": "difficultyengine:item/cape_boss"
+    }
+  ]
+}

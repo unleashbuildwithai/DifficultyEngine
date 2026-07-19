@@ -1,5 +1,8 @@
 package com.yourname.difficulty;
 
+import com.yourname.difficulty.bag.MagicBagGUI;
+import com.yourname.difficulty.bag.MagicBagGUIListener;
+import com.yourname.difficulty.bag.MagicBagManager;
 import com.yourname.difficulty.currency.GoldDropListener;
 import com.yourname.difficulty.currency.GoldManager;
 import com.yourname.difficulty.currency.GoldValueListener;
@@ -86,6 +89,9 @@ public class Main extends JavaPlugin {
     private QuestGUI       questGUI;
     private TradeListener  tradeListener;
     private VipShopListener vipShopListener;
+    // ── Magic Bag ──────────────────────────────────────────────────────────────
+    private MagicBagManager    magicBagManager;
+    private MagicBagGUI        magicBagGUI;
 
     /** All crafting recipe keys registered by this plugin — used for recipe-book discovery. */
     private final List<NamespacedKey> allRecipeKeys = new ArrayList<>();
@@ -229,6 +235,12 @@ public class Main extends JavaPlugin {
         this.tradeListener = new TradeListener(this);
         getServer().getPluginManager().registerEvents(tradeListener, this);
 
+        // ── Magic Bag ──────────────────────────────────────────────────────────
+        this.magicBagManager = new MagicBagManager(this, itemFactory);
+        this.magicBagGUI     = new MagicBagGUI(magicBagManager);
+        getServer().getPluginManager().registerEvents(
+                new MagicBagGUIListener(magicBagManager, magicBagGUI), this);
+
         // ── Register commands (null-safe) ─────────────────────────────────────
 
         registerCmd("difficulty", new DifficultyCommand(difficultyManager));
@@ -349,6 +361,37 @@ public class Main extends JavaPlugin {
             return true;
         });
 
+        // ── Magic Bag commands ─────────────────────────────────────────────────
+        registerCmd("magicbag", (sender, cmd, label, args) -> {
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage("§cOnly players can open their Magic Bag.");
+                return true;
+            }
+            magicBagGUI.open(player);
+            return true;
+        });
+
+        registerCmd("givebag", (sender, cmd, label, args) -> {
+            Player target;
+            if (args.length > 0) {
+                target = getServer().getPlayerExact(args[0]);
+                if (target == null) {
+                    sender.sendMessage("§cPlayer not found: " + args[0]);
+                    return true;
+                }
+            } else if (sender instanceof Player p) {
+                target = p;
+            } else {
+                sender.sendMessage("§cUsage: /givebag [player]");
+                return true;
+            }
+            target.getInventory().addItem(magicBagManager.buildMagicBag());
+            target.sendMessage("§5✦ §7You received a §dMagic Bag§7! Right-click to open it.");
+            if (!target.equals(sender))
+                sender.sendMessage("§7Gave a §dMagic Bag §7to §d" + target.getName() + "§7.");
+            return true;
+        });
+
         // ── Crafting recipes ──────────────────────────────────────────────────
         registerCraftingRecipes();
 
@@ -404,6 +447,7 @@ public class Main extends JavaPlugin {
         if (goldManager       != null) goldManager.saveAll();
         if (questManager      != null) questManager.saveAll();
         if (vipShopListener   != null) vipShopListener.shutdown();
+        if (magicBagManager   != null) magicBagManager.saveAll();
         for (Player p : getServer().getOnlinePlayers()) {
             SkillBonusManager.removeDefenceHpBonus(p);
         }

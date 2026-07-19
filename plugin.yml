@@ -83,6 +83,15 @@ commands:
     description: Open the VIP Shop or spawn the VIP keeper (Admin).
     usage: /vipshop [spawn]
 
+  magicbag:
+    description: Open your Magic Bag (4-section magic item storage).
+    usage: /magicbag
+    aliases: [bag, mbag]
+
+  givebag:
+    description: Give the Magic Bag item to yourself or a player (Admin).
+    usage: /givebag [player]
+
 permissions:
   difficultyengine.use:
     description: Allows use of standard player commands.

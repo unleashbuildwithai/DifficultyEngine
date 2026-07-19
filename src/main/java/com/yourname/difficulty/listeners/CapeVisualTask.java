@@ -262,9 +262,13 @@ public class CapeVisualTask extends BukkitRunnable {
                 spawnTemporaryFish(player, loc);
                 if (Math.random() < 0.5) spawnTemporaryFish(player, loc);
             }
-            // Axolotl as pixel-art particles (no real entity in air)
+            // Axolotl: 50 % chance pixel art, 50 % chance water-bubble entity cameo
             if (tick % 20 == 0) {
-                spawnAxolotlPixelArt(player, loc, right);
+                if (Math.random() < 0.5) {
+                    spawnAxolotlPixelArt(player, loc, right);
+                } else {
+                    spawnAxolotlWaterBubble(player, loc);
+                }
             }
             return;
         }
@@ -546,6 +550,73 @@ public class CapeVisualTask extends BukkitRunnable {
                         new Particle.DustOptions(c, 1.0f));
             }
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Axolotl water-bubble cameo (50 % alternate to pixel art)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Spawns a real Axolotl entity surrounded by a sphere of water/bubble
+     * particles, giving the illusion of an "invisible water bubble" — without
+     * placing any actual water blocks or affecting the world.
+     * Auto-removed after 2.5 s (50 ticks).
+     */
+    private void spawnAxolotlWaterBubble(Player player, Location center) {
+        org.bukkit.entity.Axolotl axolotl = (org.bukkit.entity.Axolotl)
+                player.getWorld().spawnEntity(
+                        center.clone().add((Math.random() - 0.5) * 0.2, 0.2, (Math.random() - 0.5) * 0.2),
+                        EntityType.AXOLOTL);
+
+        axolotl.setAI(false);
+        axolotl.setGravity(false);
+        axolotl.setPersistent(false);
+        axolotl.setInvulnerable(true);
+        axolotl.setAdult();
+        axolotl.setSilent(true);
+        axolotl.setCustomNameVisible(false);
+        axolotl.setCollidable(false);
+        axolotl.addScoreboardTag(FISH_TAG);
+
+        org.bukkit.entity.Axolotl.Variant[] variants = org.bukkit.entity.Axolotl.Variant.values();
+        axolotl.setVariant(variants[(int)(Math.random() * variants.length)]);
+
+        axolotl.setVelocity(new Vector(
+                (Math.random() - 0.5) * 0.10,
+                (Math.random() - 0.5) * 0.04,
+                (Math.random() - 0.5) * 0.10));
+
+        // Schedule water-bubble particle rings around the axolotl every 3 ticks
+        for (int delay = 0; delay <= 48; delay += 3) {
+            final int d = delay;
+            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                if (axolotl.isDead()) return;
+                Location a = axolotl.getLocation().add(0, 0.25, 0);
+
+                // Ring of falling-water / splash particles at r ≈ 0.38 blocks
+                final int ringPoints = 10;
+                for (int i = 0; i < ringPoints; i++) {
+                    double angle  = Math.PI * 2 * i / ringPoints;
+                    double radius = 0.38;
+                    double yOff   = (Math.random() - 0.5) * 0.30;
+                    Location pLoc = a.clone().add(
+                            Math.cos(angle) * radius, yOff, Math.sin(angle) * radius);
+                    player.getWorld().spawnParticle(Particle.FALLING_WATER, pLoc, 1, 0, 0, 0, 0);
+                    if (i % 2 == 0)
+                        player.getWorld().spawnParticle(Particle.SPLASH, pLoc, 1, 0, 0, 0, 0.02);
+                }
+
+                // Underwater ambient particles inside the bubble
+                player.getWorld().spawnParticle(Particle.UNDERWATER, a, 4, 0.25, 0.15, 0.25, 0);
+                // Drip particles at top of bubble
+                player.getWorld().spawnParticle(Particle.DRIPPING_WATER,
+                        a.clone().add(0, 0.35, 0), 2, 0.15, 0, 0.15, 0);
+            }, d);
+        }
+
+        // Auto-remove after 2.5 s (50 ticks)
+        plugin.getServer().getScheduler().runTaskLater(plugin,
+                () -> { if (!axolotl.isDead()) axolotl.remove(); }, 50L);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
