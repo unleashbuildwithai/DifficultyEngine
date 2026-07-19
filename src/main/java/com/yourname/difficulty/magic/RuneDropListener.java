@@ -72,10 +72,12 @@ public class RuneDropListener implements Listener {
             mob.getWorld().dropItemNaturally(mob.getLocation(), itemFactory.buildSpellComboBook());
         }
 
-        // ── Lore Book drops ───────────────────────────────────────────────────
-        ItemStack book = getLoreBookDrop(mob);
-        if (book != null) {
-            mob.getWorld().dropItemNaturally(mob.getLocation(), book);
+        // ── Lore Book drops — only from kills by a magic staff ────────────────
+        if (mob.hasMetadata(MagicStaffListener.META_STAFF_HIT)) {
+            ItemStack book = getLoreBookDrop(mob);
+            if (book != null) {
+                mob.getWorld().dropItemNaturally(mob.getLocation(), book);
+            }
         }
     }
 

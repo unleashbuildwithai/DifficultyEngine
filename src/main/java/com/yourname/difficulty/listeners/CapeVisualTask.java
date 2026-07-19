@@ -21,44 +21,31 @@ import java.util.UUID;
  * CapeVisualTask — Ambient visual effects for equipped skill capes.
  *
  * Runs every 10 ticks (0.5 s). For each online player wearing a recognised
- * cape in the elytra/chestplate slot two effects are applied:
+ * cape two effects are applied:
  *
  * ── BACK LABEL (hologram) ─────────────────────────────────────────────────
- *  An invisible ArmorStand (marker — no hitbox, no health bar) is placed
- *  0.3 blocks BEHIND the player at torso height (~0.8 blocks from feet).
- *  This makes the cape name appear to float ON the player's back rather than
- *  floating above their head alongside their name-tag.
- *  It teleports with the player every tick and is removed when the cape is
- *  taken off.
- *
- *  Examples:
- *    Melee Cape       →  §c[Melee Cape]
- *    Ranged Cape      →  §a[Ranged Cape]
- *    Defence Cape     →  §9[Defence Cape]
- *    Prayer Cape      →  §f[Prayer Cape]
- *    Magic Cape       →  §d[Magic Cape]
- *    Woodcutting Cape →  §2[WC Cape]
- *    Fishing Cape     →  §b[Fishing Cape]
- *    Farming Cape     →  §e[Farming Cape]
- *    Max Cape         →  §6[MAX CAPE]
- *    Boss Cape        →  §5[BOSS CAPE]
+ *  An invisible ArmorStand (marker) is placed 0.3 blocks BEHIND the player
+ *  at torso height (~0.8 blocks from feet).
  *
  * ── PARTICLES ────────────────────────────────────────────────────────────
- *  Cape → Particle mapping (every other tick for subtlety, 1 per second):
+ *  Cape → Particle mapping:
  *    MELEE       → CRIT          (red sparks)
  *    RANGED      → ENCHANTED_HIT (green sparks)
  *    DEFENCE     → END_ROD       (white-blue rods)
  *    PRAYER      → ENCHANT       (floating letters)
  *    MAGIC       → DUST rainbow  (cycling rainbow sparkles)
  *    WOODCUTTING → HAPPY_VILLAGER
- *    FISHING     → FALLING_WATER
+ *    FISHING     → FALLING_WATER + air-swimming fish/axolotl
  *    FARMING     → COMPOSTER
  *    BOSS Cape   → SOUL_FIRE_FLAME
  *    Max Cape    → FIREWORK
+ *
+ * NOTE: Capes are stored in CapeDataManager — players keep their chestplate
+ * slot free to wear armour simultaneously with a cape.
  */
 public class CapeVisualTask extends BukkitRunnable {
 
-    /** Scorecard tag applied to every hologram stand so they can be bulk-removed. */
+    /** Scoreboard tag applied to every hologram stand so they can be bulk-removed. */
     public static final String HOLOGRAM_TAG = "DE_cape_sign";
 
     /**
@@ -102,18 +89,9 @@ public class CapeVisualTask extends BukkitRunnable {
 
         // ── Process all online players ────────────────────────────────────────
         for (Player player : plugin.getServer().getOnlinePlayers()) {
-            // Capes are worn in the chestplate slot so they render visually.
-            // CapeDataManager is used for persistence/tracking only.
-            ItemStack chest = player.getInventory().getChestplate();
-            if (chest != null && !capeManager.isAnyCape(chest)) chest = null;
-
-            // Keep CapeDataManager in sync (for cape save/load without chestplate reference)
-            if (chest != null && !capeDataManager.hasCape(player.getUniqueId())) {
-                capeDataManager.equipCape(player.getUniqueId(), chest);
-            } else if (chest == null && capeDataManager.hasCape(player.getUniqueId())) {
-                // Cape unequipped externally (e.g. death drop) — sync the data
-                capeDataManager.unequipCape(player.getUniqueId());
-            }
+            // Cape is stored in CapeDataManager — independent of the chestplate slot.
+            // Players can now wear both chestplate armour AND a skill cape simultaneously.
+            ItemStack chest = capeDataManager.getEquippedCape(player.getUniqueId());
 
             if (chest == null) {
                 // Remove hologram if cape was just unequipped
@@ -135,8 +113,6 @@ public class CapeVisualTask extends BukkitRunnable {
 
     private void updateHologram(Player player, ItemStack cape) {
         // ── Back position ─────────────────────────────────────────────────────
-        // Get the horizontal direction the player is FACING, then negate it to
-        // get the direction toward their back.
         Vector facing = player.getLocation().getDirection();
         Vector back   = new Vector(-facing.getX(), 0, -facing.getZ());
         if (back.lengthSquared() > 1e-6) back.normalize();
@@ -168,10 +144,10 @@ public class CapeVisualTask extends BukkitRunnable {
         // Update name and follow the player
         stand.setCustomName(capeSymbolText(cape));
 
-        // Teleport to follow player (only if moved meaningfully)
+        // Only teleport if moved more than ~0.3 blocks — reduces teleport spam
         Location sl = stand.getLocation();
         if (!sl.getWorld().equals(hologramPos.getWorld())
-                || sl.distanceSquared(hologramPos) > 0.01) {
+                || sl.distanceSquared(hologramPos) > 0.09) {
             stand.teleport(hologramPos);
         }
     }
@@ -241,13 +217,11 @@ public class CapeVisualTask extends BukkitRunnable {
                 player.getWorld().spawnParticle(Particle.ENCHANT, locH, 4, 0.25, 0.1, 0.25, 0.08);
             }
             case PRAYER -> {
-                player.getWorld().spawnParticle(Particle.ENCHANT,       loc,  11, 0.35, 0.25, 0.35, 0.12);
+                player.getWorld().spawnParticle(Particle.ENCHANT,        loc,  11, 0.35, 0.25, 0.35, 0.12);
                 player.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, locH,  3, 0.2,  0.1,  0.2,  0.0);
             }
             case MAGIC -> {
-                // ── Rainbow sparkles ─────────────────────────────────────────
-                // Cycle hue across the full spectrum using the tick counter.
-                // Two layers with offset hues so the rainbow feels rich.
+                // ── Rainbow sparkles — cycle hue across full spectrum ─────────
                 float hue1 = (tick % 100) / 100.0f;
                 float hue2 = ((tick + 33) % 100) / 100.0f;
                 float hue3 = ((tick + 66) % 100) / 100.0f;
@@ -265,19 +239,19 @@ public class CapeVisualTask extends BukkitRunnable {
                 player.getWorld().spawnParticle(Particle.COMPOSTER,      locH, 4, 0.25, 0.15, 0.25, 0.0);
             }
             case FISHING -> {
-                // ── Heavy water-cascade effect ────────────────────────────────
-                player.getWorld().spawnParticle(Particle.FALLING_WATER, loc,  22, 0.45, 0.35, 0.45, 0.0);
-                player.getWorld().spawnParticle(Particle.FALLING_WATER, locH, 12, 0.30, 0.20, 0.30, 0.0);
-                player.getWorld().spawnParticle(Particle.SPLASH,        loc,  10, 0.40, 0.25, 0.40, 0.04);
-                player.getWorld().spawnParticle(Particle.SPLASH,        locH,  6, 0.25, 0.15, 0.25, 0.03);
+                // ── Lighter water-cascade effect (reduced from 48→27 particles) ──
+                player.getWorld().spawnParticle(Particle.FALLING_WATER, loc,  12, 0.40, 0.30, 0.40, 0.0);
+                player.getWorld().spawnParticle(Particle.FALLING_WATER, locH,  6, 0.25, 0.15, 0.25, 0.0);
+                player.getWorld().spawnParticle(Particle.SPLASH,        loc,   6, 0.35, 0.20, 0.35, 0.04);
+                player.getWorld().spawnParticle(Particle.SPLASH,        locH,  3, 0.20, 0.10, 0.20, 0.03);
 
-                // ── 1-2 tropical fish launched outward every 2 s ─────────────
-                if (tick % 4 == 0) {
+                // ── 1-2 tropical fish (air-swimming) every 4 s ───────────────
+                if (tick % 8 == 0) {
                     spawnTemporaryFish(player, loc);
                     if (Math.random() < 0.5) spawnTemporaryFish(player, loc);
                 }
-                // ── Axolotl cameo every 6 s ───────────────────────────────────
-                if (tick % 12 == 0) {
+                // ── Axolotl cameo every 10 s ──────────────────────────────────
+                if (tick % 20 == 0) {
                     spawnTemporaryAxolotl(player, loc);
                 }
             }
@@ -291,9 +265,9 @@ public class CapeVisualTask extends BukkitRunnable {
     // ── Fishing cape: temporary entity helpers ────────────────────────────────
 
     /**
-     * Spawns a Tropical Fish at the cape position with a random outward velocity.
-     * The fish has AI disabled and is automatically removed after 3 s (60 ticks).
-     * It is tagged {@value #FISH_TAG} so the cleanup sweep can remove orphans.
+     * Spawns a Tropical Fish that floats / swims in air at the cape position.
+     * Gravity is disabled so it drifts outward from the player instead of falling.
+     * Auto-removed after 3 s (60 ticks).
      */
     private void spawnTemporaryFish(Player player, Location loc) {
         Location spawnLoc = loc.clone().add(
@@ -303,7 +277,7 @@ public class CapeVisualTask extends BukkitRunnable {
                 player.getWorld().spawnEntity(spawnLoc, EntityType.TROPICAL_FISH);
 
         fish.setAI(false);
-        fish.setGravity(true);
+        fish.setGravity(false);  // air-swim — no falling
         fish.setPersistent(false);
         fish.setInvulnerable(true);
         fish.addScoreboardTag(FISH_TAG);
@@ -316,11 +290,11 @@ public class CapeVisualTask extends BukkitRunnable {
         fish.setPatternColor(dyeColors[(int)(Math.random() * dyeColors.length)]);
         fish.setBodyColor(dyeColors[(int)(Math.random() * dyeColors.length)]);
 
-        // Launch with a gentle random outward + upward kick so it "flows" out
+        // Gentle outward drift — no upward kick needed (gravity off)
         fish.setVelocity(new Vector(
-                (Math.random() - 0.5) * 0.55,
-                0.18 + Math.random() * 0.14,
-                (Math.random() - 0.5) * 0.55
+                (Math.random() - 0.5) * 0.40,
+                (Math.random() - 0.5) * 0.15,
+                (Math.random() - 0.5) * 0.40
         ));
 
         // Auto-remove after 3 seconds (60 ticks)
@@ -329,8 +303,8 @@ public class CapeVisualTask extends BukkitRunnable {
     }
 
     /**
-     * Spawns a colourful Axolotl at the cape position for a brief cameo.
-     * Gravity is disabled so it floats momentarily before being removed after 2.5 s.
+     * Spawns a colourful Axolotl that floats in air for a brief cameo.
+     * Gravity disabled — removed after 2.5 s.
      */
     private void spawnTemporaryAxolotl(Player player, Location loc) {
         org.bukkit.entity.Axolotl axolotl = (org.bukkit.entity.Axolotl)
@@ -340,18 +314,18 @@ public class CapeVisualTask extends BukkitRunnable {
         axolotl.setGravity(false);
         axolotl.setPersistent(false);
         axolotl.setInvulnerable(true);
-        axolotl.setAdult();   // ensure adult form (setBaby(bool) removed in 1.21)
+        axolotl.setAdult();
         axolotl.addScoreboardTag(FISH_TAG);
 
-        // Random axolotl colour variant
+        // Random colour variant
         org.bukkit.entity.Axolotl.Variant[] variants =
                 org.bukkit.entity.Axolotl.Variant.values();
         axolotl.setVariant(variants[(int)(Math.random() * variants.length)]);
 
-        // Gentle upward + outward float
+        // Gentle drift in all directions
         axolotl.setVelocity(new Vector(
                 (Math.random() - 0.5) * 0.18,
-                0.09,
+                (Math.random() - 0.5) * 0.10,
                 (Math.random() - 0.5) * 0.18
         ));
 
@@ -362,12 +336,7 @@ public class CapeVisualTask extends BukkitRunnable {
 
     // ── Rainbow colour helper ─────────────────────────────────────────────────
 
-    /**
-     * Converts a 0-1 hue value (full saturation, full brightness) to a
-     * Bukkit {@link org.bukkit.Color} suitable for {@link Particle.DustOptions}.
-     */
     private static org.bukkit.Color hsbToColor(float hue) {
-        // Manual HSB → RGB conversion (avoids java.awt dependency)
         int   h  = (int)(hue * 6);
         float f  = hue * 6 - h;
         float q  = 1 - f;
@@ -388,9 +357,9 @@ public class CapeVisualTask extends BukkitRunnable {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    /** Cape is now tracked in CapeDataManager — not the chestplate slot. */
     private boolean isWearingCape(Player player) {
-        ItemStack chest = player.getInventory().getChestplate();
-        return chest != null && capeManager.isAnyCape(chest);
+        return capeDataManager.hasCape(player.getUniqueId());
     }
 
     /**
@@ -403,14 +372,14 @@ public class CapeVisualTask extends BukkitRunnable {
         }
         holograms.clear();
 
-        // Also sweep the world for any orphaned stands from a previous crash
+        // Sweep orphaned stands from a previous crash
         plugin.getServer().getWorlds().forEach(world ->
             world.getEntitiesByClass(ArmorStand.class).forEach(stand -> {
                 if (stand.getScoreboardTags().contains(HOLOGRAM_TAG)) stand.remove();
             })
         );
 
-        // Sweep orphaned fish / axolotl entities left over from a previous crash
+        // Sweep orphaned fish / axolotl entities
         plugin.getServer().getWorlds().forEach(world ->
             world.getEntities().forEach(e -> {
                 if (e.getScoreboardTags().contains(FISH_TAG)) e.remove();

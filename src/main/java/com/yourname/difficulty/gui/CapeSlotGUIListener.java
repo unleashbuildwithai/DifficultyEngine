@@ -71,12 +71,9 @@ public class CapeSlotGUIListener implements Listener {
                     // Simulate equipping the cape directly
                     if (canEquip(player, clicked)) {
                         if (player.hasPermission("difficultyengine.cape.admin")) grantAdminPerk(player, clicked);
-                        ItemStack current = player.getInventory().getChestplate();
-                        if (current != null && !current.getType().isAir()) {
-                            player.getInventory().addItem(current);
-                        }
-                        player.getInventory().setChestplate(clicked.clone());
-                        capeDataManager.equipCape(player.getUniqueId(), clicked);
+                        // Store cape in CapeDataManager — chestplate stays on
+                        ItemStack oldCape = capeDataManager.equipCape(player.getUniqueId(), clicked);
+                        if (oldCape != null) player.getInventory().addItem(oldCape);
                         // Remove the cape from the player's inventory slot
                         event.setCurrentItem(new ItemStack(Material.AIR));
                         // Refresh the GUI cape slot
@@ -127,30 +124,23 @@ public class CapeSlotGUIListener implements Listener {
             // ── EQUIP a cape from cursor ──────────────────────────────────────
             if (!canEquip(player, cursor)) return;
 
-            // Return old chestplate to inventory (if any)
-            ItemStack current = player.getInventory().getChestplate();
-            if (current != null && !current.getType().isAir()) {
-                player.getInventory().addItem(current);
-            }
-
             // Grant admin perk
             if (player.hasPermission("difficultyengine.cape.admin")) {
                 grantAdminPerk(player, cursor);
             }
 
-            // Equip cape: put in chestplate slot (for visual) + track in CapeDataManager
-            player.getInventory().setChestplate(cursor.clone());
-            capeDataManager.equipCape(player.getUniqueId(), cursor);
+            // Store cape in CapeDataManager only — chestplate slot is untouched
+            ItemStack oldCape = capeDataManager.equipCape(player.getUniqueId(), cursor);
+            if (oldCape != null) player.getInventory().addItem(oldCape);
 
             // Clear cursor and update GUI slot
             event.getView().setCursor(new ItemStack(Material.AIR));
             event.getView().getTopInventory().setItem(CapeSlotGUI.CAPE_SLOT, cursor.clone());
 
-            player.sendMessage("§5✦ §7Cape equipped! §5✦");
+            player.sendMessage("§5✦ §7Cape equipped! (Chestplate slot remains free) §5✦");
 
         } else if (slotHasCape && (cursor == null || cursor.getType().isAir())) {
             // ── UNEQUIP the cape ──────────────────────────────────────────────
-            player.getInventory().setChestplate(null);
             capeDataManager.unequipCape(player.getUniqueId());
 
             // Put cape on cursor so player can drag it to their inventory
@@ -164,10 +154,8 @@ public class CapeSlotGUIListener implements Listener {
             if (!canEquip(player, cursor)) return;
             if (player.hasPermission("difficultyengine.cape.admin")) grantAdminPerk(player, cursor);
 
-            // Return current cape to cursor, equip the new one
-            ItemStack oldCape = player.getInventory().getChestplate();
-            player.getInventory().setChestplate(cursor.clone());
-            capeDataManager.equipCape(player.getUniqueId(), cursor);
+            // Swap via CapeDataManager — chestplate slot untouched
+            ItemStack oldCape = capeDataManager.equipCape(player.getUniqueId(), cursor);
             event.getView().setCursor(oldCape != null ? oldCape.clone() : new ItemStack(Material.AIR));
             event.getView().getTopInventory().setItem(CapeSlotGUI.CAPE_SLOT, cursor.clone());
             player.sendMessage("§5✦ §7Cape swapped! §5✦");

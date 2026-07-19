@@ -64,10 +64,10 @@ public class CapeSlotGUI {
         inv.setItem(11, infoItem());
         inv.setItem(15, infoItem());
 
-        // Cape slot — show current chestplate if it is a cape, else empty marker
-        ItemStack chestplate = player.getInventory().getChestplate();
-        if (chestplate != null && capeManager.isAnyCape(chestplate)) {
-            inv.setItem(CAPE_SLOT, chestplate.clone());
+        // Cape slot — show cape from CapeDataManager (independent of chestplate)
+        ItemStack equippedCape = capeDataManager.getEquippedCape(player.getUniqueId());
+        if (equippedCape != null) {
+            inv.setItem(CAPE_SLOT, equippedCape.clone());
         } else {
             inv.setItem(CAPE_SLOT, emptyCapeSlot());
         }

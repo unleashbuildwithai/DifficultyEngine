@@ -59,25 +59,26 @@ import java.util.UUID;
  *
  * ── Air Hover ─────────────────────────────────────────────────────────────────
  *  Right-click Air staff while airborne → slow fall + levitation (no rune cost).
- *  Right-click while on ground → normal air blast.
  *
  * ── Ground Block Magic ────────────────────────────────────────────────────────
- *  Fire bolt on solid block → lava pool (30 s, auto-removes).
- *  Water bolt on lava       → BFS obsidian trap (up to 30 blocks).
+ *  Earth bolt → places magic dirt.
+ *  Fire bolt on MAGIC DIRT (Lv50+ + lava bucket + Spell Combo Book) → lava pool (30s).
+ *  Water bolt on lava → BFS obsidian trap (up to 30 blocks).
+ *  Air/Earth bolt on lava → extinguish.
  */
 public class MagicStaffListener implements Listener {
 
     // ── Status effect metadata keys ───────────────────────────────────────────
-    public static final String META_WET       = "magic_wet";
-    public static final String META_MUDDY     = "magic_muddy";
-    public static final String META_CHILLED   = "magic_chilled";
-    public static final String META_FROZEN    = "magic_frozen";
-    public static final String META_STATUE    = "magic_statue";
-    public static final String META_SCORCHED  = "magic_scorched";
-    public static final String META_BLAZING   = "magic_blazing";
-    public static final String META_MIND_BOMB = "magic_mind_bomb";
-    public static final String META_FALLEN    = "magic_fallen";
-    public static final String META_STAFF_HIT = "magic_staff_hit";
+    public static final String META_WET        = "magic_wet";
+    public static final String META_MUDDY      = "magic_muddy";
+    public static final String META_CHILLED    = "magic_chilled";
+    public static final String META_FROZEN     = "magic_frozen";
+    public static final String META_STATUE     = "magic_statue";
+    public static final String META_SCORCHED   = "magic_scorched";
+    public static final String META_BLAZING    = "magic_blazing";
+    public static final String META_MIND_BOMB  = "magic_mind_bomb";
+    public static final String META_FALLEN     = "magic_fallen";
+    public static final String META_STAFF_HIT  = "magic_staff_hit";
     public static final String META_EARTH_HITS = "magic_earth_hits";
 
     private static final int    AIR_RANGE = 20;
@@ -97,6 +98,8 @@ public class MagicStaffListener implements Listener {
     private final Set<UUID>                          guidedPlayers      = new HashSet<>();
     private final Set<Location>                      quicksandBlocks    = new HashSet<>();
     private final Set<Location>                      magicLavaBlocks    = new HashSet<>();
+    /** Dirt blocks placed by earth staff — tracked so fire can ignite them into lava. */
+    private final Set<Location>                      magicDirtBlocks    = new HashSet<>();
     private       SandstormManager                   sandstormManager   = null;
 
     private static final long MAGIC_XP_CAST  = 10L;
@@ -129,7 +132,6 @@ public class MagicStaffListener implements Listener {
 
         int magicLevel = skillManager.getLevel(player.getUniqueId(), SkillType.MAGIC);
 
-        // ── Air hover: right-click while airborne → float, no rune or cooldown ──
         if (element == MagicElement.AIR && !player.isOnGround()) {
             activateAirHover(player, magicLevel);
             return;
@@ -152,7 +154,6 @@ public class MagicStaffListener implements Listener {
 
         awardMagicXp(player, MAGIC_XP_CAST);
 
-        // First cast this session → give Mage Gear Guide book
         if (guidedPlayers.add(player.getUniqueId())) {
             player.getInventory().addItem(itemFactory.buildMageGearGuide());
             player.sendMessage("§5✦ §7You received a §5Mage Gear Guide§7! Check your inventory.");
@@ -257,6 +258,12 @@ public class MagicStaffListener implements Listener {
         return false;
     }
 
+    private boolean hasLavaBucket(Player player) {
+        for (ItemStack i : player.getInventory().getContents())
+            if (i != null && i.getType() == Material.LAVA_BUCKET) return true;
+        return false;
+    }
+
     private void placeWaterStream(Player player, Block hitBlock) {
         BlockFace dir = getHorizontalFacing(player);
         Block start = hitBlock.getRelative(BlockFace.UP);
@@ -303,7 +310,7 @@ public class MagicStaffListener implements Listener {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  AIR STAFF — directional projectile (aim with crosshair)
+    //  AIR STAFF
     // ══════════════════════════════════════════════════════════════════════════
 
     private void castAir(Player player, int magicLevel) {
@@ -324,17 +331,15 @@ public class MagicStaffListener implements Listener {
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_PHANTOM_FLAP, 1.0f, 1.8f);
         player.sendActionBar("§7[Air] §7Air bolt fired! §8(Lv " + magicLevel + ")");
 
-        // ── Air gust sweeps nearby magic dirt blocks (from earth hits) ───────
-        // Clears DIRT blocks in the 4 cardinal directions at foot + head height.
+        // Air gust also sweeps nearby magic dirt blocks
         for (int dy = 0; dy <= 1; dy++) {
-            for (BlockFace face : new BlockFace[]{
-                    BlockFace.NORTH, BlockFace.SOUTH,
-                    BlockFace.EAST,  BlockFace.WEST}) {
+            for (BlockFace face : new BlockFace[]{BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST}) {
                 Block b = player.getLocation().getBlock().getRelative(face).getRelative(0, dy, 0);
                 if (b.getType() == Material.DIRT) {
                     b.getWorld().spawnParticle(Particle.BLOCK,
                         b.getLocation().add(0.5, 0.5, 0.5), 8, 0.3, 0.3, 0.3,
                         Material.DIRT.createBlockData());
+                    magicDirtBlocks.remove(b.getLocation().toBlockLocation());
                     b.setType(Material.AIR);
                 }
             }
@@ -363,7 +368,6 @@ public class MagicStaffListener implements Listener {
         if (!(event.getHitEntity() instanceof LivingEntity target)) return;
         if (target.getUniqueId().equals(shooterId)) return;
 
-        // Tag for Spell Combo Book drop tracking (8% in RuneDropListener)
         target.setMetadata(META_STAFF_HIT, new FixedMetadataValue(plugin,
             shooterId != null ? shooterId.toString() : ""));
 
@@ -385,7 +389,7 @@ public class MagicStaffListener implements Listener {
 
         if (element == MagicElement.FIRE) {
             if (type == Material.WATER) {
-                // Fire + water block -> evaporate
+                // Fire + water → evaporate
                 block.setType(Material.AIR);
                 block.getWorld().spawnParticle(Particle.CLOUD,
                     block.getLocation().add(0.5, 0.5, 0.5), 20, 0.3, 0.3, 0.3, 0.05);
@@ -393,8 +397,15 @@ public class MagicStaffListener implements Listener {
                     block.getLocation().add(0.5, 0.5, 0.5), 10, 0.2, 0.2, 0.2, 0.02);
                 block.getWorld().playSound(block.getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 1.0f, 1.5f);
                 if (shooter != null) shooter.sendActionBar("§c§7Fire evaporated the water!");
-            } else if (face != null && type.isSolid() && type != Material.LAVA) {
-                // Fire + solid block -> temporary lava pool (ground magic)
+            } else if (face != null
+                    && type == Material.DIRT
+                    && magicDirtBlocks.contains(block.getLocation().toBlockLocation())
+                    && shooter != null && lvl >= 50
+                    && hasLavaBucket(shooter)
+                    && itemFactory.hasSpellComboBook(shooter)) {
+                // Fire + magic-dirt → lava pool (requires Lv50+, lava bucket, Spell Combo Book)
+                magicDirtBlocks.remove(block.getLocation().toBlockLocation());
+                block.setType(Material.AIR);
                 Block adjacent = block.getRelative(face);
                 if (adjacent.getType().isAir()) {
                     adjacent.setType(Material.LAVA);
@@ -405,13 +416,7 @@ public class MagicStaffListener implements Listener {
                     adjacent.getWorld().spawnParticle(Particle.LAVA,
                         adjacent.getLocation().add(0.5, 0.5, 0.5), 8, 0.2, 0.2, 0.2, 0.0);
                     adjacent.getWorld().playSound(adjacent.getLocation(), Sound.BLOCK_LAVA_AMBIENT, 1.0f, 0.8f);
-                    if (shooter != null) {
-                        if (itemFactory.hasSpellComboBook(shooter)) {
-                            shooter.sendActionBar("§c§7Ground scorched -> §c§lLAVA pool§7! §8Water bolt = Obsidian trap!");
-                        } else {
-                            shooter.sendActionBar("§c§7Fire scorched the ground!");
-                        }
-                    }
+                    shooter.sendActionBar("§c§7Magic dirt ignited! §c§lLAVA pool §7(30s) — §8Water = Obsidian trap!");
                     final Block lavaBlock = adjacent;
                     plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
                         if (lavaBlock.getType() == Material.LAVA
@@ -424,7 +429,7 @@ public class MagicStaffListener implements Listener {
             }
 
         } else if (element == MagicElement.WATER) {
-            // Water + lava -> obsidian trap (BFS flood fill)
+            // Water + lava → obsidian trap (BFS)
             if (type == Material.LAVA) {
                 int converted = convertLavaToObsidian(block, shooter);
                 if (shooter != null && converted > 0) {
@@ -437,8 +442,17 @@ public class MagicStaffListener implements Listener {
             }
 
         } else if (element == MagicElement.EARTH) {
-            if (type == Material.WATER) {
-                // Earth + water -> quicksand (soul sand)
+            if (type == Material.LAVA) {
+                // Earth + lava → smother/extinguish
+                block.setType(Material.AIR);
+                magicLavaBlocks.remove(block.getLocation().toBlockLocation());
+                block.getWorld().spawnParticle(Particle.BLOCK,
+                    block.getLocation().add(0.5, 0.5, 0.5), 20, 0.3, 0.3, 0.3,
+                    Material.DIRT.createBlockData());
+                block.getWorld().playSound(block.getLocation(), Sound.BLOCK_GRAVEL_PLACE, 1.0f, 0.8f);
+                if (shooter != null) shooter.sendActionBar("§2§7Earth smothered the lava!");
+            } else if (type == Material.WATER) {
+                // Earth + water → quicksand (soul sand)
                 block.setType(Material.SOUL_SAND);
                 quicksandBlocks.add(block.getLocation().toBlockLocation());
                 block.getWorld().spawnParticle(Particle.BLOCK,
@@ -448,28 +462,39 @@ public class MagicStaffListener implements Listener {
                 if (shooter != null)
                     shooter.sendActionBar("§2§7Water became §8Quicksand§7! §8Air bolt = Sandstorm!");
             } else if (face != null) {
-                // Earth + solid block -> place dirt on face
+                // Earth + solid block → place magic dirt on face
                 Block adjacent = block.getRelative(face);
                 if (adjacent.getType().isAir()) {
                     adjacent.setType(Material.DIRT);
+                    magicDirtBlocks.add(adjacent.getLocation().toBlockLocation());
                     adjacent.getWorld().spawnParticle(Particle.BLOCK,
                         adjacent.getLocation().add(0.5, 0.5, 0.5), 12, 0.3, 0.3, 0.3,
                         Material.DIRT.createBlockData());
                     final Block b = adjacent;
-                    plugin.getServer().getScheduler().runTaskLater(plugin,
-                        () -> { if (b.getType() == Material.DIRT) b.setType(Material.AIR); }, 600L);
+                    plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                        if (b.getType() == Material.DIRT) b.setType(Material.AIR);
+                        magicDirtBlocks.remove(b.getLocation().toBlockLocation());
+                    }, 600L);
                 }
             }
 
         } else if (element == MagicElement.AIR) {
-            // Air + quicksand -> sandstorm
             if (type == Material.SOUL_SAND && quicksandBlocks.contains(block.getLocation().toBlockLocation())) {
+                // Air + quicksand → sandstorm
                 quicksandBlocks.remove(block.getLocation().toBlockLocation());
                 if (sandstormManager != null) {
                     sandstormManager.triggerSandstorm(block.getLocation(), shooter);
                     if (shooter != null)
                         shooter.sendActionBar("§6§f§lSANDSTORM TRIGGERED! §7The quicksand erupts!");
                 }
+            } else if (type == Material.LAVA) {
+                // Air + lava → extinguish
+                block.setType(Material.AIR);
+                magicLavaBlocks.remove(block.getLocation().toBlockLocation());
+                block.getWorld().spawnParticle(Particle.CLOUD,
+                    block.getLocation().add(0.5, 0.5, 0.5), 20, 0.3, 0.3, 0.3, 0.05);
+                block.getWorld().playSound(block.getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 1.0f, 1.2f);
+                if (shooter != null) shooter.sendActionBar("§7☁ §7Air gust extinguished the lava!");
             }
         }
     }
@@ -643,14 +668,9 @@ public class MagicStaffListener implements Listener {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  SPELL DEFLECTION — sword deflects fire/water bolts back at the caster
+    //  SPELL DEFLECTION
     // ══════════════════════════════════════════════════════════════════════════
 
-    /**
-     * Hitting a tracked staff projectile (Snowball or SmallFireball) with any
-     * sword deflects it back toward the original shooter at 2.8× speed.
-     * The hitter becomes the new shooter so the bolt can damage the original mage.
-     */
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onSpellDeflect(org.bukkit.event.entity.EntityDamageByEntityEvent event) {
         if (!(event.getDamager() instanceof Player hitter)) return;
@@ -658,23 +678,19 @@ public class MagicStaffListener implements Listener {
         UUID projId = event.getEntity().getUniqueId();
         if (!trackedProjectiles.containsKey(projId)) return;
 
-        // Must be holding a sword
         ItemStack hand = hitter.getInventory().getItemInMainHand();
         if (hand == null || !hand.getType().name().endsWith("_SWORD")) return;
 
-        event.setCancelled(true); // don't destroy the projectile
+        event.setCancelled(true);
 
-        // Deflect away from the hitter
         Vector deflect = event.getEntity().getLocation()
             .subtract(hitter.getEyeLocation()).toVector().normalize().multiply(2.8);
         if (deflect.getY() < 0.1) deflect.setY(0.1);
         event.getEntity().setVelocity(deflect);
 
-        // New shooter = the hitter (can now damage original caster)
         projectileShooters.put(projId, hitter.getUniqueId());
 
-        hitter.getWorld().playSound(hitter.getLocation(),
-            Sound.ENTITY_PLAYER_ATTACK_SWEEP, 1.2f, 2.0f);
+        hitter.getWorld().playSound(hitter.getLocation(), Sound.ENTITY_PLAYER_ATTACK_SWEEP, 1.2f, 2.0f);
         hitter.getWorld().spawnParticle(Particle.CRIT,
             event.getEntity().getLocation(), 12, 0.3, 0.3, 0.3, 0.2);
         hitter.sendActionBar("§f§lDEFLECTED! §7The spell flies back!");
@@ -850,13 +866,16 @@ public class MagicStaffListener implements Listener {
             target.getLocation().add(0, 1, 0), 30, 0.3, 0.3, 0.3,
             Material.DIRT.createBlockData());
 
-        // Place dirt block at target's feet
+        // Place magic dirt at target's feet (tracked for fire combo)
         Block feetBlock = target.getLocation().getBlock();
         if (feetBlock.getType().isAir()) {
             feetBlock.setType(Material.DIRT);
+            magicDirtBlocks.add(feetBlock.getLocation().toBlockLocation());
             final Block fb = feetBlock;
-            plugin.getServer().getScheduler().runTaskLater(plugin,
-                () -> { if (fb.getType() == Material.DIRT) fb.setType(Material.AIR); }, 100L);
+            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                if (fb.getType() == Material.DIRT) fb.setType(Material.AIR);
+                magicDirtBlocks.remove(fb.getLocation().toBlockLocation());
+            }, 100L);
         }
 
         // Track earth hits; 2nd hit -> suffocate
@@ -967,21 +986,18 @@ public class MagicStaffListener implements Listener {
     // ══════════════════════════════════════════════════════════════════════════
 
     private void handleAirHit(LivingEntity target, Player shooter, int lvl) {
-        // FROZEN + AIR = INSTANT DEATH
         if (isFrozen(target)) {
             killFrozen(target, shooter, "§b§c§lSHATTERED! §7Frozen solid - launched into the ground!");
             if (shooter != null) awardMagicXp(shooter, MAGIC_XP_COMBO);
             return;
         }
 
-        // STATUE + AIR = INSTANT DEATH
         if (isStatue(target)) {
             killStatue(target, shooter, "§6§c§lCRUMBLED! §7The statue was blasted apart!");
             if (shooter != null) awardMagicXp(shooter, MAGIC_XP_COMBO);
             return;
         }
 
-        // CHILLED + AIR = FROZEN
         if (isChilled(target)) {
             removeChilled(target);
             applyFrozen(target, 100);
@@ -999,7 +1015,6 @@ public class MagicStaffListener implements Listener {
             return;
         }
 
-        // WET + AIR = CHILLED
         if (isWet(target)) {
             removeWet(target, true);
             applyChilled(target, 50);
@@ -1014,7 +1029,6 @@ public class MagicStaffListener implements Listener {
             return;
         }
 
-        // MUDDY + AIR = MUD LAUNCH
         if (isMuddy(target)) {
             removeMuddy(target);
             Vector up = new Vector(0, 2.5 + (lvl / 99.0) * 2.0, 0)
@@ -1032,7 +1046,6 @@ public class MagicStaffListener implements Listener {
             return;
         }
 
-        // BLAZING + AIR = INFERNO BLAST
         if (isBlazing(target)) {
             removeBlazing(target);
             double dist = shooter != null ? Math.max(0.5, target.getLocation().distance(shooter.getLocation())) : AIR_RANGE / 2.0;
@@ -1051,22 +1064,19 @@ public class MagicStaffListener implements Listener {
             return;
         }
 
-        // ── AIR BOLT NEGATION: player holding Air staff while hovering → negate ──
         if (target instanceof Player tp) {
             ItemStack targetHand = tp.getInventory().getItemInMainHand();
             if (itemFactory.getStaffElement(targetHand) == MagicElement.AIR
                     && tp.hasPotionEffect(PotionEffectType.SLOW_FALLING)) {
                 tp.getWorld().spawnParticle(Particle.CLOUD,
                     tp.getLocation().add(0, 1, 0), 20, 0.4, 0.4, 0.4, 0.1);
-                tp.getWorld().playSound(tp.getLocation(),
-                    Sound.ENTITY_PHANTOM_FLAP, 1.0f, 2.0f);
+                tp.getWorld().playSound(tp.getLocation(), Sound.ENTITY_PHANTOM_FLAP, 1.0f, 2.0f);
                 tp.sendActionBar("§7☁ §fYour Air staff deflected the gust!");
                 if (shooter != null) shooter.sendActionBar("§7☁ §7Their Air staff negated your gust!");
                 return;
             }
         }
 
-        // SCORCHED + AIR = FANNED FLAMES
         if (isScorched(target)) {
             removeScorched(target);
             int fire = 60 + (int)((lvl / 99.0) * 80);
@@ -1079,7 +1089,7 @@ public class MagicStaffListener implements Listener {
             return;
         }
 
-        // Normal air gust — scales with level AND mage gear (0.50x no gear → 2.00x full Master)
+        // Normal air gust
         double dist    = shooter != null ? Math.max(0.5, target.getLocation().distance(shooter.getLocation())) : 5.0;
         double kb      = 3.0 + (AIR_RANGE - dist) * 1.4;
         double mult    = 1.0 + (lvl / 99.0) * 2.5;
@@ -1502,7 +1512,7 @@ public class MagicStaffListener implements Listener {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  AIR HOVER (no rune, no cooldown — right-click Air staff while airborne)
+    //  AIR HOVER
     // ══════════════════════════════════════════════════════════════════════════
 
     private void activateAirHover(Player player, int magicLevel) {
@@ -1533,25 +1543,14 @@ public class MagicStaffListener implements Listener {
         if (t != null) t.cancel();
     }
 
-    /**
-     * Air gust velocity multiplier based on total mage gear power worn.
-     *
-     * No gear         : 0.50x (50% nerf — intentional, gear is required for full power)
-     * Full Apprentice : ~0.875x
-     * Full Mage       : ~1.250x
-     * Full Alch       : ~1.625x
-     * Full Master     : ~2.000x (double knockback!)
-     */
     private double getAirGearMultiplier(Player shooter) {
         if (shooter == null) return 0.50;
         double power = itemFactory.getAirGearPower(shooter);
-        // power range 0.0 (no gear) → 8.0 (4x Master)
-        // multiplier  0.50 → 2.00
         return 0.50 + (power / 8.0) * 1.50;
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  LAVA -> OBSIDIAN BFS (Water spell on lava block)
+    //  LAVA -> OBSIDIAN BFS
     // ══════════════════════════════════════════════════════════════════════════
 
     private int convertLavaToObsidian(Block startBlock, Player shooter) {

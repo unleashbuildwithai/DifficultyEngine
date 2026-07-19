@@ -691,10 +691,10 @@ public class ItemFactory {
             meta.setAuthor("§7Master Aldric");
             meta.setGeneration(BookMeta.Generation.ORIGINAL);
             meta.addPage("§8§l─ The Mage's Primer ─\n\n§7Status effects are the\ncore of combo magic.\n\nHit targets to apply\na status, then follow\nup with the right\nelement to combo!");
-            meta.addPage("§8§l─ Fire Combos ─\n\n§cFire§7→§cScorched (3s)\n§7+§cFire§7→§c§lBlazing!\n§7+§7Air§7→§fFanned Flames\n§7+§bWater§7→§fSteam Burst\n\n§c§lBlazing§7 targets:\n§7+§7Air§7→§c§lInferno Blast\n§7+§bWater§7→§fSteam Explosion\n§7+§cFire§7→§c§lInferno Vortex");
-            meta.addPage("§8§l─ Water Combos ─\n\n§bWater§7→§bWet (10s)\n\n§bWet§7 targets:\n§7+§2Earth§7→§6Muddy\n§7+§7Air§7→§b❄Chilled (2.5s!)\n§7+§bWater§7→§fFlood Wash\n\n§bChilled§7 targets:\n§7+§7Air§7→§b§lFROZEN (5s!)\n§7+§2Earth§7→§fCracked Ice");
-            meta.addPage("§8§l─ Earth Combos ─\n\n§2Earth§7→Slowness\n§2Earth+Earth§7→§2Suffocate!\n\n§6Muddy§7 targets:\n§7+§cFire§7→§e§lSTATUE (8s!)\n§7+§7Air§7→§fMud Launch\n§7+§bWater§7→§fFlood Wash\n\n§e§lStatue§7:\n§7+§2Earth§7→§fCrumble\n§7+§7Air§7→§c§l??? (seek tome)");
-            meta.addPage("§8§l─ Air Combos ─\n\n§7On§bWet§7→§b❄Chilled\n§7On§b❄Chilled§7→§b§lFrozen\n§7On§6Muddy§7→§fMud Launch\n§7On§c§lBlazing§7→§c§lInferno Blast\n§7On§cScorched§7→§fFanned\n§7On§b§lFrozen§7→§c§l???(seek tome)\n\n§8§lHOVER:§7Hold Air staff\nin air to float!");
+            meta.addPage("§8§l─ Fire Combos ─\n\n§cFire§7→§cScorched (3s)\n§7+§cFire§7→§c§lBlazing!\n§7+§7Air§7→§6Fanned Flames\n§7+§bWater§7→§6Steam Burst\n\n§c§lBlazing§7 targets:\n§7+§7Air§7→§c§lInferno Blast\n§7+§bWater§7→§6Steam Explosion\n§7+§cFire§7→§c§lInferno Vortex");
+            meta.addPage("§8§l─ Water Combos ─\n\n§bWater§7→§bWet (10s)\n\n§bWet§7 targets:\n§7+§2Earth§7→§6Muddy\n§7+§7Air§7→§b❄Chilled (2.5s!)\n§7+§bWater§7→§6Flood Wash\n\n§bChilled§7 targets:\n§7+§7Air§7→§b§lFROZEN (5s!)\n§7+§2Earth§7→§6Cracked Ice");
+            meta.addPage("§8§l─ Earth Combos ─\n\n§2Earth§7→Slowness\n§2Earth+Earth§7→§2Suffocate!\n\n§6Muddy§7 targets:\n§7+§cFire§7→§e§lSTATUE (8s!)\n§7+§7Air§7→§6Mud Launch\n§7+§bWater§7→§6Flood Wash\n\n§e§lStatue§7:\n§7+§2Earth§7→§6Crumble\n§7+§7Air§7→§c§l??? (seek tome)");
+            meta.addPage("§8§l─ Air Combos ─\n\n§7On§bWet§7→§b❄Chilled\n§7On§b❄Chilled§7→§b§lFrozen\n§7On§6Muddy§7→§6Mud Launch\n§7On§c§lBlazing§7→§c§lInferno Blast\n§7On§cScorched§7→§6Fanned\n§7On§b§lFrozen§7→§c§l???(seek tome)\n\n§8§lHOVER:§7Hold Air staff\nin air to float!");
             item.setItemMeta(meta);
         }
         return item;
@@ -712,7 +712,7 @@ public class ItemFactory {
             meta.addPage("§8§l─ Advanced Theory ─\n\n§7You have mastered the\nbasics. Now learn the\ndeadly chains.\n\n§7The freeze chain and\nstatue trap can end\nfights instantly.\n\n§8Seek the §cAncient\nKill Tome §8for the\nfinal steps.");
             meta.addPage("§8§l─ The Freeze Chain ─\n\n§71. §bWater§7→§bWet\n§72. §7Air on Wet§7→§b❄Chilled\n§73. §7Air on Chilled\n§7   →§b§lFROZEN (5s!)\n§74. ??? on Frozen\n§7   →§c§lINSTANT DEATH\n\n§8High Magic level\nlets you cast faster.");
             meta.addPage("§8§l─ The Statue Trap ─\n\n§71. §bWater§7→§bWet\n§72. §2Earth on Wet§7→§6Muddy\n§73. §cFire on Muddy\n§7   →§e§lSTATUE (8s!)\n§74. ??? on Statue\n§7   →§c§lINSTANT DEATH\n\n§88 seconds is your\nwindow. Make it count.");
-            meta.addPage("§8§l─ Thaw Explosion ─\n\n§7A §b§lFROZEN §7target hit\nwith §cFire §7creates a\nmassive steam burst.\n\n§c🔥 Fire + §b§lFrozen\n→§c§lTHAW EXPLOSION!\n\nAoE damage. Great\nvs groups!\n\n§8Also: §bWater§7 on §b§lFrozen\n→§fSlush §7(slow+blind)");
+            meta.addPage("§8§l─ Thaw Explosion ─\n\n§7A §b§lFROZEN §7target hit\nwith §cFire §7creates a\nmassive steam burst.\n\n§c🔥 Fire + §b§lFrozen\n→§c§lTHAW EXPLOSION!\n\nAoE damage. Great\nvs groups!\n\n§8Also: §bWater§7 on §b§lFrozen\n→§6Slush §7(slow+blind)");
             meta.addPage("§8§l─ Mind Bomb ─\n\n§7Wear §d2+ Mage Gear\n§7for a §d5% §7chance on\nany combo hit:\n\n§d§lMIND BOMB!\n§7Nausea+Blindness 5s\n\n§730% chance→§c§lFALLEN§7.\nPress SPACE to get up.");
             item.setItemMeta(meta);
         }
