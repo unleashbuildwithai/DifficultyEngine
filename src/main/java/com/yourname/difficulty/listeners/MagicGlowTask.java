@@ -1,4 +1,4 @@
-package com.yourname.difficulty.listeners;
+ package com.yourname.difficulty.listeners;
 
 import com.yourname.difficulty.items.ItemFactory;
 import com.yourname.difficulty.magic.MagicElement;
@@ -6,11 +6,19 @@ import com.yourname.difficulty.skills.SkillManager;
 import com.yourname.difficulty.skills.SkillType;
 import org.bukkit.Color;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.Particle;
+import org.bukkit.block.data.type.Light;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
+
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * MagicGlowTask — Ambient particle glow for held elemental staffs.
@@ -44,6 +52,13 @@ public class MagicGlowTask extends BukkitRunnable {
     private final JavaPlugin   plugin;
     private int tick = 0;
 
+    /**
+     * Tracks the last fake LIGHT block sent to each player holding a Fire staff.
+     * On each tick we restore the previous location and place a new one at the
+     * player's current position so the light follows them smoothly.
+     */
+    private final Map<UUID, Location> fireLightMap = new HashMap<>();
+
     public MagicGlowTask(ItemFactory itemFactory, SkillManager skillManager, JavaPlugin plugin) {
         this.itemFactory  = itemFactory;
         this.skillManager = skillManager;
@@ -53,13 +68,22 @@ public class MagicGlowTask extends BukkitRunnable {
     @Override
     public void run() {
         tick++;
+        Set<UUID> activeFirePlayers = new HashSet<>();
+
         for (Player player : plugin.getServer().getOnlinePlayers()) {
             ItemStack hand = player.getInventory().getItemInMainHand();
             MagicElement el = itemFactory.getStaffElement(hand);
-            if (el == null) continue;
+            if (el == null) {
+                // Not holding any staff — remove any fire light this player had
+                removeFakeLight(player);
+                continue;
+            }
 
             // ── Staff glow is a level-99 Magic perk only ────────────────────
-            if (skillManager.getLevel(player.getUniqueId(), SkillType.MAGIC) < 99) continue;
+            if (skillManager.getLevel(player.getUniqueId(), SkillType.MAGIC) < 99) {
+                removeFakeLight(player);
+                continue;
+            }
 
             // Position near the player's right-hand hold area
             Location eye  = player.getEyeLocation();
@@ -70,7 +94,71 @@ public class MagicGlowTask extends BukkitRunnable {
             Location aura = player.getLocation().clone().add(0, 1.1, 0);
 
             spawnElementGlow(player, el, hand1, aura);
+
+            // ── Fire staff: dynamic LIGHT block (level 15) follows player ───
+            if (el == MagicElement.FIRE) {
+                activeFirePlayers.add(player.getUniqueId());
+                updateFireLight(player);
+            } else {
+                removeFakeLight(player);
+            }
         }
+
+        // Clean up any players who left or stopped holding fire staff
+        fireLightMap.keySet().removeIf(uuid -> !activeFirePlayers.contains(uuid));
+    }
+
+    // ── Fire light helpers ─────────────────────────────────────────────────────
+
+    /** Place / update the fake LIGHT block at the player's head position. */
+    private void updateFireLight(Player player) {
+        UUID uuid = player.getUniqueId();
+        // Target: one block above the player's feet (typically air while standing)
+        Location newLoc = player.getLocation().clone();
+        newLoc.setY(Math.floor(newLoc.getY()) + 1);
+        newLoc = newLoc.getBlock().getLocation();
+
+        Location prev = fireLightMap.get(uuid);
+
+        // Restore previous fake block if we moved
+        if (prev != null && !blockLocEqual(prev, newLoc)) {
+            player.sendBlockChange(prev, prev.getBlock().getBlockData());
+        }
+
+        // Only place the light block if the target block is passable (air/transparent)
+        if (newLoc.getBlock().isPassable()) {
+            Light lightData = (Light) Material.LIGHT.createBlockData();
+            lightData.setLevel(15);
+            player.sendBlockChange(newLoc, lightData);
+            fireLightMap.put(uuid, newLoc);
+        } else if (prev == null || !blockLocEqual(prev, newLoc)) {
+            // Block not passable — track null so we don't spam restore
+            fireLightMap.put(uuid, newLoc);
+        }
+    }
+
+    /** Remove the fake light block for a player and restore the real block. */
+    private void removeFakeLight(Player player) {
+        Location prev = fireLightMap.remove(player.getUniqueId());
+        if (prev != null) {
+            player.sendBlockChange(prev, prev.getBlock().getBlockData());
+        }
+    }
+
+    /** Block-grid equality (ignores yaw/pitch). */
+    private boolean blockLocEqual(Location a, Location b) {
+        return a.getWorld() == b.getWorld()
+                && a.getBlockX() == b.getBlockX()
+                && a.getBlockY() == b.getBlockY()
+                && a.getBlockZ() == b.getBlockZ();
+    }
+
+    /** Call on plugin disable to restore all fake light blocks server-wide. */
+    public void cleanupLights() {
+        for (Player player : plugin.getServer().getOnlinePlayers()) {
+            removeFakeLight(player);
+        }
+        fireLightMap.clear();
     }
 
     private void spawnElementGlow(Player player, MagicElement el, Location hand1, Location aura) {
