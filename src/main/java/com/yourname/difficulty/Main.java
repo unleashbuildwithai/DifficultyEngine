@@ -493,6 +493,13 @@ public class Main extends JavaPlugin {
                 if (target == null) { sender.sendMessage("§cPlayer not found."); return true; }
             } else if (sender instanceof Player p) { target = p; }
             else { sender.sendMessage("§cUsage: /givebag [player]"); return true; }
+            // Prevent duplicates — one Magic Bag per player
+            for (org.bukkit.inventory.ItemStack s : target.getInventory().getContents()) {
+                if (itemFactory.isMagicBag(s)) {
+                    sender.sendMessage("§c✗ §e" + target.getName() + " §7already has a Magic Bag.");
+                    return true;
+                }
+            }
             target.getInventory().addItem(magicBagManager.buildMagicBag());
             target.sendMessage("§5✦ §7You received a §dMagic Bag§7!");
             return true;
