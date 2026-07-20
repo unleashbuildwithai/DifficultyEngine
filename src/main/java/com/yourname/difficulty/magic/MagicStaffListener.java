@@ -244,7 +244,9 @@ public class MagicStaffListener implements Listener {
         // ── All other elements: right-click only ──────────────────────────────
         if (!isRightClick) return;
 
-        if (element == MagicElement.AIR && !player.isOnGround()) {
+        // Air hover — at Lv99 works even from ground; below Lv99 requires being airborne.
+        // Levitation lifts the player; combine with Jump Boost potions to go higher.
+        if (element == MagicElement.AIR && (magicLevel >= 99 || !player.isOnGround())) {
             activateAirHover(player, magicLevel);
             return;
         }

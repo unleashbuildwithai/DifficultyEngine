@@ -73,10 +73,11 @@ public class RegistryGUIListener implements Listener {
         ItemStack clicked = event.getCurrentItem();
         if (clicked == null || clicked.getType().isAir()) return;
 
-        // Navigation arrows / glass / book label should not be giveable
+        // Navigation arrows and glass panes should not be giveable.
+        // BOOK is allowed — Earth Magic Pages and the page-label BOOK at slot 49
+        // are already filtered above (slot 49 returns early). Do NOT block BOOK here.
         if (clicked.getType() == Material.ARROW ||
-            clicked.getType() == Material.GRAY_STAINED_GLASS_PANE ||
-            clicked.getType() == Material.BOOK) return;
+            clicked.getType() == Material.GRAY_STAINED_GLASS_PANE) return;
 
         // ── Per-item permission checks ─────────────────────────────────────────
 

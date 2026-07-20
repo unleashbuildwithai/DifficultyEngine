@@ -34,7 +34,7 @@ import java.util.List;
  */
 public class RegistryGUI {
 
-    public static final int    PAGE_COUNT     = 8;
+    public static final int    PAGE_COUNT     = 9;
     public static final int    ITEMS_PER_PAGE = 45;
     private static final int   SIZE           = 54;
     private static final int   SLOT_PREV      = 45;
@@ -52,7 +52,8 @@ public class RegistryGUI {
         "§eRanged Gear",
         "§2Earth Magic",
         "§6Magic Books",
-        "§dCapes & Cosmetics"
+        "§dCapes & Cosmetics",
+        "§5Support Staff"    // index 9
     };
 
     private final ItemFactory itemFactory;

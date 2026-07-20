@@ -164,9 +164,18 @@ public class CastingEngine implements Listener {
     public void onElementCast(Player player, MagicElement element) {
         final List<MagicElement> queue = new ArrayList<>(queueManager.addCast(player.getUniqueId(), element));
 
-        // Delay 2 ticks so the spell's own action-bar shows first
+        // Only show the queue HUD if the player has a Support Staff in their inventory.
+        // Without a Support Staff the HUD is irrelevant and would just confuse players
+        // who are using staffs for normal combat.
         plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
             if (!player.isOnline()) return;
+            // Check if player has a support staff
+            boolean hasSupportStaff = false;
+            for (org.bukkit.inventory.ItemStack s : player.getInventory().getContents()) {
+                if (isSupportStaff(s)) { hasSupportStaff = true; break; }
+            }
+            if (!hasSupportStaff) return; // No support staff — show no queue HUD
+
             StringBuilder hud = new StringBuilder("§7Queue: ");
             for (MagicElement el : queue) {
                 hud.append(el.color).append(el.name().charAt(0));
