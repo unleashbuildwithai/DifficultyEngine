@@ -118,6 +118,8 @@ public class MagicStaffListener implements Listener {
     private       CastingEngine                      castingEngine      = null;
     /** Optional portal listener — called when lightning hits Ancient Debris. */
     private       AncientDebrisPortalListener        portalListener     = null;
+    /** Optional favorites manager — gates combo hints to starred chains only. */
+    private       ComboFavoritesManager              favoritesManager   = null;
     /** Player UUID → repeating task that keeps them on fire after a lightning burn. */
     private final Map<UUID, BukkitTask>              lightningBurnTasks = new HashMap<>();
 
@@ -144,6 +146,25 @@ public class MagicStaffListener implements Listener {
      * aimed directly at an Ancient Debris block opens the Ancient Realm portal.
      */
     public void setPortalListener(AncientDebrisPortalListener pl) { this.portalListener = pl; }
+
+    /** Wires in the ComboFavoritesManager so hints only show for starred chains. */
+    public void setFavoritesManager(ComboFavoritesManager fm) { this.favoritesManager = fm; }
+
+    /**
+     * Returns true if a combo hint for {@code chainTag} should appear in the action bar.
+     *
+     * Requirements:
+     *  1. {@code shooter} is not null.
+     *  2. Shooter has a §5Spell Combo Book§r in inventory.
+     *  3. {@code chainTag} is starred in the player's favorites.
+     *     (If favorites set is empty → no hints show even with the book.)
+     */
+    private boolean showHint(Player shooter, String chainTag) {
+        if (shooter == null) return false;
+        if (!itemFactory.hasSpellComboBook(shooter)) return false;
+        if (favoritesManager == null) return false;
+        return favoritesManager.isFavorited(shooter.getUniqueId(), chainTag);
+    }
 
     // ══════════════════════════════════════════════════════════════════════════
     //  RIGHT-CLICK CAST
@@ -929,7 +950,7 @@ public class MagicStaffListener implements Listener {
             target.getWorld().spawnParticle(Particle.FLAME,
                 target.getLocation().add(0, 1, 0), 50, 0.5, 0.5, 0.5, 0.2);
             if (shooter != null) {
-                if (itemFactory.hasSpellComboBook(shooter)) {
+                if (showHint(shooter, ComboFavoritesManager.BLAZING_CHAIN)) {
                     shooter.sendActionBar("§c§f§lBLAZING! §8(" + fire/20 + "s fire - Air to Inferno Blast!)");
                 } else {
                     shooter.sendActionBar("§c§f§lBLAZING! §8(" + fire/20 + "s fire)");
@@ -957,7 +978,7 @@ public class MagicStaffListener implements Listener {
                 Material.BROWN_TERRACOTTA.createBlockData());
             target.getWorld().playSound(target.getLocation(), Sound.BLOCK_MUD_BREAK, 2.0f, 0.6f);
             if (shooter != null) {
-                if (itemFactory.hasAncientKillTome(shooter)) {
+                if (showHint(shooter, ComboFavoritesManager.STATUE_CHAIN)) {
                     shooter.sendActionBar("§6§e§lSTATUE! §7Mud hardened - target frozen! §8Air gust = §c§lDEATH!");
                 } else {
                     shooter.sendActionBar("§6§e§lSTATUE! §7Mud hardened - target immobilised! §8(8s)");
@@ -1031,7 +1052,7 @@ public class MagicStaffListener implements Listener {
             if (target.isValid()) target.setFireTicks(Math.max(target.getFireTicks(), fire));
         }, 1L);
         if (shooter != null) {
-            if (itemFactory.hasSpellComboBook(shooter)) {
+            if (showHint(shooter, ComboFavoritesManager.SCORCHED_CHAIN)) {
                 shooter.sendActionBar("§c§7Fireball hit! §8Scorched §8(" + fire/20 + "s - hit again to Blaze!)");
             } else {
                 shooter.sendActionBar("§c§7Fireball hit! §8(Scorched " + fire/20 + "s)");
@@ -1141,7 +1162,7 @@ public class MagicStaffListener implements Listener {
                 target.getLocation().add(0, 1, 0), 50, 0.4, 0.4, 0.4, 0.2);
             target.getWorld().playSound(target.getLocation(), Sound.BLOCK_GLASS_BREAK, 1.5f, 1.2f);
             if (shooter != null) {
-                if (itemFactory.hasSpellComboBook(shooter)) {
+                if (showHint(shooter, ComboFavoritesManager.FROZEN_CHAIN)) {
                     shooter.sendActionBar("§b§f§lSLUSH! §7Ice shattered - Slowness + Blindness!");
                 } else {
                     shooter.sendActionBar("§b§f§lSLUSH!");
@@ -1167,7 +1188,7 @@ public class MagicStaffListener implements Listener {
                 target.getLocation().add(0, 1, 0), 40, 0.5, 0.5, 0.5, Material.MUD.createBlockData());
             target.getWorld().playSound(target.getLocation(), Sound.ITEM_BUCKET_FILL, 1.2f, 0.6f);
             if (shooter != null) {
-                if (itemFactory.hasSpellComboBook(shooter)) {
+                if (showHint(shooter, ComboFavoritesManager.MUDDY_CHAIN)) {
                     shooter.sendActionBar("§b§f§lFLOOD WASH! §7Mud washed away - target soaked again!");
                 } else {
                     shooter.sendActionBar("§b§f§lFLOOD WASH!");
@@ -1230,7 +1251,7 @@ public class MagicStaffListener implements Listener {
         target.getWorld().spawnParticle(Particle.SPLASH,
             target.getLocation().add(0, 1, 0), 40, 0.4, 0.4, 0.4, 0.2);
         if (shooter != null) {
-            if (itemFactory.hasSpellComboBook(shooter)) {
+            if (showHint(shooter, ComboFavoritesManager.WET_CHAIN)) {
                 shooter.sendActionBar("§b§7Water hit! §bWet §7(" + wetTicks/20 + "s - Earth=Muddy, Air=Chilled)");
             } else {
                 shooter.sendActionBar("§b§7Water hit! §8(" + wetTicks/20 + "s WET)");
@@ -1284,7 +1305,7 @@ public class MagicStaffListener implements Listener {
             int muddyTicks = 300 + (int)((lvl / 99.0) * 300);
             applyMuddy(target, muddyTicks);
             if (shooter != null) {
-                if (itemFactory.hasSpellComboBook(shooter)) {
+                if (showHint(shooter, ComboFavoritesManager.MUDDY_CHAIN)) {
                     shooter.sendActionBar("§6§7Wet + Earth = §6Muddy! §8(" + muddyTicks/20 + "s - Fire to Statue!)");
                 } else {
                     shooter.sendActionBar("§6§7Muddy! §8(" + muddyTicks/20 + "s)");
@@ -1407,7 +1428,7 @@ public class MagicStaffListener implements Listener {
         target.damage(dmg, shooter);
         target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 40, 0, false, true, true));
         if (shooter != null) {
-            if (itemFactory.hasSpellComboBook(shooter)) {
+            if (showHint(shooter, ComboFavoritesManager.WET_CHAIN)) {
                 shooter.sendActionBar("§2§7Earth hit! §8(" + (dmg/2) + "❤) - hit §bWet§8 target to make §6Muddy");
             } else {
                 shooter.sendActionBar("§2§7Earth hit! §8(" + (dmg/2) + "❤)");
@@ -1439,7 +1460,7 @@ public class MagicStaffListener implements Listener {
             target.getWorld().spawnParticle(Particle.SNOWFLAKE,
                 target.getLocation().add(0, 1, 0), 50, 0.5, 0.5, 0.5, 0.1);
             if (shooter != null) {
-                if (itemFactory.hasAncientKillTome(shooter)) {
+                if (showHint(shooter, ComboFavoritesManager.FROZEN_CHAIN)) {
                     shooter.sendActionBar("§b§f§lFROZEN! §7Chilled target locked solid! §8Air gust = §c§lDEATH!");
                 } else {
                     shooter.sendActionBar("§b§f§lFROZEN! §7Chilled target locked solid! §8(5s)");
@@ -1454,7 +1475,7 @@ public class MagicStaffListener implements Listener {
             removeWet(target, true);
             applyChilled(target, 50);
             if (shooter != null) {
-                if (itemFactory.hasSpellComboBook(shooter)) {
+                if (showHint(shooter, ComboFavoritesManager.CHILLED_CHAIN)) {
                     shooter.sendActionBar("§b§7Target is §bChilled§7! §8Cast Air again quickly to Freeze!");
                 } else {
                     shooter.sendActionBar("§b§7Target is §bChilled§7!");

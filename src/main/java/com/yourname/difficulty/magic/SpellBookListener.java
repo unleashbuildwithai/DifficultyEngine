@@ -19,9 +19,9 @@ import java.util.Random;
  * SpellBookListener — Handles all Spell Tome / Spell Page interactions.
  *
  * ── Right-click Spell Tome ──────────────────────────────────────────────────
- *  Opens a read-only WRITTEN_BOOK view showing the player's 37 pages.
- *  Locked pages show "???" until discovered. Uses {@code Player#openBook()} —
- *  the book is never placed into the player's inventory.
+ *  Opens the §dCombo Favorites GUI§r (chest inventory) so the player can
+ *  star/un-star which combo hints they want to see during combat.
+ *  Inside the GUI there is a "Read Full Tome" button to open the written book.
  *
  * ── Right-click Spell Page ──────────────────────────────────────────────────
  *  Consumes the item and unlocks one random undiscovered page. Plays a
@@ -38,9 +38,15 @@ public class SpellBookListener implements Listener {
     private static final Random RAND = new Random();
 
     private final SpellBookManager manager;
+    private       FavoritesGUI     favoritesGUI = null;
 
     public SpellBookListener(SpellBookManager manager) {
         this.manager = manager;
+    }
+
+    /** Wires in the FavoritesGUI — called from Main after construction. */
+    public void setFavoritesGUI(FavoritesGUI gui) {
+        this.favoritesGUI = gui;
     }
 
     // ── Right-click handler ───────────────────────────────────────────────────
@@ -56,14 +62,21 @@ public class SpellBookListener implements Listener {
         Player    player = event.getPlayer();
         ItemStack hand   = player.getInventory().getItemInMainHand();
 
-        // ── Spell Tome → open book view ───────────────────────────────────────
+        // ── Spell Tome → open Favorites GUI ──────────────────────────────────
         if (manager.isSpellTome(hand)) {
             event.setCancelled(true);
-            int count = manager.getUnlockedCount(player.getUniqueId());
-            player.openBook(manager.buildBookForPlayer(player.getUniqueId()));
-            player.sendActionBar(
-                "§5✦ §dArcane Tome §8— §7" + count + " §8/ §7"
-                + SpellBookManager.TOTAL_PAGES + " §dpages unlocked");
+            if (favoritesGUI != null) {
+                favoritesGUI.open(player);
+                player.playSound(player.getLocation(),
+                        Sound.ITEM_BOOK_PAGE_TURN, 0.8f, 1.3f);
+            } else {
+                // Fallback: open written book directly (favoritesGUI not yet wired)
+                int count = manager.getUnlockedCount(player.getUniqueId());
+                player.openBook(manager.buildBookForPlayer(player.getUniqueId()));
+                player.sendActionBar(
+                    "§5✦ §dArcane Tome §8— §7" + count + " §8/ §7"
+                    + SpellBookManager.TOTAL_PAGES + " §dpages unlocked");
+            }
             return;
         }
 
@@ -95,7 +108,7 @@ public class SpellBookListener implements Listener {
                 + " §7is now unlocked in your §dArcane Tome§7.");
             player.sendMessage(
                 "§8  " + total + " / " + SpellBookManager.TOTAL_PAGES
-                + " pages discovered.  §7Right-click your §dArcane Tome§7, or use §d/spellbook §7to read.");
+                + " pages discovered.  §7Right-click your §dArcane Tome§7 to open the §dFavorites§7 menu.");
             player.sendActionBar(
                 "§5✦ §dPage " + newPage + " §7unlocked§8! §8("
                 + total + "/" + SpellBookManager.TOTAL_PAGES + ")");

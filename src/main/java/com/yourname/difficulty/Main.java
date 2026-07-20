@@ -52,6 +52,9 @@ import com.yourname.difficulty.magic.MagicElement;
 import com.yourname.difficulty.magic.MagicStaffListener;
 import com.yourname.difficulty.magic.RuneDropListener;
 import com.yourname.difficulty.magic.SandstormManager;
+import com.yourname.difficulty.magic.ComboFavoritesManager;
+import com.yourname.difficulty.magic.FavoritesGUI;
+import com.yourname.difficulty.magic.FavoritesGUIListener;
 import com.yourname.difficulty.magic.SpellBookListener;
 import com.yourname.difficulty.magic.SpellBookManager;
 import com.yourname.difficulty.monsters.CustomMonsterDropListener;
@@ -271,8 +274,16 @@ public class Main extends JavaPlugin {
                 new DarkBowListener(itemFactory, skillManager, this), this);
 
         this.spellBookManager = new SpellBookManager(this);
+        // ── Combo Favorites system — gates action bar hints to starred chains ───
+        ComboFavoritesManager comboFavoritesManager = new ComboFavoritesManager(this);
+        FavoritesGUI          favoritesGUI          = new FavoritesGUI(comboFavoritesManager, spellBookManager);
+        SpellBookListener     spellBookListener     = new SpellBookListener(spellBookManager);
+        spellBookListener.setFavoritesGUI(favoritesGUI);
+        getServer().getPluginManager().registerEvents(spellBookListener, this);
         getServer().getPluginManager().registerEvents(
-                new SpellBookListener(spellBookManager), this);
+                new FavoritesGUIListener(favoritesGUI, comboFavoritesManager, spellBookManager), this);
+        // Wire FavoritesManager into MagicStaffListener (must be wired after both created)
+        magicStaffListener.setFavoritesManager(comboFavoritesManager);
 
         this.questManager = new QuestManager(this, goldManager, skillManager, itemFactory);
         this.questGUI     = new QuestGUI(questManager);
