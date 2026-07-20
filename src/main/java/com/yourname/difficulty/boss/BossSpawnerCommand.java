@@ -53,6 +53,39 @@ public class BossSpawnerCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
+        World tempWorld = plugin.getServer().getWorld("ancient_realm");
+        if (tempWorld == null) {
+            tempWorld = plugin.getServer().getWorlds().get(0); // fallback to overworld
+        }
+        final World world = tempWorld;
+
+        if (label.equalsIgnoreCase("tpboss") || label.equalsIgnoreCase("bosstp")) {
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage("§cOnly players can teleport.");
+                return true;
+            }
+            if (args.length == 0) {
+                sender.sendMessage("§7Usage: §e/tpboss <tempest|crimson>");
+                return true;
+            }
+            switch (args[0].toLowerCase()) {
+                case "tempest" -> {
+                    Location loc = new Location(world, TEMPEST_X, TEMPEST_Y, TEMPEST_Z);
+                    player.teleport(loc);
+                    player.sendMessage("§a✓ §7Teleported to §5Tempest Sanctum§7 in the Ancient Realm!");
+                }
+                case "crimson" -> {
+                    Location loc = new Location(world, CrimsonBossManager.SPAWN_X, CrimsonBossManager.SPAWN_Y, CrimsonBossManager.SPAWN_Z);
+                    player.teleport(loc);
+                    player.sendMessage("§a✓ §7Teleported to §cCrimson Pit§7 in the Ancient Realm!");
+                }
+                default -> {
+                    sender.sendMessage("§c✗ §7Unknown arena: §e" + args[0]);
+                }
+            }
+            return true;
+        }
+
         if (args.length == 0) {
             sender.sendMessage("§7Usage: §e/spawnboss <tempest|crimson>");
             sender.sendMessage("§8  §etempest §7— Tempest Overlord at Tempest Sanctum (114, -38, -47)");
@@ -60,27 +93,26 @@ public class BossSpawnerCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        World world = plugin.getServer().getWorlds().get(0); // overworld
-
         switch (args[0].toLowerCase()) {
 
             // ── Tempest Sanctum ───────────────────────────────────────────────
             case "tempest" -> {
                 Location loc = new Location(world, TEMPEST_X, TEMPEST_Y, TEMPEST_Z);
 
-                // Spawn a Wither as the Tempest Overlord
-                Wither wither = (Wither) world.spawnEntity(loc, EntityType.WITHER);
-                wither.setCustomName("§5⚡ §l§dThe Tempest Overlord");
-                wither.setCustomNameVisible(true);
-                wither.setRemoveWhenFarAway(false);
+                // Spawn a colossal Phantom as the Tempest Overlord
+                Phantom phantom = (Phantom) world.spawnEntity(loc, EntityType.PHANTOM);
+                phantom.setCustomName("§5⚡ §l§dThe Tempest Overlord");
+                phantom.setCustomNameVisible(true);
+                phantom.setSize(18); // Colossal air/wind spirit size
+                phantom.setRemoveWhenFarAway(false);
 
-                var hp = wither.getAttribute(org.bukkit.attribute.Attribute.GENERIC_MAX_HEALTH);
+                var hp = phantom.getAttribute(org.bukkit.attribute.Attribute.GENERIC_MAX_HEALTH);
                 if (hp != null) hp.setBaseValue(TEMPEST_MAX_HP);
-                wither.setHealth(TEMPEST_MAX_HP);
+                phantom.setHealth(TEMPEST_MAX_HP);
 
                 // Register with effect system (Shriek, Leached, etc.)
-                bossEffectListener.registerBoss(wither);
-                bossEffectListener.spawnShriek(wither);
+                bossEffectListener.registerBoss(phantom);
+                bossEffectListener.spawnShriek(phantom);
 
                 // Announce to all players in range
                 for (Player p : world.getPlayers()) {

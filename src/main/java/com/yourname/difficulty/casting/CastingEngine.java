@@ -1,4 +1,4 @@
-package com.yourname.difficulty.casting;
+ package com.yourname.difficulty.casting;
 
 import com.yourname.difficulty.items.ItemFactory;
 import com.yourname.difficulty.magic.MagicElement;
@@ -191,29 +191,61 @@ public class CastingEngine implements Listener {
      * When a player hits another player with the Support Staff (left-click),
      * and the target is in the same party, record it as the combo target.
      */
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGH)
     public void onPartyMemberHit(EntityDamageByEntityEvent event) {
         if (!(event.getDamager() instanceof Player attacker)) return;
-        if (!(event.getEntity()  instanceof Player target))   return;
+        if (!(event.getEntity()  instanceof LivingEntity target)) return;
 
         // Must be holding support staff
         ItemStack hand = attacker.getInventory().getItemInMainHand();
         if (!isSupportStaff(hand)) return;
 
-        // Must be in the same party
-        if (partyManager == null) return;
-        if (!partyManager.isInParty(attacker.getUniqueId())) return;
-        Set<UUID> members = partyManager.getPartyMembers(attacker.getUniqueId());
-        if (!members.contains(target.getUniqueId())) return;
+        // Check if target is a player in the same party
+        boolean inSameParty = false;
+        if (target instanceof Player targetPlayer && partyManager != null && partyManager.isInParty(attacker.getUniqueId())) {
+            Set<UUID> members = partyManager.getPartyMembers(attacker.getUniqueId());
+            if (members.contains(targetPlayer.getUniqueId())) {
+                inSameParty = true;
+            }
+        }
 
-        // Record combo gate
-        lastPartyHitTarget.put(attacker.getUniqueId(), target.getUniqueId());
-        lastPartyHitTime.put(attacker.getUniqueId(), System.currentTimeMillis());
+        if (inSameParty) {
+            // Cancel staff damage on party member
+            event.setCancelled(true);
 
-        attacker.sendActionBar("§5✦ §7Combo loaded! Right-click §dSupport Staff §7within §a5s §7for full buffs on §b"
-                + target.getName() + "§7!");
-        attacker.getWorld().spawnParticle(Particle.ENCHANT,
-                target.getLocation().add(0, 1, 0), 20, 0.4, 0.4, 0.4, 0.1);
+            // Left-click with Support Staff heals party member if we have Baked Potato or Cooked Mutton!
+            if (consumeSupportFood(attacker)) {
+                double healAmount = 6.0; // 3 hearts
+                double newHealth = Math.min(target.getMaxHealth(), target.getHealth() + healAmount);
+                target.setHealth(newHealth);
+                target.getWorld().spawnParticle(Particle.HEART, target.getLocation().add(0, 1.5, 0), 10, 0.3, 0.3, 0.3, 0.05);
+                target.getWorld().playSound(target.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.6f, 1.6f);
+                attacker.sendMessage("§5✦ §7Healed party member §b" + target.getName() + " §7using support food!");
+                target.sendMessage("§5✦ §7Healed §a+3❤ §7by §b" + attacker.getName() + "§7!");
+            } else {
+                attacker.sendMessage("§c✗ §7Need §6Cooked Mutton §7or §eBaked Potato §7to heal party members on hit!");
+            }
+
+            // Record combo gate
+            lastPartyHitTarget.put(attacker.getUniqueId(), target.getUniqueId());
+            lastPartyHitTime.put(attacker.getUniqueId(), System.currentTimeMillis());
+
+            attacker.sendActionBar("§5✦ §7Combo loaded! Right-click §dSupport Staff §7within §a5s §7for full buffs on §b"
+                    + target.getName() + "§7!");
+            attacker.getWorld().spawnParticle(Particle.ENCHANT,
+                    target.getLocation().add(0, 1, 0), 20, 0.4, 0.4, 0.4, 0.1);
+        } else {
+            // Not in same party (could be hostile mob or player not in party)
+            // If the attacker has a poisonous potato, poison the target and cancel default weapon damage!
+            if (hasPoisonousPotato(attacker)) {
+                consumePoisonousPotato(attacker);
+                target.addPotionEffect(new org.bukkit.potion.PotionEffect(org.bukkit.potion.PotionEffectType.POISON, 120, 1)); // Poison II for 6s
+                target.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, target.getLocation().add(0, 1, 0), 15, 0.3, 0.3, 0.3, 0.05);
+                target.getWorld().playSound(target.getLocation(), Sound.ENTITY_SPIDER_DEATH, 0.8f, 1.2f);
+                attacker.sendMessage("§5✦ §7Poisoned §a" + target.getName() + " §7using §2Poisonous Potato§7!");
+                event.setDamage(1.0); // apply minimal damage
+            }
+        }
     }
 
     // ── SupportStaff right-click ──────────────────────────────────────────────
@@ -251,16 +283,31 @@ public class CastingEngine implements Listener {
         long hitTime       = lastPartyHitTime.getOrDefault(player.getUniqueId(), 0L);
         boolean hasComboGate = (partyTargetId != null && (now - hitTime) <= PARTY_HIT_WINDOW_MS);
 
+        Player target = null;
         if (hasComboGate) {
+            target = plugin.getServer().getPlayer(partyTargetId);
+        } else if (hasAnySupportPage(player)) {
+            // No combo required: check if player is looking at a party member within 15 blocks
+            org.bukkit.util.RayTraceResult targetRay = player.getWorld().rayTraceEntities(
+                player.getEyeLocation(), player.getLocation().getDirection(), 15,
+                0.5, entity -> entity instanceof Player && !entity.equals(player)
+            );
+            if (targetRay != null && targetRay.getHitEntity() instanceof Player p) {
+                if (partyManager != null && partyManager.isInParty(player.getUniqueId())) {
+                    Set<UUID> members = partyManager.getPartyMembers(player.getUniqueId());
+                    if (members.contains(p.getUniqueId())) {
+                        target = p;
+                    }
+                }
+            }
+        }
+
+        if (target != null && target.isOnline()) {
             // Clear gate immediately
             lastPartyHitTarget.remove(player.getUniqueId());
             lastPartyHitTime.remove(player.getUniqueId());
-
-            Player target = plugin.getServer().getPlayer(partyTargetId);
-            if (target != null && target.isOnline()) {
-                applyFullSupportBuffs(player, target);
-                return;
-            }
+            applyFullSupportBuffs(player, target);
+            return;
         }
 
         // ── No combo gate → check for elemental combo first ──────────────────
@@ -467,6 +514,38 @@ public class CastingEngine implements Listener {
             }
         }
         return false;
+    }
+
+    private boolean hasPoisonousPotato(Player player) {
+        for (ItemStack s : player.getInventory().getContents()) {
+            if (s != null && s.getType() == Material.POISONOUS_POTATO) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void consumePoisonousPotato(Player player) {
+        ItemStack[] contents = player.getInventory().getContents();
+        for (int i = 0; i < contents.length; i++) {
+            ItemStack s = contents[i];
+            if (s != null && s.getType() == Material.POISONOUS_POTATO) {
+                if (s.getAmount() > 1) s.setAmount(s.getAmount() - 1);
+                else player.getInventory().setItem(i, new ItemStack(Material.AIR));
+                return;
+            }
+        }
+    }
+
+    private boolean hasAnySupportPage(Player player) {
+        if (itemFactory == null) return false;
+        return itemFactory.hasSupportPage(player, ItemFactory.SUPPORT_PAGE_HEALING_KEY)
+            || itemFactory.hasSupportPage(player, ItemFactory.SUPPORT_PAGE_SPEED_KEY)
+            || itemFactory.hasSupportPage(player, ItemFactory.SUPPORT_PAGE_DEFENCE_KEY)
+            || itemFactory.hasSupportPage(player, ItemFactory.SUPPORT_PAGE_COMBAT_KEY)
+            || itemFactory.hasSupportPage(player, ItemFactory.SUPPORT_PAGE_STRENGTH_KEY)
+            || itemFactory.hasSupportPage(player, ItemFactory.SUPPORT_PAGE_CRIT_KEY)
+            || itemFactory.hasSupportPage(player, ItemFactory.SUPPORT_PAGE_PRAYER_KEY);
     }
 
     // ── Discovered combo tracking ─────────────────────────────────────────────

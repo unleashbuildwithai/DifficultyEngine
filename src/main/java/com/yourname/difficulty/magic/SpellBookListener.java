@@ -39,6 +39,7 @@ public class SpellBookListener implements Listener {
 
     private final SpellBookManager manager;
     private       FavoritesGUI     favoritesGUI = null;
+    private       com.yourname.difficulty.items.ItemFactory itemFactory = null;
 
     public SpellBookListener(SpellBookManager manager) {
         this.manager = manager;
@@ -47,6 +48,11 @@ public class SpellBookListener implements Listener {
     /** Wires in the FavoritesGUI — called from Main after construction. */
     public void setFavoritesGUI(FavoritesGUI gui) {
         this.favoritesGUI = gui;
+    }
+
+    /** Wires in the ItemFactory — called from Main after construction. */
+    public void setItemFactory(com.yourname.difficulty.items.ItemFactory factory) {
+        this.itemFactory = factory;
     }
 
     // ── Right-click handler ───────────────────────────────────────────────────
@@ -61,6 +67,21 @@ public class SpellBookListener implements Listener {
 
         Player    player = event.getPlayer();
         ItemStack hand   = player.getInventory().getItemInMainHand();
+
+        // ── Spell Combo Book → open written guide ───────────────────────────
+        if (itemFactory != null && itemFactory.isSpellComboBook(hand)) {
+            event.setCancelled(true);
+            player.openBook(buildWrittenComboBook());
+            player.playSound(player.getLocation(), Sound.ITEM_BOOK_PAGE_TURN, 0.8f, 1.3f);
+            return;
+        }
+
+        // ── Support Pages/Books ──────────────────────────────────────────────
+        if (isSupportPageItem(hand)) {
+            event.setCancelled(true);
+            openSupportPageAsBook(player, hand);
+            return;
+        }
 
         // ── Spell Tome → open Favorites GUI ──────────────────────────────────
         if (manager.isSpellTome(hand)) {
@@ -113,6 +134,95 @@ public class SpellBookListener implements Listener {
                 "§5✦ §dPage " + newPage + " §7unlocked§8! §8("
                 + total + "/" + SpellBookManager.TOTAL_PAGES + ")");
         }
+    }
+
+    private boolean isSupportPageItem(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        org.bukkit.persistence.PersistentDataContainer pdc = item.getItemMeta().getPersistentDataContainer();
+        for (org.bukkit.NamespacedKey key : pdc.getKeys()) {
+            if (key.getKey().startsWith("de_support_page_")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void openSupportPageAsBook(Player player, ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return;
+        org.bukkit.inventory.meta.ItemMeta itemMeta = item.getItemMeta();
+        String title = itemMeta.getDisplayName();
+        java.util.List<String> lore = itemMeta.getLore();
+        
+        ItemStack writtenBook = new ItemStack(org.bukkit.Material.WRITTEN_BOOK);
+        org.bukkit.inventory.meta.BookMeta bookMeta = (org.bukkit.inventory.meta.BookMeta) writtenBook.getItemMeta();
+        if (bookMeta != null) {
+            bookMeta.setTitle("Support Spell Guide");
+            bookMeta.setAuthor("Support Archmage");
+            bookMeta.setGeneration(org.bukkit.inventory.meta.BookMeta.Generation.ORIGINAL);
+            
+            StringBuilder sb = new StringBuilder();
+            sb.append("§5§l" + title.replace("§5✦ Support Page: §d", "").replace("§5✦ ", "") + "§r\n\n");
+            if (lore != null) {
+                for (String line : lore) {
+                    if (line.contains("[DifficultyEngine")) continue;
+                    sb.append(line).append("\n");
+                }
+            }
+            sb.append("\n§d✦ §8[Right-click Support Staff to cast once unlocked]");
+            
+            bookMeta.addPage(sb.toString());
+            writtenBook.setItemMeta(bookMeta);
+            player.openBook(writtenBook);
+            player.playSound(player.getLocation(), Sound.ITEM_BOOK_PAGE_TURN, 0.8f, 1.3f);
+        }
+    }
+
+    private ItemStack buildWrittenComboBook() {
+        ItemStack book = new ItemStack(org.bukkit.Material.WRITTEN_BOOK);
+        org.bukkit.inventory.meta.BookMeta meta = (org.bukkit.inventory.meta.BookMeta) book.getItemMeta();
+        if (meta != null) {
+            meta.setTitle("Spell Combo Book");
+            meta.setAuthor("Archmage Guide");
+            meta.setGeneration(org.bukkit.inventory.meta.BookMeta.Generation.ORIGINAL);
+            
+            // Page 1: Introduction
+            meta.addPage("§d§lSPELL COMBOS§r\n\n§7Cast spells in quick succession to trigger high-impact elemental combos!\n\n§5Carry this book§7 to see action bar hints in combat.\n\n§dPages ahead detail all recipes...");
+            
+            // Page 2: Fire & Water Combos
+            meta.addPage("§c§lFIRE & WATER§r\n\n" +
+                "§cFire §7+ §cFire\n§8→ §c§lInferno Burst§r (AoE blast)\n\n" +
+                "§bWater §7+ §cFire §r/ §cFire §7+ §bWater\n§8→ §e§lSteam Blast§r (Armor shred)\n\n" +
+                "§bWater §7+ §bWater\n§8→ §b§lTidal Surge§r (Pushback wave)");
+                
+            // Page 3: Earth & Air Combos
+            meta.addPage("§2§lEARTH & AIR§r\n\n" +
+                "§aAir §7+ §aAir\n§8→ §f§lGale Force§r (Launch targets)\n\n" +
+                "§aAir §7+ §cFire §r/ §cFire §7+ §aAir\n§8→ §c§lTornado Flame§r (Blazing dash)\n\n" +
+                "§eEarth §7+ §eEarth\n§8→ §e§lStone Skin§r (Heavy resistance)");
+
+            // Page 4: Advanced Combos
+            meta.addPage("§d§lADVANCED COMBOS§r\n\n" +
+                "§eEarth §7+ §bWater\n§8→ §6§lQuicksand§r (AoE slowdown)\n\n" +
+                "§bWater §7+ §eEarth\n§8→ §8§lMud Wall§r (Block attacks)\n\n" +
+                "§aAir §7+ §bWater\n§8→ §d§lMist Veil§r (Total stealth)");
+
+            // Page 5: More Advanced Combos
+            meta.addPage("§d§lADVANCED COMBOS§r\n\n" +
+                "§bWater §7+ §aAir\n§8→ §b§lCleanse§r (Clear debuffs)\n\n" +
+                "§eEarth §7+ §aAir §r/ §aAir §7+ §eEarth\n§8→ §7§lSandstorm§r (Blind enemies)");
+
+            // Page 6: Grand Harmony
+            meta.addPage("§d§lGRAND HARMONY§r\n\n" +
+                "§cFire §7+ §bWater §7+ §eEarth §7+ §aAir\n" +
+                "§8(Or any 4-element sequence)\n\n" +
+                "§5§lGRAND HARMONY§r\n" +
+                "§d✦ Absolute Shielding\n" +
+                "§d✦ Heavy frontliner boost\n" +
+                "§d✦ Ultimate support aura");
+
+            book.setItemMeta(meta);
+        }
+        return book;
     }
 
     // ── Hostile mob death: 4% chance to drop a Spell Page ────────────────────

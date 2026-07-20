@@ -125,6 +125,8 @@ public class MagicStaffListener implements Listener {
     private final Map<UUID, BukkitTask>              lightningBurnTasks = new HashMap<>();
     /** Optional LightningAdminCommand — zero-cooldown fast-cast for tagged players. */
     private       LightningAdminCommand              lightningAdminCommand = null;
+    /** Lightning Charge Manager to track loaded charges from magic bottles. */
+    private       LightningChargeManager             lightningChargeManager = null;
     /** Tracks Water Wave bolt UUIDs so handleWaterHit can apply 2× damage. */
     private final Set<UUID>                          waveProjectiles       = new HashSet<>();
     /** Optional PartyManager reference — used for Water splash auto-heal. */
@@ -167,6 +169,9 @@ public class MagicStaffListener implements Listener {
 
     /** Wires in the PartyManager for water-splash party auto-heal. */
     public void setPartyManagerRef(com.yourname.difficulty.party.PartyManager pm) { this.partyManagerRef = pm; }
+
+    /** Wires in the LightningChargeManager for bottle charges. */
+    public void setLightningChargeManager(LightningChargeManager lcm) { this.lightningChargeManager = lcm; }
 
     /**
      * Wires in the MagicBagManager so that hint/book checks find the Spell Combo
@@ -224,30 +229,27 @@ public class MagicStaffListener implements Listener {
 
         // ── Fire Staff Lv99: dual-click mode ──────────────────────────────────
         // Left-click  → normal fireball
-        // Right-click → lightning strike (admin = no cooldown, no rune cost)
-        // Right-click on ANCIENT_DEBRIS → portal ritual (handled by AncientDebrisPortalListener)
+        // Right-click → lightning strike (admin = no cooldown, no bottle charge cost)
+        // Right-click on ANCIENT_DEBRIS → portal ritual
         if (element == MagicElement.FIRE && magicLevel >= 99) {
             if (isRightClick) {
-                // ── Ancient Debris portal check ───────────────────────────────
-                // If the player is right-clicking Ancient Debris, skip lightning
-                // and let AncientDebrisPortalListener (HIGHEST priority) handle it.
-                if (event.getClickedBlock() != null
-                        && event.getClickedBlock().getType() == org.bukkit.Material.ANCIENT_DEBRIS) {
-                    return; // Portal listener takes over — no lightning fired
-                }
-
                 // ── Lightning Strike ──────────────────────────────────────────
-                boolean isAdmin = player.hasPermission("difficultyengine.cape.admin");
+                boolean isAdmin = player.hasPermission("difficultyengine.cape.admin") 
+                    && lightningAdminCommand != null && lightningAdminCommand.hasFastCast(player.getUniqueId());
+                
                 if (!isAdmin) {
-                    long cooldownMs = getCooldownMs(player, magicLevel);
+                    long cooldownMs = 8000L; // 8 second cooldown for lightning
                     if (!checkAndSetCooldown(player.getUniqueId(), MagicElement.FIRE, cooldownMs)) {
                         long msLeft = msUntilReady(player.getUniqueId(), MagicElement.FIRE, cooldownMs);
-                        player.sendActionBar("§e⚡ §c[Fire Lv99] §8Lightning: §e"
+                        player.sendActionBar("§e⚡ §c[Lightning] §8Cooldown: §e"
                                 + String.format("%.1f", msLeft / 1000.0) + "s");
                         return;
                     }
-                    if (!consumeRune(player, MagicElement.FIRE)) {
-                        player.sendActionBar("§c✗ §7No §c🔥 Fire Rune §7for Lightning Strike!");
+                    
+                    if (lightningChargeManager != null && !lightningChargeManager.consumeCharge(player)) {
+                        player.sendActionBar("§c✗ §7You need §bLightning Charges§7! §8(Drink a Charged Magic Bottle)");
+                        // Reset cooldown if failed
+                        cooldowns.get(player.getUniqueId()).remove(MagicElement.FIRE);
                         return;
                     }
                 }
@@ -452,7 +454,7 @@ public class MagicStaffListener implements Listener {
         if (ray != null && ray.getHitBlock() != null
                 && ray.getHitBlock().getType() == Material.ANCIENT_DEBRIS
                 && portalListener != null) {
-            // Fire visual lightning AT the block, then trigger portal
+            // Fire real lightning AT the block, then trigger portal
             Location debrisLoc = ray.getHitBlock().getLocation().add(0.5, 0, 0.5);
             player.getWorld().strikeLightningEffect(debrisLoc.clone().add(0, 1, 0));
             player.getWorld().spawnParticle(Particle.ELECTRIC_SPARK, debrisLoc.clone().add(0, 1, 0), 40, 0.4, 1.0, 0.4, 0.1);
@@ -469,7 +471,8 @@ public class MagicStaffListener implements Listener {
                 .add(player.getLocation().getDirection().multiply(40));
         }
 
-        // ── Visual strike — particles only, no screen-flashing lightning entity ─
+        // ── Real Lightning Strike ─────────────────────────────────────────────
+        player.getWorld().strikeLightningEffect(strikeAt);
         spawnLightningVisual(strikeAt);
 
         // ── 10% chance to ignite a dirt/grass block near the strike ──────────
@@ -507,7 +510,19 @@ public class MagicStaffListener implements Listener {
         for (Entity e : player.getWorld().getNearbyEntities(strikeAt, 3, 4, 3)) {
             if (!(e instanceof LivingEntity le)) continue;
             if (e.equals(player)) continue;
-            le.damage(baseDmg, player);
+            
+            double finalDmg = baseDmg;
+            
+            // 50% Crit chance for Bosses / Nightmares -> 150% damage
+            boolean isBossOrNightmare = le.hasMetadata("boss_tag") || le.hasMetadata("difficultyengine_nightmare");
+            if (isBossOrNightmare && RAND.nextDouble() < 0.50) {
+                finalDmg *= 1.50;
+                player.getWorld().spawnParticle(Particle.CRIT, le.getLocation().add(0, 1, 0), 30, 0.5, 0.5, 0.5, 0.2);
+                player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_ATTACK_CRIT, 1.0f, 1.2f);
+                player.sendActionBar("§e⚡ §c§lCRITICAL STRIKE! §8(" + (int)(finalDmg/2) + "❤)");
+            }
+            
+            le.damage(finalDmg, player);
             applyScorched(le, 80);
             le.getWorld().spawnParticle(Particle.ELECTRIC_SPARK,
                 le.getLocation().add(0, 1, 0), 40, 0.3, 0.5, 0.3, 0.12);
@@ -690,7 +705,6 @@ public class MagicStaffListener implements Listener {
         // ── Self-extinguish ───────────────────────────────────────────────────
         if (player.hasMetadata(META_LIGHTNING_BURNING)) {
             clearLightningBurn(player);
-            player.sendMessage("§b💧 §aYour Water Magic extinguished your own Lightning Burn!");
             player.sendActionBar("§b💧 §aLightning Burn extinguished!");
             player.getWorld().spawnParticle(Particle.CLOUD,
                 player.getLocation().add(0, 1, 0), 20, 0.4, 0.4, 0.4, 0.05);
@@ -709,7 +723,6 @@ public class MagicStaffListener implements Listener {
                 // Cure nearby lightning burns
                 if (nearby.hasMetadata(META_LIGHTNING_BURNING)) {
                     clearLightningBurn(nearby);
-                    nearby.sendTitle("§b§l💧 BURN OUT", "§7Water splash cured you!", 5, 30, 10);
                     nearby.sendActionBar("§b💧 §a" + player.getName()
                         + "§a's Water Magic cured your Lightning Burn!");
                     nearby.getWorld().spawnParticle(Particle.CLOUD,
@@ -832,14 +845,39 @@ public class MagicStaffListener implements Listener {
     //  EARTH STAFF
     // ══════════════════════════════════════════════════════════════════════════
 
+    private boolean hasAnyEarthPage(Player player) {
+        for (EarthBlockTier tier : EarthBlockTier.values()) {
+            if (itemFactory.hasEarthPage(player, tier)) return true;
+        }
+        ItemStack[] bag = getBagContents(player);
+        if (bag != null) {
+            for (ItemStack s : bag) {
+                if (s != null && s.hasItemMeta()) {
+                    for (EarthBlockTier tier : EarthBlockTier.values()) {
+                        org.bukkit.NamespacedKey key = itemFactory.getEarthPageKey(tier);
+                        if (s.getItemMeta().getPersistentDataContainer().has(key, org.bukkit.persistence.PersistentDataType.BYTE)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     private void castEarth(Player player, int magicLevel) {
         // ── TIER SYSTEM (Magic Level 10+): throw block from inventory ─────────
         if (magicLevel >= 10) {
+            if (!hasAnyEarthPage(player)) {
+                player.sendActionBar("§c✗ §7You need an Earth Magic Page to cast!");
+                // refund the cooldown/rune by resetting them
+                cooldowns.get(player.getUniqueId()).remove(MagicElement.EARTH);
+                player.getInventory().addItem(itemFactory.buildRune(MagicElement.EARTH, 1));
+                return;
+            }
             EarthBlockTier tier = findBestEarthTier(player, magicLevel);
             if (tier == null) {
-                // No earth page/block — fall back to basic earth bolt.
-                // The rune is already consumed; just cast a plain dirt bolt
-                // so the player always gets SOMETHING without a page/block.
+                // They have pages, but do not have the block! Fall back to basic dirt bolt (no block spawned)
                 castEarthBasicBolt(player, magicLevel);
                 return;
             }
@@ -1655,14 +1693,7 @@ public class MagicStaffListener implements Listener {
             return;
         }
 
-        // ── ORIGINAL SYSTEM (Level 1-9): 2-hit suffocate ─────────────────────
-        // Dirt placed at feet is permanent (Silk Touch recoverable).
-        Block feetBlock = target.getLocation().getBlock();
-        if (feetBlock.getType().isAir()) {
-            feetBlock.setType(Material.DIRT);
-            magicDirtBlocks.add(feetBlock.getLocation().toBlockLocation());
-        }
-
+        // ── ORIGINAL SYSTEM (Level 1-9): 2-hit suffocate (no block spawned) ──
         int hits = 1;
         if (target.hasMetadata(META_EARTH_HITS)) {
             hits = (int) target.getMetadata(META_EARTH_HITS).get(0).value() + 1;
@@ -2252,49 +2283,72 @@ public class MagicStaffListener implements Listener {
     private void activateAirHover(Player player, int magicLevel) {
         UUID uid = player.getUniqueId();
 
-        // Toggle off if already hovering
+        if (magicLevel < 99) {
+            // Under Level 99: Air-only 3-second Levitation boost (scales up with level) with 5-second cooldown
+            if (player.isOnGround()) {
+                player.sendActionBar("§c☁ §7You must be in the air to use the Air Boost!");
+                return;
+            }
+
+            if (player.hasMetadata("air_boost_cd")) {
+                long cd = player.getMetadata("air_boost_cd").get(0).asLong();
+                if (System.currentTimeMillis() < cd) {
+                    double left = (cd - System.currentTimeMillis()) / 1000.0;
+                    player.sendActionBar(String.format("§c☁ §7Air Boost on cooldown! §e(%.1fs left)", left));
+                    return;
+                }
+            }
+
+            // Consume 1 Air Rune as "activation fee"
+            if (!consumeRune(player, MagicElement.AIR)) {
+                player.sendActionBar("§c✗ §7No §fAir Runes§7 for Air Boost!");
+                return;
+            }
+
+            // Boost duration in ticks: 60 ticks (3s) + magic level (e.g. at Lv50, 110 ticks ≈ 5.5s)
+            int ticks = 60 + magicLevel;
+            player.addPotionEffect(new PotionEffect(PotionEffectType.SLOW_FALLING, ticks, 0, false, true, true));
+            player.addPotionEffect(new PotionEffect(PotionEffectType.LEVITATION, ticks, 0, false, true, true));
+
+            player.getWorld().spawnParticle(Particle.CLOUD, player.getLocation().add(0, 0.5, 0), 20, 0.5, 0.2, 0.5, 0.05);
+            player.getWorld().playSound(player.getLocation(), Sound.ENTITY_PHANTOM_FLAP, 1.0f, 1.5f);
+            player.sendActionBar("§7☁ §fAir Boost activated! §8(No fall damage)");
+
+            // 5 second cooldown
+            player.setMetadata("air_boost_cd", new FixedMetadataValue(plugin, System.currentTimeMillis() + 5000L));
+            return;
+        }
+
+        // Level 99+: Continuous Levitation/Flight
         if (airHoverTasks.containsKey(uid)) {
             cancelHoverTask(uid);
             player.removePotionEffect(PotionEffectType.SLOW_FALLING);
             player.removePotionEffect(PotionEffectType.LEVITATION);
-            player.sendActionBar("§7☁ §7Hover cancelled.");
+            player.sendActionBar("§7☁ §7Flight cancelled.");
             return;
         }
 
         // Need at least 1 rune to start
         if (!consumeRune(player, MagicElement.AIR)) {
-            player.sendActionBar("§c✗ §7No §fAir Runes§7! Hover requires Air Runes to sustain.");
+            player.sendActionBar("§c✗ §7No §fAir Runes§7 to fly!");
             return;
         }
 
-        // Levitation requires Lv99 AND at least one piece of Mage Gear
-        final boolean canLevitate = (magicLevel >= 99)
-                && (itemFactory.getMageGearCooldownBonus(player) > 0);
+        final boolean canLevitate = true; // Always fly at Level 99!
 
-        // Rune drain interval: higher level = longer gap = less consumption
-        // Lv1=20t (1s), Lv99=180t (9s); Mage Gear adds up to +50% on top
-        double levelFactor = magicLevel / 99.0;
-        int    baseInterval = (int) (20 + (1.0 - levelFactor) * 160);
-        double gearBonus    = Math.min(0.50, itemFactory.getMageGearCooldownBonus(player) / 4000.0);
+        // Flight rune drain interval: base 9 seconds, Mage Gear adds up to 50%
+        int baseInterval = 180;
+        double gearBonus = Math.min(0.50, itemFactory.getMageGearCooldownBonus(player) / 4000.0);
         final int runeInterval = Math.max(10, (int) (baseInterval * (1.0 + gearBonus)));
 
         // Apply initial effects
         player.addPotionEffect(new PotionEffect(PotionEffectType.SLOW_FALLING, 60, 0, false, true, true));
-        if (canLevitate) {
-            player.addPotionEffect(new PotionEffect(PotionEffectType.LEVITATION, 10, 0, false, false, false));
-        }
+        player.addPotionEffect(new PotionEffect(PotionEffectType.LEVITATION, 10, 0, false, false, false));
 
-        player.getWorld().spawnParticle(Particle.CLOUD,
-            player.getLocation().add(0, 0.5, 0), 8, 0.4, 0.1, 0.4, 0.02);
+        player.getWorld().spawnParticle(Particle.CLOUD, player.getLocation().add(0, 0.5, 0), 8, 0.4, 0.1, 0.4, 0.02);
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_PHANTOM_FLAP, 0.6f, 2.0f);
 
-        if (canLevitate) {
-            player.sendActionBar("§7☁ §f⬆ LEVITATING §8— Air Runes drain while airborne. Right-click to stop.");
-        } else if (magicLevel >= 99) {
-            player.sendActionBar("§7☁ §fHovering §8(Equip Mage Gear to fly up!) §7Runes draining...");
-        } else {
-            player.sendActionBar("§7☁ §fHovering §8(Lv99 + Mage Gear = fly up!)");
-        }
+        player.sendActionBar("§7☁ §f⬆ FLYING §8— Air Runes drain over time. Right-click to stop.");
 
         // Sustain task: runs every 5 ticks
         final int[] tickCount = {0};
@@ -2302,7 +2356,7 @@ public class MagicStaffListener implements Listener {
             if (!player.isOnline()) { cancelHoverTask(uid); return; }
             if (player.isOnGround()) {
                 cancelHoverTask(uid);
-                player.sendActionBar("§7☁ §7Hover ended — landed.");
+                player.sendActionBar("§7☁ §7Flight ended — landed.");
                 return;
             }
 
@@ -2310,22 +2364,19 @@ public class MagicStaffListener implements Listener {
 
             // Re-apply effects each cycle
             player.addPotionEffect(new PotionEffect(PotionEffectType.SLOW_FALLING, 30, 0, false, true, true));
-            if (canLevitate) {
-                player.addPotionEffect(new PotionEffect(PotionEffectType.LEVITATION, 15, 0, false, false, false));
-            }
+            player.addPotionEffect(new PotionEffect(PotionEffectType.LEVITATION, 15, 0, false, false, false));
 
-            // Consume rune at calculated interval
+            // Consume rune at interval
             if (tickCount[0] % runeInterval == 0) {
                 if (!consumeRune(player, MagicElement.AIR)) {
                     cancelHoverTask(uid);
                     player.removePotionEffect(PotionEffectType.LEVITATION);
-                    player.sendActionBar("§c✗ §7Out of §fAir Runes§7! Hover cancelled!");
-                    player.sendTitle("§c✗ No Air Runes", "§7Hover ended!", 5, 25, 8);
+                    player.sendActionBar("§c✗ §7Out of §fAir Runes§7! Flight cancelled!");
+                    player.sendTitle("§c✗ No Air Runes", "§7Flight ended!", 5, 25, 8);
                     return;
                 }
                 int remaining = countRunes(player, MagicElement.AIR);
-                player.sendActionBar("§7☁ §f" + (canLevitate ? "⬆ Levitating" : "Hovering")
-                    + " §8— §f" + remaining + " §7Air Rune" + (remaining == 1 ? "" : "s") + " left");
+                player.sendActionBar("§7☁ §f⬆ Flying §8— §f" + remaining + " §7Air Rune" + (remaining == 1 ? "" : "s") + " left");
             }
         }, 5L, 5L);
         airHoverTasks.put(uid, task);
@@ -2512,6 +2563,32 @@ public class MagicStaffListener implements Listener {
             book.setItemMeta(meta);
         }
         return book;
+    }
+
+    private boolean isFriendlyPartyMember(Player shooter, LivingEntity target) {
+        if (shooter == null || !(target instanceof Player targetPlayer)) return false;
+        if (partyManagerRef == null) return false;
+        if (!partyManagerRef.isInParty(shooter.getUniqueId())) return false;
+        Set<UUID> members = partyManagerRef.getPartyMembers(shooter.getUniqueId());
+        return members.contains(targetPlayer.getUniqueId());
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onMagicFriendlyDamage(org.bukkit.event.entity.EntityDamageByEntityEvent event) {
+        if (!(event.getEntity() instanceof Player target)) return;
+        
+        Player shooter = null;
+        if (event.getDamager() instanceof Player p) {
+            shooter = p;
+        } else if (event.getDamager() instanceof org.bukkit.entity.Projectile proj && proj.getShooter() instanceof Player p) {
+            shooter = p;
+        }
+
+        if (shooter != null && target.hasMetadata(META_STAFF_HIT)) {
+            if (isFriendlyPartyMember(shooter, target)) {
+                event.setCancelled(true);
+            }
+        }
     }
 
 }

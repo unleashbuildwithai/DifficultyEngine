@@ -149,6 +149,15 @@ public class MagicBagGUIListener implements Listener {
                 return;
             }
         }
+
+        // Block dragging non-magic items into the bag
+        ItemStack dragged = event.getOldCursor();
+        if (dragged != null && !dragged.getType().isAir() && !isMagicItem(dragged)) {
+            event.setCancelled(true);
+            if (event.getWhoClicked() instanceof Player player) {
+                player.sendMessage("§c✗ §7Only §dMagic Items §7can be stored in the Magic Bag!");
+            }
+        }
     }
 
     // ── Main click handler ────────────────────────────────────────────────────
@@ -221,6 +230,19 @@ public class MagicBagGUIListener implements Listener {
             return;
         }
 
+        // Number keys (Hotbar Swap)
+        if (event.getClick() == ClickType.NUMBER_KEY) {
+            int hotbarSlot = event.getHotbarButton();
+            ItemStack hotbarItem = player.getInventory().getItem(hotbarSlot);
+            boolean hotbarEmpty = hotbarItem == null || hotbarItem.getType().isAir();
+            if (!hotbarEmpty && !isMagicItem(hotbarItem)) {
+                player.sendMessage("§c✗ §7Only §dMagic Items §7can be stored in the Magic Bag!");
+                return; // event stays cancelled
+            }
+            event.setCancelled(false);
+            return;
+        }
+
         // Shift-click from top → push item back to player inventory
         if (event.getClick() == ClickType.SHIFT_LEFT
                 || event.getClick() == ClickType.SHIFT_RIGHT) {
@@ -243,6 +265,12 @@ public class MagicBagGUIListener implements Listener {
 
         ItemStack clicked = event.getCurrentItem();
         if (clicked == null || clicked.getType().isAir()) return;
+
+        // Block shift-clicking non-magic items into the bag
+        if (!isMagicItem(clicked)) {
+            player.sendMessage("§c✗ §7Only §dMagic Items §7can be stored in the Magic Bag!");
+            return;
+        }
 
         int page = playerPage.getOrDefault(player.getUniqueId(), 0);
 

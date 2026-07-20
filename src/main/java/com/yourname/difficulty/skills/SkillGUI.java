@@ -64,9 +64,9 @@ public class SkillGUI {
         ItemStack glass = filler();
         for (int i = 0; i < 54; i++) inv.setItem(i, glass);
 
-        // Section labels
-        inv.setItem(4,  label("§c§lCombat Skills",      Material.NETHERITE_SWORD));
-        inv.setItem(22, label("§a§lGathering & Magic",  Material.BLAZE_POWDER));
+        // Section labels (replaced with clean gray glass border to remove blank items)
+        inv.setItem(4,  filler());
+        inv.setItem(22, filler());
 
         // Skill items — all amount 1 (no stack numbers)
         inv.setItem(SLOT_MELEE,       buildSkillItem(uuid, SkillType.MELEE));

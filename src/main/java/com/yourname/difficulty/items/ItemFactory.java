@@ -19,6 +19,8 @@ import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.inventory.meta.PotionMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -58,6 +60,8 @@ public class ItemFactory {
     public static final String MELEE_GEAR_KEY        = "melee_gear";
     public static final String RANGED_GEAR_KEY       = "ranged_gear";
     public static final String RAINBOW_AXOLOTL_KEY   = "rainbow_axolotl";
+    public static final String BLAZEFIEND_SPAWNER_KEY = "de_blazefiend_spawner";
+    public static final String TEMPEST_SPAWNER_KEY = "de_tempest_spawner";
 
     // ── Lightning Magic system ────────────────────────────────────────────────
     public static final String CATCHING_BLOCK_KEY       = "de_catching_block";
@@ -83,6 +87,7 @@ public class ItemFactory {
     public static final String SUPPORT_PAGE_STRENGTH_KEY = "de_support_page_strength";
     public static final String SUPPORT_PAGE_CRIT_KEY     = "de_support_page_crit";
     public static final String SUPPORT_PAGE_PRAYER_KEY   = "de_support_page_prayer";
+    public static final String SUPPORT_STAFF_KEY         = "de_support_staff";
 
     // ── NamespacedKeys ────────────────────────────────────────────────────────
     private final NamespacedKey soulfurPotionKey;
@@ -100,6 +105,8 @@ public class ItemFactory {
     private final NamespacedKey meleeGearKey;
     private final NamespacedKey rangedGearKey;
     private final NamespacedKey rainbowAxolotlKey;
+    private final NamespacedKey blazefiendSpawnerKey;
+    private final NamespacedKey tempestSpawnerKey;
     // ── Lightning Magic NamespacedKeys ────────────────────────────────────────
     private final NamespacedKey catchingBlockKey;
     private final NamespacedKey emptyMagicBottleKey;
@@ -119,6 +126,7 @@ public class ItemFactory {
     private final NamespacedKey supportPageStrengthKey;
     private final NamespacedKey supportPageCritKey;
     private final NamespacedKey supportPagePrayerKey;
+    private final NamespacedKey supportStaffKey;
     /** Per-tier PDC keys (MAGE tier maps to mageGearKey). */
     private final Map<MageGearTier,  NamespacedKey> mageGearTierKeys  = new EnumMap<>(MageGearTier.class);
     private final Map<MeleeGearTier, NamespacedKey> meleeGearTierKeys = new EnumMap<>(MeleeGearTier.class);
@@ -132,11 +140,18 @@ public class ItemFactory {
     private final Map<EarthBlockTier, NamespacedKey> earthPageKeys = new EnumMap<>(EarthBlockTier.class);
 
     private final SkillCapeManager capeManager;
+    private final JavaPlugin plugin;
+    private com.yourname.difficulty.bag.MagicBagManager magicBagManager = null;
+
+    public void setMagicBagManager(com.yourname.difficulty.bag.MagicBagManager magicBagManager) {
+        this.magicBagManager = magicBagManager;
+    }
 
     private final List<ItemStack> registryPage1 = new ArrayList<>();
     private final List<ItemStack> registryPage2 = new ArrayList<>();
 
     public ItemFactory(JavaPlugin plugin, SkillCapeManager capeManager) {
+        this.plugin = plugin;
         this.soulfurPotionKey    = new NamespacedKey(plugin, SOULFUR_POTION_KEY);
         this.turboMinecartKey    = new NamespacedKey(plugin, TURBO_MINECART_KEY);
         this.enchantedShardKey   = new NamespacedKey(plugin, ENCHANTED_SHARD_KEY);
@@ -163,6 +178,8 @@ public class ItemFactory {
         this.meleeGearKey       = new NamespacedKey(plugin, MELEE_GEAR_KEY);
         this.rangedGearKey      = new NamespacedKey(plugin, RANGED_GEAR_KEY);
         this.rainbowAxolotlKey      = new NamespacedKey(plugin, RAINBOW_AXOLOTL_KEY);
+        this.blazefiendSpawnerKey   = new NamespacedKey(plugin, BLAZEFIEND_SPAWNER_KEY);
+        this.tempestSpawnerKey      = new NamespacedKey(plugin, TEMPEST_SPAWNER_KEY);
         this.catchingBlockKey       = new NamespacedKey(plugin, CATCHING_BLOCK_KEY);
         this.emptyMagicBottleKey    = new NamespacedKey(plugin, EMPTY_MAGIC_BOTTLE_KEY);
         this.chargedMagicBottleKey  = new NamespacedKey(plugin, CHARGED_MAGIC_BOTTLE_KEY);
@@ -197,6 +214,7 @@ public class ItemFactory {
         this.supportPageStrengthKey  = new NamespacedKey(plugin, SUPPORT_PAGE_STRENGTH_KEY);
         this.supportPageCritKey      = new NamespacedKey(plugin, SUPPORT_PAGE_CRIT_KEY);
         this.supportPagePrayerKey    = new NamespacedKey(plugin, SUPPORT_PAGE_PRAYER_KEY);
+        this.supportStaffKey         = new NamespacedKey(plugin, SUPPORT_STAFF_KEY);
 
         this.capeManager = capeManager;
         register();
@@ -1491,6 +1509,7 @@ public class ItemFactory {
     public SkillType getCapeSkill(ItemStack item)  { return capeManager.getCapeSkill(item); }
     public boolean   isAnyCape(ItemStack item)     { return capeManager.isAnyCape(item); }
     public boolean   isMaxCape(ItemStack item)     { return capeManager.isMaxCape(item); }
+    public ItemStack buildBossCape()               { return capeManager.buildBossCape(); }
 
     // ── Registry access ───────────────────────────────────────────────────────
 
@@ -1670,6 +1689,94 @@ public class ItemFactory {
     //  SUPPORT STAFF — Support Rune + 7 Support Pages
     // ══════════════════════════════════════════════════════════════════════════
 
+    /** Builds the SupportStaff item (BREEZE_ROD with PDC + lore). */
+    public ItemStack buildBlazefiendSpawner() {
+        ItemStack item = new ItemStack(Material.GILDED_BLACKSTONE);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§c§lBlazefiend Spawner Block");
+            meta.addEnchant(Enchantment.UNBREAKING, 1, true);
+            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+            meta.setLore(List.of(
+                "§8" + "─".repeat(28),
+                "§7An ancient block of gilded blackstone,",
+                "§7pulsing with the heart of the pit.",
+                "§8" + "─".repeat(28),
+                "§c✦ §7Place and strike inside §5Ancient Realm",
+                "§7  to awaken the Infernal Blazefiend.",
+                "§8" + "─".repeat(28),
+                "§8[DifficultyEngine — Spawner Block]"
+            ));
+            meta.getPersistentDataContainer().set(blazefiendSpawnerKey, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    public boolean isBlazefiendSpawner(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer().has(blazefiendSpawnerKey, PersistentDataType.BYTE);
+    }
+
+    public ItemStack buildTempestSpawner() {
+        ItemStack item = new ItemStack(Material.CRYING_OBSIDIAN);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§5§lTempest Spawner Block");
+            meta.addEnchant(Enchantment.UNBREAKING, 1, true);
+            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+            meta.setLore(List.of(
+                "§8" + "─".repeat(28),
+                "§7An ancient block of crying obsidian,",
+                "§7crackling with storm energy.",
+                "§8" + "─".repeat(28),
+                "§c✦ §7Place and strike inside §5Ancient Realm",
+                "§7  to awaken the Tempest Overlord.",
+                "§8" + "─".repeat(28),
+                "§8[DifficultyEngine — Spawner Block]"
+            ));
+            meta.getPersistentDataContainer().set(tempestSpawnerKey, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    public boolean isTempestSpawner(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer().has(tempestSpawnerKey, PersistentDataType.BYTE);
+    }
+
+    public ItemStack buildSupportStaff() {
+        ItemStack staff = new ItemStack(Material.BREEZE_ROD);
+        ItemMeta meta = staff.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§5✦ §dSupport Staff");
+            meta.setLore(List.of(
+                "§7Cast elements, then right-click",
+                "§7this staff to trigger a combo.",
+                "§8(Fire, Water, Earth, Air)",
+                "",
+                "§5Combo gate: §7left-click a party",
+                "§7member first (within 5s) for",
+                "§5full support buffs§7.",
+                "",
+                "§8Requires: §dSupport Rune §8+ §6Cooked Mutton §8/ §eBaked Potato",
+                "§5[Right-click to activate]"
+            ));
+            meta.getPersistentDataContainer()
+                    .set(supportStaffKey, PersistentDataType.BYTE, (byte) 1);
+            staff.setItemMeta(meta);
+        }
+        return staff;
+    }
+
+    /** Returns true if the item is a SupportStaff. */
+    public boolean isSupportStaff(ItemStack item) {
+        if (item == null || item.getType().isAir() || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer()
+                .has(supportStaffKey, PersistentDataType.BYTE);
+    }
+
     /** Builds 1 Support Rune — consumed each time the Support Staff is used. */
     public ItemStack buildSupportRune() {
         ItemStack item = new ItemStack(Material.PHANTOM_MEMBRANE);
@@ -1716,10 +1823,23 @@ public class ItemFactory {
     public boolean hasSupportPage(Player player, String pdcKeyConst) {
         NamespacedKey key = resolvePageKey(pdcKeyConst);
         if (key == null) return false;
+        // Check main inventory
         for (ItemStack s : player.getInventory().getContents()) {
             if (s != null && s.hasItemMeta()
                     && s.getItemMeta().getPersistentDataContainer().has(key, PersistentDataType.BYTE)) {
                 return true;
+            }
+        }
+        // Check magic bag if available
+        if (magicBagManager != null) {
+            ItemStack[] bagContents = magicBagManager.getBag(player.getUniqueId());
+            if (bagContents != null) {
+                for (ItemStack s : bagContents) {
+                    if (s != null && s.hasItemMeta()
+                            && s.getItemMeta().getPersistentDataContainer().has(key, PersistentDataType.BYTE)) {
+                        return true;
+                    }
+                }
             }
         }
         return false;
@@ -1955,10 +2075,34 @@ public class ItemFactory {
         return p;
     }
 
+    public ItemStack buildSupportPotion(String id, String displayName, Color color, PotionEffect... effects) {
+        ItemStack item = new ItemStack(Material.POTION);
+        PotionMeta meta = (PotionMeta) item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(displayName);
+            meta.setColor(color);
+            for (PotionEffect effect : effects) {
+                meta.addCustomEffect(effect, true);
+            }
+            meta.setLore(List.of(
+                "§d✦ Support Blessing Potion ✦",
+                "§7Unlimited use if carrying a §5Support Rune§7.",
+                "§c☠ Warning: §7Breaks on use without a §5Support Rune§7!",
+                "§8[DifficultyEngine — Support Blessing]"
+            ));
+            meta.getPersistentDataContainer().set(new NamespacedKey(plugin, "de_support_potion_" + id), PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
     /** Builds all 7 support pages + rune for registry page 9. */
     public List<ItemStack> buildRegistryPage9() {
         List<ItemStack> p = new ArrayList<>();
+        p.add(buildSupportStaff());
         p.add(buildSupportRune());
+        p.add(buildBlazefiendSpawner());
+        p.add(buildTempestSpawner());
         p.add(buildSupportPage(SUPPORT_PAGE_HEALING_KEY,  "Healing",       "+3 heal on target",    "Restores health to", "the buffed party member."));
         p.add(buildSupportPage(SUPPORT_PAGE_SPEED_KEY,    "Faster Speed",  "Speed II (20s)",       "Grants swift movement", "to the party member."));
         p.add(buildSupportPage(SUPPORT_PAGE_DEFENCE_KEY,  "Defence",       "Resistance II (15s)",  "Reduces damage taken", "by the party member."));
@@ -1966,6 +2110,25 @@ public class ItemFactory {
         p.add(buildSupportPage(SUPPORT_PAGE_STRENGTH_KEY, "Strength",      "Strength II (10s)",    "Upgraded damage boost,", "requires Combat Boost too."));
         p.add(buildSupportPage(SUPPORT_PAGE_CRIT_KEY,     "Crit Attack",   "Luck II (20s)",        "Raises crit chance", "for the party member."));
         p.add(buildSupportPage(SUPPORT_PAGE_PRAYER_KEY,   "Prayer Pierce", "Haste I + clears Res", "Ignores prayer defence", "hit through protection."));
+        
+        // Add the 16 Support Blessing Potions to Page 9
+        p.add(buildSupportPotion("veil_of_silence", "§5✦ Veil of Silence §d(Blessing)", Color.BLACK, new PotionEffect(PotionEffectType.INVISIBILITY, 1200, 0)));
+        p.add(buildSupportPotion("aegis_ward", "§9✦ Aegis Ward §d(Blessing)", Color.GRAY, new PotionEffect(PotionEffectType.RESISTANCE, 600, 1)));
+        p.add(buildSupportPotion("spell_breaker_bulwark", "§d✦ Spell-Breaker's Bulwark §d(Blessing)", Color.NAVY, new PotionEffect(PotionEffectType.FIRE_RESISTANCE, 600, 0), new PotionEffect(PotionEffectType.SLOW_FALLING, 600, 0)));
+        p.add(buildSupportPotion("vitality_surge", "§c✦ Vitality Surge §d(Blessing)", Color.RED, new PotionEffect(PotionEffectType.INSTANT_HEALTH, 1, 1)));
+        p.add(buildSupportPotion("chrono_mend", "§a✦ Chrono-Mend §d(Blessing)", Color.FUCHSIA, new PotionEffect(PotionEffectType.REGENERATION, 300, 1)));
+        p.add(buildSupportPotion("aetheric_shielding", "§e✦ Aetheric Shielding §d(Blessing)", Color.YELLOW, new PotionEffect(PotionEffectType.ABSORPTION, 600, 3)));
+        p.add(buildSupportPotion("zephyr_momentum", "§f✦ Zephyr's Momentum §d(Blessing)", Color.WHITE, new PotionEffect(PotionEffectType.SPEED, 600, 1)));
+        p.add(buildSupportPotion("gravitic_leap", "§2✦ Gravitic Leap §d(Blessing)", Color.LIME, new PotionEffect(PotionEffectType.JUMP_BOOST, 600, 2)));
+        p.add(buildSupportPotion("featherweight_descent", "§b✦ Featherweight Descent §d(Blessing)", Color.TEAL, new PotionEffect(PotionEffectType.SLOW_FALLING, 600, 0)));
+        p.add(buildSupportPotion("berserker_resonance", "§4✦ Berserker's Resonance §d(Blessing)", Color.MAROON, new PotionEffect(PotionEffectType.STRENGTH, 400, 1)));
+        p.add(buildSupportPotion("fortune_aura", "§6✦ Fortune's Aura §d(Blessing)", Color.ORANGE, new PotionEffect(PotionEffectType.LUCK, 1200, 1)));
+        p.add(buildSupportPotion("ocular_sight", "§1✦ Ocular Sight §d(Blessing)", Color.BLUE, new PotionEffect(PotionEffectType.NIGHT_VISION, 2400, 0)));
+        p.add(buildSupportPotion("pyric_mandate", "§c✦ Pyric Mandate §d(Blessing)", Color.ORANGE, new PotionEffect(PotionEffectType.FIRE_RESISTANCE, 1200, 0)));
+        p.add(buildSupportPotion("abyssal_lung", "§3✦ Abyssal Lung §d(Blessing)", Color.SILVER, new PotionEffect(PotionEffectType.WATER_BREATHING, 1200, 0)));
+        p.add(buildSupportPotion("enervation_curse", "§8✦ Enervation Curse §d(Blessing)", Color.PURPLE, new PotionEffect(PotionEffectType.WEAKNESS, 400, 1)));
+        p.add(buildSupportPotion("stasis_anchor", "§8✦ Stasis Anchor §d(Blessing)", Color.BLACK, new PotionEffect(PotionEffectType.SLOWNESS, 400, 1)));
+        
         return p;
     }
 }

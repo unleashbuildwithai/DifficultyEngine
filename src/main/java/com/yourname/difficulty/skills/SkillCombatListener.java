@@ -90,7 +90,9 @@ public class SkillCombatListener implements Listener {
             Material hand = attacker.getInventory().getItemInMainHand().getType();
             if (SWORDS.contains(hand) || AXES.contains(hand)) {
                 applyMeleeBonus(attacker, event);
-                return;
+            } else {
+                // Apply lightning buff even for punches or magic staff casts
+                applyLightningBuff(attacker, event);
             }
         }
 
@@ -99,6 +101,18 @@ public class SkillCombatListener implements Listener {
             if (arrow.getShooter() instanceof Player shooter) {
                 applyRangedBonus(shooter, arrow, event);
             }
+        }
+    }
+    
+    private void applyLightningBuff(Player attacker, EntityDamageByEntityEvent event) {
+        if (hasLightningDamageBuff(attacker)) {
+            double newDmg = event.getDamage();
+            if (event.getEntity() instanceof Player) {
+                newDmg *= 1.3;
+            } else {
+                newDmg *= 1.5;
+            }
+            event.setDamage(newDmg);
         }
     }
 
@@ -119,7 +133,9 @@ public class SkillCombatListener implements Listener {
                 attacker.sendActionBar("§c✦ CRITICAL HIT! §6×" + SkillBonusManager.CRIT_MULTIPLIER);
             }
         }
+        
         event.setDamage(newDmg);
+        applyLightningBuff(attacker, event);
     }
 
     private void applyRangedBonus(Player shooter, AbstractArrow arrow,
@@ -127,7 +143,10 @@ public class SkillCombatListener implements Listener {
         int level = skillManager.getLevel(shooter.getUniqueId(), SkillType.RANGED);
 
         double bonus = SkillBonusManager.rangedDamageBonus(level);
-        event.setDamage(event.getDamage() + bonus);
+        double newDmg = event.getDamage() + bonus;
+        
+        event.setDamage(newDmg);
+        applyLightningBuff(shooter, event);
 
         // Scale tipped arrow potion effects
         if (arrow instanceof Arrow tipped && !tipped.getCustomEffects().isEmpty()
@@ -149,6 +168,16 @@ public class SkillCombatListener implements Listener {
                 }
             }, 1L);
         }
+    }
+
+    private boolean hasLightningDamageBuff(Player player) {
+        if (!player.hasMetadata("lightning_damage_buff")) return false;
+        long expiry = player.getMetadata("lightning_damage_buff").get(0).asLong();
+        if (System.currentTimeMillis() > expiry) {
+            player.removeMetadata("lightning_damage_buff", plugin);
+            return false;
+        }
+        return true;
     }
 
     // ── DEFENCE damage reduction ──────────────────────────────────────────────

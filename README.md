@@ -6,19 +6,22 @@ A comprehensive skill & combat enhancement plugin for Paper/Spigot servers.
 
 ## 🆕 Latest Changes (July 2026)
 
-### ⚡ Lightning Catching Block
+### ⚡ Lightning Catching Block (Automated & Redesigned)
 - Place a Catching Block (Lodestone) and right-click it to open its GUI.
-- Store Empty Magic Bottles in the block.
+- **Automatic Hopper Support:** Place hoppers above the block to push Empty Magic Bottles in, and hoppers underneath to pull Charged Magic Bottles out!
+- **Stacked Layout:** GUI has been redesigned to support stacked inputs (Slot 2 for Empty Bottles, Slot 6 for Charged Bottles) with arrow flow pointers.
 - When a lightning strikes a nearby Lightning Rod during rain, an empty bottle converts to a **Charged Magic Bottle** (4 casts).
-- Drink a Charged Magic Bottle to store **Lightning Charges** (displayed over food bar), or use it directly to cast lightning and retain 3 charges!
+- **Charged Magic Bottle Drinking:** Drink a Charged Magic Bottle to store **Lightning Charges** (if Magic Lv 99+), or receive a 5-minute surge of lightning power (+50% damage against monsters, +30% against players) if under Magic Lv 99!
+- Fire Staff right-click lightning strike now requires and consumes 1 absorbed Lightning Charge per cast (Admins get infinite, toggleable).
 
-### 🔥 Crimson Boss Mechanics
-- The Infernal Blazefiend now spawns via a dramatic sequence: Warden emerge sound, 5 random enderman-style teleports, a custom 6-bolt lightning cluster, and a global sky flash in a 200-block radius.
-- **Phase 2:** At ≤ 30% HP, changes to `SOUL_FIRE_FLAME` particles, moves faster, and its physical damage is doubled.
+### 🔥 World Boss Spawners & Teleports
+- All boss spawners (`/spawnboss tempest` and `/spawnboss crimson`) now correctly spawn the bosses directly in the **`ancient_realm`** dimension instead of the Overworld.
+- **Admin Command:** `/tpboss <tempest|crimson>` (aliases `/bosstp`) instantly teleports you to the boss arenas inside the `ancient_realm` for testing or engagement.
 
-### 🌌 Ancient Debris Portal
-- Striking a standard 4x5 nether portal frame made out of **Ancient Debris** will ignite it with special water blocks.
-- Entering the portal triggers a glitch/nausea effect and teleport players to the Ancient Realm safely to `Y=77.0`.
+### 🌌 Ancient Debris Portal (Nether Portal Block + Aura)
+- Striking a standard 4x5 portal frame made out of **Ancient Debris** with your Fire Staff's real Lightning Strike will ignite a purple **Nether Portal** block frame!
+- Custom block physics listener protects these portal blocks from popping, and they are surrounded by a gorgeous swirling magical particle aura (lime-green, electric blue, and soul fire).
+- Entering the portal triggers a glitch/nausea effect and teleports players to the Ancient Realm safely to `Y=77.0`.
 
 ### 🎢 Turbo Minecart Slope Booster
 - Turbo Minecarts now pre-read the track up to 5 blocks ahead.

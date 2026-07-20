@@ -62,10 +62,53 @@ public class CatchingBlockListener implements Listener {
 
     private final ItemFactory       itemFactory;
     private final MagicBottleManager bottleManager;
+    private final org.bukkit.plugin.java.JavaPlugin plugin;
 
-    public CatchingBlockListener(ItemFactory itemFactory, MagicBottleManager bottleManager) {
+    public CatchingBlockListener(ItemFactory itemFactory, MagicBottleManager bottleManager, org.bukkit.plugin.java.JavaPlugin plugin) {
         this.itemFactory   = itemFactory;
         this.bottleManager = bottleManager;
+        this.plugin = plugin;
+        
+        // Hopper ticking task
+        plugin.getServer().getScheduler().runTaskTimer(plugin, this::tickHoppers, 20L, 20L);
+    }
+    
+    private void tickHoppers() {
+        for (Location loc : bottleManager.getTrackedLocations()) {
+            if (!loc.isWorldLoaded()) continue;
+            MagicBottleManager.CatchingBlockState state = bottleManager.getState(loc);
+            if (state == null) continue;
+            
+            // Push empty bottles IN from hopper above
+            Block above = loc.clone().add(0, 1, 0).getBlock();
+            if (above.getType() == Material.HOPPER && state.emptyBottles < MagicBottleManager.MAX_BOTTLES) {
+                org.bukkit.block.Hopper hopper = (org.bukkit.block.Hopper) above.getState();
+                for (int i = 0; i < hopper.getInventory().getSize(); i++) {
+                    ItemStack item = hopper.getInventory().getItem(i);
+                    if (itemFactory.isEmptyMagicBottle(item)) {
+                        if (item.getAmount() > 1) {
+                            item.setAmount(item.getAmount() - 1);
+                        } else {
+                            hopper.getInventory().setItem(i, null);
+                        }
+                        state.emptyBottles++;
+                        break; // only take 1 per tick
+                    }
+                }
+            }
+            
+            // Pull charged bottles OUT to hopper below
+            Block below = loc.clone().add(0, -1, 0).getBlock();
+            if (below.getType() == Material.HOPPER && state.fullBottles > 0) {
+                org.bukkit.block.Hopper hopper = (org.bukkit.block.Hopper) below.getState();
+                ItemStack charged = itemFactory.buildChargedMagicBottle(4);
+                charged.setAmount(1);
+                java.util.HashMap<Integer, ItemStack> leftover = hopper.getInventory().addItem(charged);
+                if (leftover.isEmpty()) {
+                    state.fullBottles--;
+                }
+            }
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -245,15 +288,27 @@ public class CatchingBlockListener implements Listener {
         
         MagicBottleManager.CatchingBlockState state = bottleManager.getState(loc);
         if (state == null) return;
+
+        ItemStack glass = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
+        org.bukkit.inventory.meta.ItemMeta glassMeta = glass.getItemMeta();
+        if (glassMeta != null) { glassMeta.setDisplayName("§8"); glass.setItemMeta(glassMeta); }
+        for (int i = 0; i < 9; i++) inv.setItem(i, glass);
         
-        // Slots 0-3: Empty Bottles
-        for (int i = 0; i < 4; i++) {
-            if (i < state.emptyBottles) {
-                inv.setItem(i, itemFactory.buildEmptyMagicBottle());
-            } else {
-                inv.setItem(i, new ItemStack(Material.AIR));
-            }
+        // Slot 2: Empty Bottles (stacked)
+        if (state.emptyBottles > 0) {
+            ItemStack emptyItem = itemFactory.buildEmptyMagicBottle();
+            emptyItem.setAmount(state.emptyBottles);
+            inv.setItem(2, emptyItem);
+        } else {
+            inv.setItem(2, new ItemStack(Material.AIR));
         }
+
+        // Slot 3 & 5: Arrows
+        ItemStack arrow = new ItemStack(Material.ARROW);
+        org.bukkit.inventory.meta.ItemMeta arrowMeta = arrow.getItemMeta();
+        if (arrowMeta != null) { arrowMeta.setDisplayName("§8➔"); arrow.setItemMeta(arrowMeta); }
+        inv.setItem(3, arrow);
+        inv.setItem(5, arrow);
         
         // Slot 4: Divider / Info
         ItemStack info = new ItemStack(Material.LODESTONE);
@@ -276,13 +331,13 @@ public class CatchingBlockListener implements Listener {
         }
         inv.setItem(4, info);
         
-        // Slots 5-8: Full Bottles
-        for (int i = 5; i < 9; i++) {
-            if ((i - 5) < state.fullBottles) {
-                inv.setItem(i, itemFactory.buildChargedMagicBottle(4));
-            } else {
-                inv.setItem(i, new ItemStack(Material.AIR));
-            }
+        // Slot 6: Full Bottles (stacked)
+        if (state.fullBottles > 0) {
+            ItemStack fullItem = itemFactory.buildChargedMagicBottle(4);
+            fullItem.setAmount(state.fullBottles);
+            inv.setItem(6, fullItem);
+        } else {
+            inv.setItem(6, new ItemStack(Material.AIR));
         }
         
         playerGuiMap.put(player.getUniqueId(), loc);
@@ -312,21 +367,27 @@ public class CatchingBlockListener implements Listener {
         if (clickedInv.equals(event.getView().getTopInventory())) {
             // Clicked top inventory
             int slot = event.getSlot();
-            if (slot >= 0 && slot <= 3) {
+            if (slot == 2) {
                 // Try to take empty bottle
                 if (state.emptyBottles > 0) {
-                    state.emptyBottles--;
-                    player.getInventory().addItem(itemFactory.buildEmptyMagicBottle()).values().forEach(
+                    int amountToTake = event.isShiftClick() ? state.emptyBottles : 1;
+                    state.emptyBottles -= amountToTake;
+                    ItemStack drop = itemFactory.buildEmptyMagicBottle();
+                    drop.setAmount(amountToTake);
+                    player.getInventory().addItem(drop).values().forEach(
                         item -> player.getWorld().dropItemNaturally(player.getLocation(), item)
                     );
                     player.playSound(player.getLocation(), Sound.ENTITY_ITEM_PICKUP, 1f, 1f);
                     openCatchingBlockGUI(player, loc); // Refresh
                 }
-            } else if (slot >= 5 && slot <= 8) {
+            } else if (slot == 6) {
                 // Try to take full bottle
                 if (state.fullBottles > 0) {
-                    state.fullBottles--;
-                    player.getInventory().addItem(itemFactory.buildChargedMagicBottle(4)).values().forEach(
+                    int amountToTake = event.isShiftClick() ? state.fullBottles : 1;
+                    state.fullBottles -= amountToTake;
+                    ItemStack drop = itemFactory.buildChargedMagicBottle(4);
+                    drop.setAmount(amountToTake);
+                    player.getInventory().addItem(drop).values().forEach(
                         item -> player.getWorld().dropItemNaturally(player.getLocation(), item)
                     );
                     player.playSound(player.getLocation(), Sound.ENTITY_ITEM_PICKUP, 1f, 1f);

@@ -49,6 +49,9 @@ public class QuestKillListener implements Listener {
             } else if (q == QuestType.SPIDER_SLAYER) {
                 // Both Spider and CaveSpider count
                 matches = (type == EntityType.SPIDER || type == EntityType.CAVE_SPIDER);
+            } else if (q == QuestType.TEMPEST_SLAYER) {
+                // Must be the Tempest Overlord Phantom
+                matches = (type == EntityType.PHANTOM && "§5⚡ §l§dThe Tempest Overlord".equals(mob.getCustomName()));
             } else {
                 matches = (type == q.targetType);
             }

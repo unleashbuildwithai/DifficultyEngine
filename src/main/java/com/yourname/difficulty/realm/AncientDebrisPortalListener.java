@@ -46,43 +46,36 @@ public class AncientDebrisPortalListener implements Listener {
         // Ambient particle task for portals
         plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
             for (Location loc : activePortalBlocks) {
-                if (Math.random() < 0.3) {
-                    loc.getWorld().spawnParticle(Particle.DUST, loc.clone().add(0.5, 0.5, 0.5), 1, 0.3, 0.3, 0.3, 0, new Particle.DustOptions(Color.PURPLE, 1.0f));
-                    loc.getWorld().spawnParticle(Particle.DUST, loc.clone().add(0.5, 0.5, 0.5), 1, 0.3, 0.3, 0.3, 0, new Particle.DustOptions(Color.GREEN, 1.0f));
-                    loc.getWorld().spawnParticle(Particle.DUST, loc.clone().add(0.5, 0.5, 0.5), 1, 0.3, 0.3, 0.3, 0, new Particle.DustOptions(Color.BLUE, 1.0f));
-                }
+                // Dense beautiful lime-green, electric blue, and soul aura sworl
+                loc.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, loc.clone().add(0.5, 0.5, 0.5), 3, 0.3, 0.4, 0.3, 0.05);
+                loc.getWorld().spawnParticle(Particle.SOUL, loc.clone().add(0.5, 0.5, 0.5), 2, 0.3, 0.4, 0.3, 0.02);
+                loc.getWorld().spawnParticle(Particle.DUST, loc.clone().add(0.5, 0.5, 0.5), 3, 0.3, 0.4, 0.3, 0, new Particle.DustOptions(Color.fromRGB(0, 180, 255), 1.2f)); // electric blue
             }
         }, 5L, 5L);
     }
 
     public void setBringCommand(BringCommand bc) { this.bringCommand = bc; }
 
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
-    public void onInteract(PlayerInteractEvent event) {
-        // "striking the ancient debris should be in a circle like the obsidionblocks for thgge nether"
-        if (event.getAction() != Action.LEFT_CLICK_BLOCK) return;
+    /**
+     * Ignites the portal if the block is part of a valid Ancient Debris portal frame.
+     * Called directly by MagicStaffListener when a Lv99 Fire Staff lightning strikes it.
+     */
+    public void triggerViaLightning(Player player, Location blockLoc) {
+        Block block = blockLoc.getBlock();
+        if (block.getType() != Material.ANCIENT_DEBRIS) return;
 
-        Block block = event.getClickedBlock();
-        if (block == null || block.getType() != Material.ANCIENT_DEBRIS) return;
-
-        Player player   = event.getPlayer();
-        UUID uuid = player.getUniqueId();
-        
-        // Wait, the user didn't specify holding the fire staff anymore for the new portal trigger, but let's keep the magic check
-        int magicLevel = skillManager.getLevel(uuid, SkillType.MAGIC);
+        int magicLevel = skillManager.getLevel(player.getUniqueId(), SkillType.MAGIC);
         if (magicLevel < REQUIRED_MAGIC) {
+            player.sendMessage("§c✗ §7You need Magic Level " + REQUIRED_MAGIC + " to ignite this portal.");
             return;
         }
 
-        // Check if it's part of a valid Nether Portal frame shape
         List<Block> portalAirBlocks = getPortalAirBlocks(block);
         if (portalAirBlocks.isEmpty()) return;
 
-        event.setCancelled(true);
-
         // Ignite the portal
         for (Block air : portalAirBlocks) {
-            air.setType(Material.WATER);
+            air.setType(Material.NETHER_PORTAL);
             activePortalBlocks.add(air.getLocation());
         }
         
@@ -91,6 +84,15 @@ public class AncientDebrisPortalListener implements Listener {
         player.sendMessage("§5⚡ §7The Ancient Debris portal ignites!");
     }
     
+    @EventHandler
+    public void onPortalPhysics(org.bukkit.event.block.BlockPhysicsEvent event) {
+        if (event.getBlock().getType() == Material.NETHER_PORTAL) {
+            if (activePortalBlocks.contains(event.getBlock().getLocation())) {
+                event.setCancelled(true);
+            }
+        }
+    }
+
     @EventHandler
     public void onWaterFlow(BlockFromToEvent event) {
         if (activePortalBlocks.contains(event.getBlock().getLocation())) {
@@ -104,7 +106,8 @@ public class AncientDebrisPortalListener implements Listener {
         Location to = event.getTo();
         if (to == null) return;
         
-        if (activePortalBlocks.contains(to.getBlock().getLocation())) {
+        Block block = to.getBlock();
+        if (block.getType() == Material.NETHER_PORTAL && (activePortalBlocks.contains(block.getLocation()) || isAncientDebrisPortalBlock(block))) {
             UUID uuid = player.getUniqueId();
             
             // Check cooldown
@@ -144,9 +147,11 @@ public class AncientDebrisPortalListener implements Listener {
                         return;
                     }
                     
-                    // Fixed teleport coordinate calculation: Use the player's current X/Z
-                    // and find a safe Y in the ancient realm.
-                    Location dest = new Location(ancientWorld, player.getLocation().getX(), 77.0, player.getLocation().getZ(), player.getLocation().getYaw(), player.getLocation().getPitch());
+                    // Fixed teleport coordinate calculation: Use the precise config/world spawn coordinates
+                    double x = plugin.getConfig().getDouble("ancient-realm.spawn-x", -23.320);
+                    double y = plugin.getConfig().getDouble("ancient-realm.spawn-y", 77.0);
+                    double z = plugin.getConfig().getDouble("ancient-realm.spawn-z", 1.450);
+                    Location dest = new Location(ancientWorld, x, y, z, player.getLocation().getYaw(), player.getLocation().getPitch());
                     
                     player.teleport(dest);
                     
@@ -158,6 +163,55 @@ public class AncientDebrisPortalListener implements Listener {
                 }
             }, 30L); // 1.5 second delay while glitching
         }
+    }
+
+    private boolean isAncientDebrisPortalBlock(Block block) {
+        if (block.getType() != Material.NETHER_PORTAL) return false;
+        int[][] dirs = {{1, 0, 0}, {0, 0, 1}}; // X axis portal, Z axis portal
+        for (int[] dir : dirs) {
+            int dx = dir[0];
+            int dz = dir[1];
+            for (int w = 0; w < 2; w++) {
+                for (int h = 0; h < 3; h++) {
+                    Block bottomLeftAir = block.getRelative(-w * dx, -h, -w * dz);
+                    if (checkPortalFrameForPortalBlocks(bottomLeftAir, dx, dz)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean checkPortalFrameForPortalBlocks(Block bottomLeftAir, int dx, int dz) {
+        // Check if the 2x3 area is air, water, or portal
+        for (int w = 0; w < 2; w++) {
+            for (int h = 0; h < 3; h++) {
+                Material type = bottomLeftAir.getRelative(w * dx, h, w * dz).getType();
+                if (type != Material.AIR && type != Material.WATER && type != Material.NETHER_PORTAL) {
+                    return false;
+                }
+            }
+        }
+        
+        // Check frame (bottom)
+        for (int w = 0; w < 2; w++) {
+            if (bottomLeftAir.getRelative(w * dx, -1, w * dz).getType() != Material.ANCIENT_DEBRIS) return false;
+        }
+        // Check frame (top)
+        for (int w = 0; w < 2; w++) {
+            if (bottomLeftAir.getRelative(w * dx, 3, w * dz).getType() != Material.ANCIENT_DEBRIS) return false;
+        }
+        // Check frame (left)
+        for (int h = 0; h < 3; h++) {
+            if (bottomLeftAir.getRelative(-dx, h, -dz).getType() != Material.ANCIENT_DEBRIS) return false;
+        }
+        // Check frame (right)
+        for (int h = 0; h < 3; h++) {
+            if (bottomLeftAir.getRelative(2 * dx, h, 2 * dz).getType() != Material.ANCIENT_DEBRIS) return false;
+        }
+        
+        return true;
     }
 
     private List<Block> getPortalAirBlocks(Block clickedFrameBlock) {
@@ -174,7 +228,7 @@ public class AncientDebrisPortalListener implements Listener {
             // Try to find bottom-left corner of the air gap relative to clicked block
             for (int offsetX = -2; offsetX <= 2; offsetX++) {
                 for (int offsetZ = -2; offsetZ <= 2; offsetZ++) {
-                    for (int offsetY = 0; offsetY <= 1; offsetY++) {
+                    for (int offsetY = -3; offsetY <= 1; offsetY++) { // Expanded offsetY scanner range
                         Block bottomLeftAir = clickedFrameBlock.getRelative(offsetX * dx, offsetY, offsetZ * dz);
                         
                         if (checkPortalFrame(bottomLeftAir, dx, dz)) {
@@ -233,8 +287,4 @@ public class AncientDebrisPortalListener implements Listener {
         return plugin.getServer().getWorld(REALM_WORLD_NAME);
     }
 
-    public void triggerViaLightning(Player player, Location blockLoc) {
-        // Deprecated trigger, we can just redirect to checking portal shape
-        onInteract(new PlayerInteractEvent(player, Action.LEFT_CLICK_BLOCK, player.getInventory().getItemInMainHand(), blockLoc.getBlock(), null));
-    }
 }

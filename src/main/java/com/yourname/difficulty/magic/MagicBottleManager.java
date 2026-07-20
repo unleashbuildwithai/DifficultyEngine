@@ -33,7 +33,8 @@ public class MagicBottleManager {
     }
 
     /** Maximum empty bottles that can be stored per catching block. */
-    public static final int MAX_BOTTLES = 4; // Slots 0-3 for empty, slots 5-8 for full
+    /** Maximum bottles that can be stored per catching block. */
+    public static final int MAX_BOTTLES = 64;
 
     /**
      * Normalised Location (block coords) → CatchingBlockState.

@@ -107,6 +107,9 @@ public class GunZSwordListener implements Listener {
     /** Timestamp when the most recent dash fired (for slash-cancel window). */
     private final Map<UUID, Long>                  lastDashTime  = new HashMap<>();
 
+    /** Tracks the player's location on the previous tick to compute real movement delta. */
+    private final Map<UUID, Location>              lastLocations = new HashMap<>();
+
     public GunZSwordListener(ItemFactory itemFactory, SkillManager skillManager, JavaPlugin plugin) {
         this.itemFactory  = itemFactory;
         this.skillManager = skillManager;
@@ -138,15 +141,20 @@ public class GunZSwordListener implements Listener {
             }
 
             Location loc = player.getLocation();
+            Location lastLoc = lastLocations.get(uid);
+            lastLocations.put(uid, loc.clone());
 
-            // ── Compute horizontal movement velocity ──────────────────────────
-            // We use the player's actual velocity rather than position delta so
-            // it responds on the same tick the key is pressed, regardless of lag.
-            Vector vel = player.getVelocity();
-            double vx  = vel.getX();
-            double vz  = vel.getZ();
+            if (lastLoc == null || !lastLoc.getWorld().equals(loc.getWorld())) {
+                continue;
+            }
 
-            // Project world velocity into player-local space using the yaw angle
+            // ── Compute horizontal movement delta ──────────────────────────────
+            // Since player.getVelocity() doesn't contain standard walking speed on the server,
+            // we use the real position difference between tick samples.
+            double vx = loc.getX() - lastLoc.getX();
+            double vz = loc.getZ() - lastLoc.getZ();
+
+            // Project world delta into player-local space using the yaw angle
             double yaw  = Math.toRadians(loc.getYaw());
             double sinY = Math.sin(yaw);
             double cosY = Math.cos(yaw);
@@ -156,12 +164,15 @@ public class GunZSwordListener implements Listener {
             // right > 0 = right  (D key); right < 0 = left    (A key)
             double right =  vx *   cosY  + vz * sinY;
 
+            // Adjust threshold for position delta (around 0.05 per tick for normal walking)
+            double threshold = 0.05;
+
             // ── Classify directions that are currently ACTIVE ─────────────────
             Set<Dir> current = new HashSet<>(4);
-            if (fwd   >  MOVE_THRESHOLD) current.add(Dir.W);
-            if (fwd   < -MOVE_THRESHOLD) current.add(Dir.S);
-            if (right >  MOVE_THRESHOLD) current.add(Dir.D);
-            if (right < -MOVE_THRESHOLD) current.add(Dir.A);
+            if (fwd   >  threshold) current.add(Dir.W);
+            if (fwd   < -threshold) current.add(Dir.S);
+            if (right >  threshold) current.add(Dir.D);
+            if (right < -threshold) current.add(Dir.A);
 
             Set<Dir> prev = prevActive.getOrDefault(uid, new HashSet<>());
             EnumMap<Dir, long[]> history =

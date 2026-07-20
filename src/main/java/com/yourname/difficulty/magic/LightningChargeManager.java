@@ -1,4 +1,4 @@
-package com.yourname.difficulty.magic;
+ package com.yourname.difficulty.magic;
 
 import com.yourname.difficulty.items.ItemFactory;
 import org.bukkit.Material;
@@ -19,19 +19,29 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import com.yourname.difficulty.skills.SkillManager;
+import com.yourname.difficulty.skills.SkillType;
+
 public class LightningChargeManager implements Listener {
 
     private final JavaPlugin plugin;
     private final ItemFactory itemFactory;
+    private final SkillManager skillManager;
     private final Map<UUID, Integer> playerCharges = new HashMap<>();
+    private final Map<UUID, Long> damageBuffEndTime = new HashMap<>();
 
-    public LightningChargeManager(JavaPlugin plugin, ItemFactory itemFactory) {
+    public LightningChargeManager(JavaPlugin plugin, ItemFactory itemFactory, SkillManager skillManager) {
         this.plugin = plugin;
         this.itemFactory = itemFactory;
+        this.skillManager = skillManager;
         
         // Task to display charges above the food bar using the Action Bar
         plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
             for (Player player : plugin.getServer().getOnlinePlayers()) {
+                ItemStack hand = player.getInventory().getItemInMainHand();
+                if (itemFactory.getStaffElement(hand) != MagicElement.FIRE) {
+                    continue; // Only show when actively holding the Lightning (Fire) Staff
+                }
                 int charges = getCharges(player);
                 if (charges > 0) {
                     StringBuilder bar = new StringBuilder("§e⚡ Lightning Charges: §b");
@@ -65,6 +75,13 @@ public class LightningChargeManager implements Listener {
         return false;
     }
 
+    public boolean hasDamageBuff(Player player) {
+        Long end = damageBuffEndTime.get(player.getUniqueId());
+        if (end != null && System.currentTimeMillis() < end) return true;
+        damageBuffEndTime.remove(player.getUniqueId());
+        return false;
+    }
+
     @EventHandler(priority = EventPriority.HIGH)
     public void onDrinkBottle(PlayerItemConsumeEvent event) {
         ItemStack item = event.getItem();
@@ -80,89 +97,25 @@ public class LightningChargeManager implements Listener {
                     player.getInventory().getHeldItemSlot() : 40, new ItemStack(Material.AIR));
             }
             
-            // Give empty bottle
+            // Give empty bottle back
             player.getInventory().addItem(itemFactory.buildEmptyMagicBottle()).values().forEach(
                 dropped -> player.getWorld().dropItemNaturally(player.getLocation(), dropped)
             );
             
-            // Add 4 charges
-            addCharges(player, 4);
-            player.playSound(player.getLocation(), Sound.ENTITY_WITCH_DRINK, 1.0f, 1.0f);
-            player.getWorld().spawnParticle(Particle.ELECTRIC_SPARK, player.getLocation().add(0, 1, 0), 20, 0.5, 0.5, 0.5, 0.1);
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGH)
-    public void onCastBottle(PlayerInteractEvent event) {
-        if (event.getHand() != EquipmentSlot.HAND) return;
-        
-        // We use left-click to cast from the bottle or cast with charges
-        if (event.getAction() != Action.LEFT_CLICK_AIR && event.getAction() != Action.LEFT_CLICK_BLOCK) return;
-        
-        Player player = event.getPlayer();
-        ItemStack item = player.getInventory().getItemInMainHand();
-        
-        boolean hasBottle = itemFactory.isChargedMagicBottle(item);
-        boolean hasEmptyBottle = itemFactory.isEmptyMagicBottle(item);
-        
-        if (hasBottle) {
-            // Left click with full bottle -> cast and leave 3 charges
-            if (item.getAmount() > 1) {
-                item.setAmount(item.getAmount() - 1);
+            int magicLevel = skillManager.getLevel(player.getUniqueId(), SkillType.MAGIC);
+            
+            if (magicLevel >= 99) {
+                // Add 4 charges for Lightning Strike
+                addCharges(player, 4);
+                player.sendMessage("§b⚡ §7You absorbed §b4 Lightning Charges§7!");
             } else {
-                player.getInventory().setItem(player.getInventory().getHeldItemSlot(), new ItemStack(Material.AIR));
+                // 5 minute damage buff
+                player.setMetadata("lightning_damage_buff", new org.bukkit.metadata.FixedMetadataValue(plugin, System.currentTimeMillis() + (5 * 60 * 1000L)));
+                player.sendMessage("§b⚡ §7You feel a surge of lightning power! §8(+50% damage vs monsters, +30% vs players for 5m)");
             }
-            
-            player.getInventory().addItem(itemFactory.buildEmptyMagicBottle()).values().forEach(
-                dropped -> player.getWorld().dropItemNaturally(player.getLocation(), dropped)
-            );
-            
-            addCharges(player, 3);
-            castCustomLightning(player);
-            
-        } else if (getCharges(player) > 0) {
-            // Player has charges, left-click with empty bottle or anything else casts it?
-            // Let's restrict it to empty magic bottle to be safe, or just bare hands/empty bottle.
-            if (hasEmptyBottle || item.getType() == Material.AIR) {
-                if (consumeCharge(player)) {
-                    castCustomLightning(player);
-                }
-            }
+
+            player.playSound(player.getLocation(), Sound.ENTITY_WITCH_DRINK, 1.0f, 1.0f);
+            player.getWorld().spawnParticle(Particle.ELECTRIC_SPARK, player.getLocation().add(0, 1, 0), 30, 0.5, 0.5, 0.5, 0.1);
         }
-    }
-    
-    private void castCustomLightning(Player player) {
-        // Find target block up to 50 blocks away
-        org.bukkit.block.Block target = player.getTargetBlockExact(50, org.bukkit.FluidCollisionMode.NEVER);
-        org.bukkit.Location loc = target != null ? target.getLocation().add(0.5, 1.0, 0.5) : player.getLocation().add(player.getLocation().getDirection().multiply(10));
-        
-        // Spawn actual lightning (no damage to player usually by default, but let's just use effect if we want)
-        // Wait, standard lightning strike
-        player.getWorld().strikeLightning(loc);
-        
-        // Custom visual for the right-click/left-click lightning
-        // "very light flame pixels and white "like make them 35% less" and leace the lightning strike make it look more blue and thin black outline blue coat and white middle"
-        
-        // We can simulate the custom bolt with particles
-        org.bukkit.Location start = loc.clone().add(0, 15, 0); // Strike from sky
-        
-        double distance = start.distance(loc);
-        org.bukkit.util.Vector dir = loc.toVector().subtract(start.toVector()).normalize();
-        
-        for (double d = 0; d < distance; d += 0.5) {
-            org.bukkit.Location pt = start.clone().add(dir.clone().multiply(d));
-            
-            // White middle
-            player.getWorld().spawnParticle(Particle.DUST, pt, 5, 0.1, 0.1, 0.1, 0, new Particle.DustOptions(org.bukkit.Color.WHITE, 1.5f));
-            
-            // Blue coat
-            player.getWorld().spawnParticle(Particle.DUST, pt, 10, 0.3, 0.3, 0.3, 0, new Particle.DustOptions(org.bukkit.Color.BLUE, 1.0f));
-            
-            // Thin black outline
-            player.getWorld().spawnParticle(Particle.DUST, pt, 3, 0.4, 0.4, 0.4, 0, new Particle.DustOptions(org.bukkit.Color.BLACK, 0.5f));
-        }
-        
-        // Flame pixels at base (35% less opacity/amount)
-        player.getWorld().spawnParticle(Particle.FLAME, loc, 15, 1.0, 0.5, 1.0, 0.05); // reduced from normal burst
     }
 }

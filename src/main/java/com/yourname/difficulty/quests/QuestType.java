@@ -103,6 +103,14 @@ public enum QuestType {
         EntityType.ENDER_DRAGON, 1,
         "GOLD:2000,XP:3000",
         false
+    ),
+    TEMPEST_SLAYER(
+        "Storm Wrath",
+        "§7Defeat the §5⚡ Tempest Overlord§7.",
+        Material.FEATHER,
+        EntityType.PHANTOM, 1,
+        "GOLD:1500,XP:2500",
+        false
     );
 
     // ── Fields ────────────────────────────────────────────────────────────────

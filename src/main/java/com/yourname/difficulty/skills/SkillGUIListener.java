@@ -30,7 +30,7 @@ public class SkillGUIListener implements Listener {
     /** Returns true if the inventory title matches any skill GUI variant. */
     private boolean isSkillGui(String title) {
         if (title == null) return false;
-        return title.startsWith("§8✦ §6Skill Tree §8✦")
-            || title.startsWith("§8✦ §6")  && title.endsWith("'s Skills §8✦");
+        return title.equals(SkillGUI.TITLE)
+            || (title.startsWith("§8[ §6") && title.endsWith("'s Stats §8]"));
     }
 }

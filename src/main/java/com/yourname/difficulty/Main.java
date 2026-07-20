@@ -48,6 +48,7 @@ import com.yourname.difficulty.listeners.RangedGearEquipListener;
 import com.yourname.difficulty.listeners.RangedSpeedListener;
 import com.yourname.difficulty.listeners.SitListener;
 import com.yourname.difficulty.listeners.SoulfurPotionListener;
+import com.yourname.difficulty.listeners.SupportPotionListener;
 import com.yourname.difficulty.magic.MagicElement;
 import com.yourname.difficulty.magic.CatchingBlockListener;
 import com.yourname.difficulty.magic.MagicBottleManager;
@@ -231,10 +232,11 @@ public class Main extends JavaPlugin {
         magicStaffListener.setLightningAdminCommand(lightningAdminCommand);
         this.magicBottleManager = new MagicBottleManager();
         getServer().getPluginManager().registerEvents(
-            new CatchingBlockListener(itemFactory, magicBottleManager), this);
+            new CatchingBlockListener(itemFactory, magicBottleManager, this), this);
             
-        this.lightningChargeManager = new com.yourname.difficulty.magic.LightningChargeManager(this, itemFactory);
+        this.lightningChargeManager = new com.yourname.difficulty.magic.LightningChargeManager(this, itemFactory, skillManager);
         getServer().getPluginManager().registerEvents(lightningChargeManager, this);
+        magicStaffListener.setLightningChargeManager(lightningChargeManager);
 
         this.sandstormManager = new SandstormManager(this);
         magicStaffListener.setSandstormManager(sandstormManager);
@@ -281,6 +283,8 @@ public class Main extends JavaPlugin {
 
         getServer().getPluginManager().registerEvents(
                 new RuneDropListener(itemFactory), this);
+        getServer().getPluginManager().registerEvents(
+                new SupportPotionListener(itemFactory), this);
 
         this.gunZSwordListener = new GunZSwordListener(itemFactory, skillManager, this);
         getServer().getPluginManager().registerEvents(gunZSwordListener, this);
@@ -294,6 +298,7 @@ public class Main extends JavaPlugin {
         FavoritesGUI          favoritesGUI          = new FavoritesGUI(comboFavoritesManager, spellBookManager);
         SpellBookListener     spellBookListener     = new SpellBookListener(spellBookManager);
         spellBookListener.setFavoritesGUI(favoritesGUI);
+        spellBookListener.setItemFactory(itemFactory);
         getServer().getPluginManager().registerEvents(spellBookListener, this);
         getServer().getPluginManager().registerEvents(
                 new FavoritesGUIListener(favoritesGUI, comboFavoritesManager, spellBookManager, this), this);
@@ -340,6 +345,7 @@ public class Main extends JavaPlugin {
         this.magicBagGUI     = new MagicBagGUI(magicBagManager);
         // Wire bag manager into staff listener so Spell Combo Book is found even when bagged
         magicStaffListener.setMagicBagManager(magicBagManager);
+        itemFactory.setMagicBagManager(magicBagManager);
         getServer().getPluginManager().registerEvents(
                 new MagicBagGUIListener(magicBagManager, magicBagGUI, this), this);
         getServer().getPluginManager().registerEvents(
@@ -561,6 +567,11 @@ public class Main extends JavaPlugin {
         if (spawnBossPluginCmd != null) {
             spawnBossPluginCmd.setExecutor(bossSpawnerCmd);
             spawnBossPluginCmd.setTabCompleter(bossSpawnerCmd);
+        }
+        org.bukkit.command.PluginCommand tpBossPluginCmd = getCommand("tpboss");
+        if (tpBossPluginCmd != null) {
+            tpBossPluginCmd.setExecutor(bossSpawnerCmd);
+            tpBossPluginCmd.setTabCompleter(bossSpawnerCmd);
         }
 
         registerCmd("hardcore", (sender, cmd, label, args) -> {

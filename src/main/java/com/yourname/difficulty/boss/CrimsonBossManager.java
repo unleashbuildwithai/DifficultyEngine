@@ -10,9 +10,12 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockDamageEvent;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
@@ -90,6 +93,8 @@ public class CrimsonBossManager implements Listener {
     private final BossEffectListener bossEffectListener;
     private final Random             random = new Random();
 
+    /** UUIDs of all active boss entities (supports split/multiple). */
+    private final Set<UUID> activeBossUuids = new HashSet<>();
     /** UUID of the active boss, null when not alive. */
     private UUID           bossUuid      = null;
     /** Tracks ender pearls thrown by the boss. */
@@ -105,45 +110,122 @@ public class CrimsonBossManager implements Listener {
         this.plugin             = plugin;
         this.itemFactory        = itemFactory;
         this.bossEffectListener = bossEffectListener;
+
+        // Periodically spawn Blazefiend guards around the Crimson Pit spawner
+        plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
+            World w = plugin.getServer().getWorld("ancient_realm");
+            if (w == null) return;
+            Location spawnerLoc = new Location(w, SPAWN_X, SPAWN_Y, SPAWN_Z);
+            
+            // Check if spawner block is present (ensure gilded blackstone at default spot)
+            Block b = spawnerLoc.getBlock();
+            if (b.getType() == Material.AIR) {
+                b.setType(Material.GILDED_BLACKSTONE);
+            }
+
+            if (isBossAlive()) return; // do not spawn guards while the boss is active
+
+            // Count existing guards
+            int guardsCount = 0;
+            for (Entity e : w.getNearbyEntities(spawnerLoc, 30, 20, 30)) {
+                if (e instanceof Blaze blaze && "§c🔥 Blazefiend".equals(blaze.getCustomName())) {
+                    guardsCount++;
+                }
+            }
+
+            if (guardsCount < 6) {
+                int toSpawn = Math.min(3, 6 - guardsCount);
+                for (int i = 0; i < toSpawn; i++) {
+                    double rx = SPAWN_X + (random.nextDouble() - 0.5) * 15;
+                    double rz = SPAWN_Z + (random.nextDouble() - 0.5) * 15;
+                    Location gl = new Location(w, rx, SPAWN_Y + 1.0, rz);
+                    Blaze guard = (Blaze) w.spawnEntity(gl, EntityType.BLAZE);
+                    guard.setCustomName("§c🔥 Blazefiend");
+                    guard.setCustomNameVisible(true);
+                    guard.setRemoveWhenFarAway(true);
+                }
+            }
+        }, 100L, 400L); // check every 20 seconds
     }
 
     // ══ Public API ═══════════════════════════════════════════════════════════
 
     /**
      * Spawns (or replaces) the boss.
-     * 1% chance the spawn is a Legendary variant with 25 000 HP instead of 2 500.
+     * Supports normal, inferno, vortex, amalgam types and splits.
      *
-     * @param loc Spawn location.  If null, uses the default Crimson Pit coords.
+     * @param loc Spawn location. If null, uses the default Crimson Pit coords.
      */
     public Blaze spawnBoss(Location loc) {
+        return spawnBoss(loc, false);
+    }
+
+    public Blaze spawnBoss(Location loc, boolean isSplitInferno) {
         if (loc == null) {
-            World w = plugin.getServer().getWorlds().get(0);
+            World w = plugin.getServer().getWorld("ancient_realm");
+            if (w == null) {
+                w = plugin.getServer().getWorlds().get(0);
+            }
             loc = new Location(w, SPAWN_X, SPAWN_Y, SPAWN_Z);
         }
 
-        dismissExisting();
-
-        // ── Legendary roll ────────────────────────────────────────────────────
-        boolean legendary = random.nextDouble() < LEGENDARY_CHANCE;
-        double  hp        = legendary ? LEGENDARY_HP : BOSS_MAX_HP;
-
-        Blaze boss = (Blaze) loc.getWorld().spawnEntity(loc, EntityType.BLAZE);
-
-        if (legendary) {
-            boss.setCustomName("§4☠ §c§l⚡ THE LEGENDARY BLAZEFIEND ⚡ §4☠");
-            // Server-wide legendary announcement
-            for (Player online : plugin.getServer().getOnlinePlayers()) {
-                online.sendMessage("");
-                online.sendMessage("§4§l⚡ ☠ §c§lLEGENDARY BLAZEFIEND HAS AWAKENED! §4§l☠ ⚡");
-                online.sendMessage("§7§oA once-in-a-hundred terror rises from the Crimson Pit...");
-                online.sendMessage("§6§o  §e25 000 HP §6— §cBring everything you have!");
-                online.sendMessage("");
-                online.sendTitle("§4§l⚡ LEGENDARY BOSS ⚡", "§c25 000 HP — §6Crimson Pit!", 10, 100, 20);
-            }
-        } else {
-            boss.setCustomName("§c🔥 §l§4The Infernal Blazefiend");
+        if (!isSplitInferno) {
+            dismissExisting();
+            // Rebuild the Crimson Pit room schematic on spawn to repair the arena
+            rebuildArena(loc, "crimson_pit");
         }
 
+        double roll = random.nextDouble();
+        double hp = 5000.0;
+        String name = "§c🔥 §l§4The Infernal Blazefiend";
+        boolean legendary = false;
+        boolean amalgam = false;
+        boolean vortex = false;
+        boolean inferno = false;
+
+        if (isSplitInferno) {
+            hp = 10000.0;
+            name = "§c🔥 §l§4The Blaze Inferno §7(Amalgam Split)";
+            inferno = true;
+        } else {
+            if (roll < 0.001) { // 0.1% chance: Dual Blaze Amalgam
+                name = "§d☠ §5§lTHE DUAL BLAZE AMALGAM §d☠";
+                hp = 20000.0;
+                amalgam = true;
+                legendary = true;
+            } else if (roll < 0.01) { // 0.9% chance: Blaze Vortex
+                name = "§d☠ §c§l⚡ THE BLAZE VORTEX ⚡ §d☠";
+                hp = 20000.0;
+                vortex = true;
+                legendary = true;
+            } else if (roll < 0.03) { // 2% chance: Blaze Inferno
+                name = "§c🔥 §l§4The Blaze Inferno";
+                hp = 15000.0;
+                inferno = true;
+                legendary = true;
+            } else {
+                // Normal Blazefiend (97% chance)
+                // Scale HP if multiple Nightmare players are nearby
+                int nightmareCount = 0;
+                for (Player p : nearbyPlayers(loc, 80.0)) {
+                    if (p.hasMetadata("difficultyengine_hardcore") || p.hasMetadata("difficultyengine_nightmare") || p.getWorld().getName().equals("ancient_realm")) {
+                        nightmareCount++;
+                    }
+                }
+                if (nightmareCount >= 4) {
+                    hp = 10000.0;
+                    name = "§4☠ §c§lTHE APOCALYPTIC BLAZEFIEND §4☠";
+                } else if (nightmareCount > 1) {
+                    hp = 7500.0;
+                    name = "§c🔥 §l§4The Nightmare Blazefiend";
+                } else {
+                    hp = 5000.0;
+                }
+            }
+        }
+
+        Blaze boss = (Blaze) loc.getWorld().spawnEntity(loc, EntityType.BLAZE);
+        boss.setCustomName(name);
         boss.setCustomNameVisible(true);
         boss.setRemoveWhenFarAway(false);
         boss.setFireTicks(Integer.MAX_VALUE);
@@ -153,14 +235,47 @@ public class CrimsonBossManager implements Listener {
         if (hpAttr != null) hpAttr.setBaseValue(hp);
         boss.setHealth(hp);
 
+        // Metadata tags
+        if (amalgam) {
+            boss.setMetadata("de_is_dual_amalgam", new FixedMetadataValue(plugin, true));
+        }
+        if (vortex) {
+            boss.setMetadata("de_is_vortex", new FixedMetadataValue(plugin, true));
+        }
+        if (inferno) {
+            boss.setMetadata("de_is_inferno", new FixedMetadataValue(plugin, true));
+        }
+        if (isSplitInferno) {
+            boss.setMetadata("de_is_split_inferno", new FixedMetadataValue(plugin, true));
+        }
+
         // Register with effect system
         bossEffectListener.registerBoss(boss);
         bossEffectListener.spawnShriek(boss);
 
+        // Clear death tags for the flawless Boss Cape run when a boss fight starts
+        for (Player p : loc.getWorld().getPlayers()) {
+            p.removeMetadata("died_during_boss", plugin);
+        }
+
+        activeBossUuids.add(boss.getUniqueId());
         bossUuid = boss.getUniqueId();
 
         startBossAI();
-        if (!legendary) announceSpawn(loc); // legendary already announced globally above
+        if (legendary) {
+            // Server-wide legendary announcement
+            for (Player online : plugin.getServer().getOnlinePlayers()) {
+                online.sendMessage("");
+                online.sendMessage("§4§l⚡ ☠ §c§l" + name.replaceAll("§.", "") + " HAS AWAKENED! §4§l☠ ⚡");
+                online.sendMessage("§7§oA supreme terror rises from the Crimson Pit...");
+                online.sendMessage("§6§o  §e" + (int)hp + " HP §6— §cBring everything you have!");
+                online.sendMessage("");
+                online.sendTitle("§4§l⚡ LEGENDARY BOSS ⚡", "§c" + (int)hp + " HP — §6Crimson Pit!", 10, 100, 20);
+            }
+        } else {
+            announceSpawn(loc);
+        }
+        
         customSpawnSequence(boss);
 
         return boss;
@@ -170,9 +285,11 @@ public class CrimsonBossManager implements Listener {
     public Blaze spawnBoss() { return spawnBoss(null); }
 
     public boolean isBossAlive() {
-        if (bossUuid == null) return false;
-        Entity e = plugin.getServer().getEntity(bossUuid);
-        return e instanceof LivingEntity le && !le.isDead();
+        activeBossUuids.removeIf(uuid -> {
+            Entity e = plugin.getServer().getEntity(uuid);
+            return !(e instanceof LivingEntity le && !le.isDead());
+        });
+        return !activeBossUuids.isEmpty();
     }
 
     public void cleanup() {
@@ -181,112 +298,170 @@ public class CrimsonBossManager implements Listener {
         bossEnderPearls.clear();
     }
 
-    // ══ Ancient Debris Trigger ════════════════════════════════════════════════
+    // ══ Spawner Block Click & Bedrock Hardness Trigger ════════════════════════
 
-    /**
-     * When a player STRIKES (left-click damages) an Ancient Debris block and
-     * the boss is not currently alive, spawn it near that block.
-     *
-     * This also announces to the player what they just triggered.
-     */
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onDebrisStrike(BlockDamageEvent event) {
-        if (event.getBlock().getType() != Material.ANCIENT_DEBRIS) return;
+    private boolean isSpawnerBlock(Block block) {
+        if (block == null) return false;
+        if (block.getType() != Material.GILDED_BLACKSTONE) return false;
+        if (block.hasMetadata("de_blazefiend_spawner")) return true;
+        if (block.getWorld().getName().equals("ancient_realm")) {
+            if (block.getX() == -108 && block.getY() == -26 && block.getZ() == -14) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    public void onSpawnerPlace(BlockPlaceEvent event) {
+        ItemStack item = event.getItemInHand();
+        if (itemFactory.isBlazefiendSpawner(item)) {
+            Block block = event.getBlockPlaced();
+            block.setMetadata("de_blazefiend_spawner", new FixedMetadataValue(plugin, true));
+            event.getPlayer().sendMessage("§a✓ §7Placed Blazefiend Spawner block!");
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onSpawnerBreak(BlockBreakEvent event) {
+        Block block = event.getBlock();
+        if (isSpawnerBlock(block)) {
+            Player player = event.getPlayer();
+            if (!player.hasPermission("difficultyengine.cape.admin") && !player.isOp()) {
+                event.setCancelled(true);
+                player.sendMessage("§c✗ §7This spawner block is protected like bedrock! Only admins can remove it.");
+            } else {
+                block.removeMetadata("de_blazefiend_spawner", plugin);
+                player.sendMessage("§a✓ §7Removed protected spawner block.");
+            }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onSpawnerStrike(BlockDamageEvent event) {
+        Block block = event.getBlock();
+        if (!isSpawnerBlock(block)) return;
+
+        Player player = event.getPlayer();
         if (isBossAlive()) {
-            // Boss is already roaming — warn the player
-            event.getPlayer().sendActionBar(
-                    "§c🔥 §7The Infernal Blazefiend already roams these caves...");
+            player.sendActionBar("§c🔥 §7The Blazefiend already roams these caves...");
             return;
         }
-        if (respawnTask != null) {
-            // Boss died recently, timer is counting down — accelerate spawn
-            cancelRespawn();
-            event.getPlayer().sendMessage(
-                    "§c☠ §4Disturbing the Ancient Debris awakens the Blazefiend early!");
-        } else {
-            event.getPlayer().sendMessage(
-                    "§c☠ §4Your strike on the Ancient Debris has awakened the Infernal Blazefiend!");
+
+        if (!block.getWorld().getName().equals("ancient_realm")) {
+            player.sendMessage("§c✗ §7The Blazefiend Spawner only works inside the §5Ancient Realm§7!");
+            return;
         }
-        // Always spawn at the Crimson Pit home location (-107.964, -26, -14.444)
-        // regardless of which debris block was struck — this is a world boss.
+
+        if (respawnTask != null) {
+            cancelRespawn();
+            player.sendMessage("§c☠ §4Striking the Spawner awakens the Blazefiend early!");
+        } else {
+            player.sendMessage("§c☠ §4Your strike on the Spawner has awakened the Infernal Blazefiend!");
+        }
+
         spawnBoss(null);
     }
 
     // ══ AI Task ═══════════════════════════════════════════════════════════════
 
     private void startBossAI() {
-        cancelTask();
+        if (bossTask != null) return; // Only start AI once
 
         bossTask = new BukkitRunnable() {
             int   tick         = 0;
             int   wanderTick   = 0;
-            // Current wander target velocity
-            Vector wanderVel   = new Vector(0, 0, 0);
 
             @Override
             public void run() {
-                if (!isBossAlive()) { cancel(); return; }
-
-                Entity entity = plugin.getServer().getEntity(bossUuid);
-                if (!(entity instanceof Blaze boss)) { cancel(); return; }
+                if (!isBossAlive()) { cancel(); bossTask = null; return; }
 
                 tick++;
                 wanderTick++;
 
-                // Keep burning
-                boss.setFireTicks(200);
+                for (UUID uuid : new ArrayList<>(activeBossUuids)) {
+                    Entity entity = plugin.getServer().getEntity(uuid);
+                    if (!(entity instanceof Blaze boss) || boss.isDead()) continue;
 
-                // ── Wandering AI (every WANDER_INTERVAL ticks) ───────────────
+                    // Keep burning
+                    boss.setFireTicks(200);
+
+                    // ── Wandering AI ─────────────────────────────────────────
+                    if (wanderTick >= WANDER_INTERVAL) {
+                        pickNewWanderTarget(boss);
+                    }
+
+                    // Apply wander velocity per boss (stored in metadata)
+                    if (boss.hasMetadata("de_wander_vel")) {
+                        Vector wanderVel = (Vector) boss.getMetadata("de_wander_vel").get(0).value();
+                        if (wanderVel != null && !wanderVel.isZero()) {
+                            Vector current = boss.getVelocity();
+                            Vector blended = current.add(wanderVel.clone().subtract(current).multiply(0.15));
+                            boss.setVelocity(blended);
+                        }
+                    }
+
+                    // ── Block-breaking in path (every 5 ticks) ───────────────────
+                    if (tick % 5 == 0) breakBlocksInPath(boss);
+
+                    // ── Phase Mechanics ──────────────────────────────────────────
+                    boolean isPhase2 = boss.getHealth() <= (boss.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue() * 0.30);
+                    
+                    // Distinct boss animations/trails
+                    if (boss.hasMetadata("de_is_vortex")) {
+                        if (tick % 3 == 0) {
+                            boss.getWorld().spawnParticle(Particle.DRAGON_BREATH, boss.getLocation().add(0, 1, 0), 12, 0.4, 0.4, 0.4, 0.05);
+                            boss.getWorld().spawnParticle(Particle.PORTAL, boss.getLocation().add(0, 1, 0), 8, 0.3, 0.3, 0.3, 0.05);
+                        }
+                    } else if (boss.hasMetadata("de_is_inferno") || boss.hasMetadata("de_is_split_inferno")) {
+                        if (tick % 3 == 0) {
+                            boss.getWorld().spawnParticle(Particle.LAVA, boss.getLocation().add(0, 1, 0), 6, 0.3, 0.3, 0.3, 0.05);
+                            boss.getWorld().spawnParticle(Particle.LARGE_SMOKE, boss.getLocation().add(0, 1.2, 0), 4, 0.3, 0.3, 0.3, 0.02);
+                        }
+                    } else if (boss.hasMetadata("de_is_dual_amalgam")) {
+                        if (tick % 3 == 0) {
+                            boss.getWorld().spawnParticle(Particle.SOUL, boss.getLocation().add(0, 1, 0), 6, 0.3, 0.3, 0.3, 0.04);
+                            boss.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, boss.getLocation().add(0, 1, 0), 6, 0.3, 0.3, 0.3, 0.05);
+                            boss.getWorld().spawnParticle(Particle.SOUL_FIRE_FLAME, boss.getLocation().add(0, 1, 0), 4, 0.3, 0.3, 0.3, 0.04);
+                        }
+                    }
+
+                    if (isPhase2) {
+                        if (boss.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED) != null && boss.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED).getBaseValue() < 0.4) {
+                            boss.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED).setBaseValue(0.5);
+                        }
+                        if (tick % 5 == 0) spawnSoulFlameSpiral(boss.getLocation());
+                    } else {
+                        if (tick % 5 == 0) spawnFlameSpiral(boss.getLocation());
+                    }
+                    
+                    if (tick % 10 == 0) spawnLavaDrips(boss.getLocation());
+
+                    List<Player> nearby = nearbyPlayers(boss.getLocation(), ENGAGE_RADIUS);
+                    if (nearby.isEmpty()) continue;
+
+                    // ── Attack 1: Homing Hellfire (every 60 ticks / 3 s) ─────────
+                    if (tick % 60 == 0) attackHomingHellfire(boss, nearby);
+
+                    // ── Attack 2: Molten Barrage (every 200 ticks / 10 s) ────────
+                    if (tick % 200 == 0) attackMoltenBarrage(boss, nearby);
+
+                    // ── Attack 3: Void Pearl Volley (every 300 ticks / 15 s) ─────
+                    if (tick % 300 == 0) attackVoidPearls(boss, nearby);
+
+                    // ── Attack 4: Fire Blob Summon (every 400 ticks / 20 s) ──────
+                    if (tick % 400 == 0) attackSummonBlobs(boss, nearby);
+
+                    // ── Attack 5: Flame Minion Summon (every 600 ticks / 30 s) ───
+                    if (tick % 600 == 0) attackSummonMinions(boss, nearby);
+
+                    // ── Attack 6: Passive Scorch (every 80 ticks / 4 s) ──────────
+                    if (tick % 80 == 0) attackScorch(boss, nearby);
+                }
+
                 if (wanderTick >= WANDER_INTERVAL) {
                     wanderTick = 0;
-                    pickNewWanderTarget(boss);
                 }
-
-                // Apply wander velocity (smooth movement)
-                if (!wanderVel.isZero()) {
-                    Vector current = boss.getVelocity();
-                    // Blend toward target velocity for smooth motion
-                    Vector blended = current.add(wanderVel.clone().subtract(current).multiply(0.15));
-                    boss.setVelocity(blended);
-                }
-
-                // ── Block-breaking in path (every 5 ticks) ───────────────────
-                if (tick % 5 == 0) breakBlocksInPath(boss);
-
-                // ── Phase Mechanics ──────────────────────────────────────────
-                boolean isPhase2 = boss.getHealth() <= (boss.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue() * 0.30);
-                
-                if (isPhase2) {
-                    if (boss.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED) != null && boss.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED).getBaseValue() < 0.4) {
-                        boss.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED).setBaseValue(0.5);
-                    }
-                    if (tick % 5 == 0) spawnSoulFlameSpiral(boss.getLocation());
-                } else {
-                    if (tick % 5 == 0) spawnFlameSpiral(boss.getLocation());
-                }
-                
-                if (tick % 10 == 0) spawnLavaDrips(boss.getLocation());
-
-                List<Player> nearby = nearbyPlayers(boss.getLocation(), ENGAGE_RADIUS);
-                if (nearby.isEmpty()) return;
-
-                // ── Attack 1: Homing Hellfire (every 60 ticks / 3 s) ─────────
-                if (tick % 60 == 0) attackHomingHellfire(boss, nearby);
-
-                // ── Attack 2: Molten Barrage (every 200 ticks / 10 s) ────────
-                if (tick % 200 == 0) attackMoltenBarrage(boss, nearby);
-
-                // ── Attack 3: Void Pearl Volley (every 300 ticks / 15 s) ─────
-                if (tick % 300 == 0) attackVoidPearls(boss, nearby);
-
-                // ── Attack 4: Fire Blob Summon (every 400 ticks / 20 s) ──────
-                if (tick % 400 == 0) attackSummonBlobs(boss, nearby);
-
-                // ── Attack 5: Flame Minion Summon (every 600 ticks / 30 s) ───
-                if (tick % 600 == 0) attackSummonMinions(boss, nearby);
-
-                // ── Attack 6: Passive Scorch (every 80 ticks / 4 s) ──────────
-                if (tick % 80 == 0) attackScorch(boss, nearby);
 
                 if (tick >= 1200) tick = 0;
             }
@@ -310,8 +485,9 @@ public class CrimsonBossManager implements Listener {
                 if (targetY < -60 && vy < 0) vy =  Math.abs(vy); // don't go too deep
 
                 // Speed limit: 0.6 blocks/tick max
-                wanderVel = new Vector(vx, vy, vz);
-                if (wanderVel.length() > 0.6) wanderVel.normalize().multiply(0.6);
+                Vector localWanderVel = new Vector(vx, vy, vz);
+                if (localWanderVel.length() > 0.6) localWanderVel.normalize().multiply(0.6);
+                boss.setMetadata("de_wander_vel", new FixedMetadataValue(plugin, localWanderVel));
             }
         };
 
@@ -584,11 +760,9 @@ public class CrimsonBossManager implements Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onBossDamagePlayer(org.bukkit.event.entity.EntityDamageByEntityEvent event) {
-        if (bossUuid == null) return;
-        if (!event.getDamager().getUniqueId().equals(bossUuid)) return;
+        if (!activeBossUuids.contains(event.getDamager().getUniqueId())) return;
         
-        Entity e = plugin.getServer().getEntity(bossUuid);
-        if (e instanceof Blaze boss) {
+        if (event.getDamager() instanceof Blaze boss) {
             boolean isPhase2 = boss.getHealth() <= (boss.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue() * 0.30);
             if (isPhase2) {
                 // Double physical "clobber" damage in Phase 2
@@ -614,9 +788,9 @@ public class CrimsonBossManager implements Listener {
         player.sendMessage("");
         player.sendTitle("§5☠ BANISHED!", "§7Hurry back — the boss is regenerating!", 10, 70, 20);
 
-        if (isBossAlive()) {
-            Entity be = plugin.getServer().getEntity(bossUuid);
-            if (be instanceof LivingEntity le) {
+        for (UUID uuid : activeBossUuids) {
+            Entity be = plugin.getServer().getEntity(uuid);
+            if (be instanceof LivingEntity le && !le.isDead()) {
                 double newHp = Math.min(le.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue(),
                         le.getHealth() + PEARL_REGEN);
                 le.setHealth(newHp);
@@ -633,10 +807,39 @@ public class CrimsonBossManager implements Listener {
         }
     }
 
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPlayerDeathDuringBoss(org.bukkit.event.entity.PlayerDeathEvent event) {
+        Player player = event.getEntity();
+        player.setMetadata("died_during_boss", new FixedMetadataValue(plugin, true));
+    }
+
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBossDeath(EntityDeathEvent event) {
-        if (bossUuid == null) return;
-        if (!event.getEntity().getUniqueId().equals(bossUuid)) return;
+        if (!activeBossUuids.contains(event.getEntity().getUniqueId())) return;
+
+        UUID deadUuid = event.getEntity().getUniqueId();
+        activeBossUuids.remove(deadUuid);
+        
+        // Handle Amalgam splitting logic on death
+        if (event.getEntity().hasMetadata("de_is_dual_amalgam")) {
+            Location loc = event.getEntity().getLocation();
+            for (Player p : nearbyPlayers(loc, ENGAGE_RADIUS * 2)) {
+                p.sendMessage("");
+                p.sendMessage("§d☠ §5§lTHE DUAL BLAZE AMALGAM SPLITS! §d☠");
+                p.sendMessage("§7Two fierce Blaze Infernos rise from the molten remains!");
+                p.sendTitle("§5§lAMALGAM SPLIT!", "§dTwo Blaze Infernos awaken!", 10, 80, 20);
+                p.playSound(p.getLocation(), Sound.ENTITY_SPIDER_DEATH, 1.0f, 0.5f); // Play sound
+            }
+            // Spawn 2 split Infernos (each with 10k HP)
+            spawnBoss(loc, true);
+            spawnBoss(loc.clone().add(1, 0, 1), true);
+            return; // Exit early to prevent victory announcement and respawn timer
+        }
+
+        if (isBossAlive()) {
+            // There is still another split boss alive — do not announce victory yet
+            return;
+        }
 
         bossUuid = null;
         cancelTask();
@@ -652,6 +855,23 @@ public class CrimsonBossManager implements Listener {
             p.sendMessage("§8§oThe Blazefiend will return in §715 minutes§8§o...");
             p.sendMessage("");
             p.sendTitle("§6⚔ BOSS DEFEATED!", "§7The Blazefiend falls to darkness!", 10, 80, 20);
+        }
+
+        // Award Boss Cape to nearby players who participated and did NOT die!
+        for (Player p : nearbyPlayers(loc, 100.0)) {
+            if (!p.hasMetadata("died_during_boss")) {
+                ItemStack bossCape = itemFactory.buildBossCape();
+                p.getInventory().addItem(bossCape);
+                p.sendMessage("");
+                p.sendMessage("§5✦ §6§l✦ BOSS CAPE AWARDED! ✦ §5✦");
+                p.sendMessage("§7You defeated the legendary world boss without dying!");
+                p.sendMessage("");
+                p.sendTitle("§5§l✦ BOSS CAPE! ✦", "§7Awarded for flawless victory!", 10, 80, 20);
+                p.playSound(p.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 1.0f, 1.0f);
+            } else {
+                p.sendMessage("§c✗ §7You died during the fight, so you did not qualify for the flawless Boss Cape reward!");
+            }
+            p.removeMetadata("died_during_boss", plugin); // clear tag
         }
 
         // ── 15% chance: drop the GunZ Sword ──────────────────────────────────
@@ -681,7 +901,10 @@ public class CrimsonBossManager implements Listener {
         respawnTask = plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
             respawnTask = null;
             // Find a random deepslate cave-level location near the original pit
-            World world = plugin.getServer().getWorlds().get(0);
+            World world = plugin.getServer().getWorld("ancient_realm");
+            if (world == null) {
+                world = plugin.getServer().getWorlds().get(0);
+            }
             double rx = SPAWN_X + (random.nextDouble() - 0.5) * 60;
             double rz = SPAWN_Z + (random.nextDouble() - 0.5) * 60;
             double ry = -20 - random.nextDouble() * 20; // between -20 and -40
@@ -698,7 +921,7 @@ public class CrimsonBossManager implements Listener {
             // Server-wide hint (so players know to search for it)
             for (Player p : world.getPlayers()) {
                 p.sendMessage("§c🔥 §4The Infernal Blazefiend has re-awoken somewhere in the depths!");
-                p.sendMessage("§7§oFind it by striking §6Ancient Debris §7§oor §6searching the caves§7§o...");
+                p.sendMessage("§7§oFind it by striking §6Spawner Block §7§oor §6searching the caves§7§o...");
             }
         }, RESPAWN_TICKS);
     }
@@ -706,9 +929,11 @@ public class CrimsonBossManager implements Listener {
     // ══ Internal helpers ════════════════════════════════════════════════════════
 
     private void dismissExisting() {
-        if (bossUuid == null) return;
-        Entity e = plugin.getServer().getEntity(bossUuid);
-        if (e != null && !e.isDead()) e.remove();
+        for (UUID uuid : activeBossUuids) {
+            Entity e = plugin.getServer().getEntity(uuid);
+            if (e != null && !e.isDead()) e.remove();
+        }
+        activeBossUuids.clear();
         cancelTask();
         bossUuid = null;
         bossEnderPearls.clear();
@@ -720,6 +945,154 @@ public class CrimsonBossManager implements Listener {
 
     private void cancelRespawn() {
         if (respawnTask != null) { respawnTask.cancel(); respawnTask = null; }
+    }
+
+    public void rebuildArena(Location spawnerLoc, String schematicName) {
+        Player player = null;
+        for (Player p : spawnerLoc.getWorld().getPlayers()) {
+            if (p.getLocation().distance(spawnerLoc) < 150) {
+                player = p;
+                break;
+            }
+        }
+        if (player == null && !Bukkit.getOnlinePlayers().isEmpty()) {
+            player = Bukkit.getOnlinePlayers().iterator().next();
+        }
+        if (player != null) {
+            player.performCommand("schem load " + schematicName);
+            player.performCommand("paste -o");
+        }
+    }
+
+    public Phantom spawnTempestOverlord(Location loc) {
+        if (loc == null) {
+            World w = plugin.getServer().getWorld("ancient_realm");
+            if (w == null) {
+                w = plugin.getServer().getWorlds().get(0);
+            }
+            loc = new org.bukkit.Location(w, 114.924, -38.0, -47.278);
+        }
+
+        // Rebuild Tempest Sanctum before spawning to repair any block breaks
+        rebuildArena(loc, "tempest_sanctum");
+
+        // Spawn a colossal Phantom as the Tempest Overlord (looks amazing and wind/sky themed!)
+        Phantom phantom = (Phantom) loc.getWorld().spawnEntity(loc, EntityType.PHANTOM);
+        phantom.setCustomName("§5⚡ §l§dThe Tempest Overlord");
+        phantom.setCustomNameVisible(true);
+        phantom.setSize(18); // Giant sky dragon size
+        phantom.setRemoveWhenFarAway(false);
+
+        var hp = phantom.getAttribute(org.bukkit.attribute.Attribute.GENERIC_MAX_HEALTH);
+        if (hp != null) hp.setBaseValue(400.0);
+        phantom.setHealth(400.0);
+
+        // Register with effect system (Shriek, Leached, etc.)
+        bossEffectListener.registerBoss(phantom);
+        bossEffectListener.spawnShriek(phantom);
+
+        // Announce to all players in range
+        for (Player p : loc.getWorld().getPlayers()) {
+            if (p.getLocation().distance(loc) > 120) continue;
+            p.sendMessage("");
+            p.sendMessage("§5⚡ §b§l⛈ THE TEMPEST OVERLORD HAS AWAKENED! ⛈ §5⚡");
+            p.sendMessage("§7The Tempest Sanctum §5crackles§7 with deadly storm energy!");
+            p.sendMessage("§6⚠ §eBring §7Air §eand §7Water §emagic — lightning is everywhere!");
+            p.sendMessage("§5⚠ §dDestroy its §5Shriek §5⚡ §dwith an §bAir Staff §dto expose its weakness!");
+            p.sendMessage("");
+            p.sendTitle("§5§l⚡ BOSS AWAKENS!", "§7§oThe Tempest Overlord roars...", 10, 70, 20);
+            p.playSound(p.getLocation(), Sound.ENTITY_WITHER_SPAWN, 1.0f, 1.0f);
+        }
+
+        // Dramatic lightning entrance ring
+        final Location finalLoc = loc;
+        for (int i = 0; i < 10; i++) {
+            final int fi = i;
+            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                double angle = fi * Math.PI * 2.0 / 10.0;
+                finalLoc.getWorld().strikeLightningEffect(finalLoc.clone().add(
+                        Math.cos(angle) * 7, 0, Math.sin(angle) * 7));
+            }, fi * 3L);
+        }
+
+        // Extra lightning bolts 1 second later for drama
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            for (int i = 0; i < 4; i++) {
+                final int fi = i;
+                plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                    double dx = (random.nextDouble() - 0.5) * 12;
+                    double dz = (random.nextDouble() - 0.5) * 12;
+                    finalLoc.getWorld().strikeLightningEffect(finalLoc.clone().add(dx, 0, dz));
+                }, fi * 5L);
+            }
+        }, 20L);
+
+        return phantom;
+    }
+
+    private boolean isTempestSpawnerBlock(Block block) {
+        if (block == null) return false;
+        if (block.getType() != Material.CRYING_OBSIDIAN) return false;
+        if (block.hasMetadata("de_tempest_spawner")) return true;
+        if (block.getWorld().getName().equals("ancient_realm")) {
+            if (block.getX() == 115 && block.getY() == -38 && block.getZ() == -47) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    public void onTempestSpawnerPlace(BlockPlaceEvent event) {
+        ItemStack item = event.getItemInHand();
+        if (item.getType() == Material.CRYING_OBSIDIAN && item.hasItemMeta() && item.getItemMeta().getPersistentDataContainer().has(new NamespacedKey(plugin, "de_tempest_spawner"), org.bukkit.persistence.PersistentDataType.BYTE)) {
+            Block block = event.getBlockPlaced();
+            block.setMetadata("de_tempest_spawner", new FixedMetadataValue(plugin, true));
+            event.getPlayer().sendMessage("§a✓ §7Placed Tempest Spawner block!");
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onTempestSpawnerBreak(BlockBreakEvent event) {
+        Block block = event.getBlock();
+        if (isTempestSpawnerBlock(block)) {
+            Player player = event.getPlayer();
+            if (!player.hasPermission("difficultyengine.cape.admin") && !player.isOp()) {
+                event.setCancelled(true);
+                player.sendMessage("§c✗ §7This spawner block is protected like bedrock! Only admins can remove it.");
+            } else {
+                block.removeMetadata("de_tempest_spawner", plugin);
+                player.sendMessage("§a✓ §7Removed protected spawner block.");
+            }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onTempestSpawnerStrike(BlockDamageEvent event) {
+        Block block = event.getBlock();
+        if (!isTempestSpawnerBlock(block)) return;
+
+        Player player = event.getPlayer();
+        boolean isTempestAlive = false;
+        for (Entity ent : block.getWorld().getEntitiesByClass(Phantom.class)) {
+            if ("§5⚡ §l§dThe Tempest Overlord".equals(ent.getCustomName()) && !ent.isDead()) {
+                isTempestAlive = true;
+                break;
+            }
+        }
+
+        if (isTempestAlive) {
+            player.sendActionBar("§c⚡ §7The Tempest Overlord already roams these skies...");
+            return;
+        }
+
+        if (!block.getWorld().getName().equals("ancient_realm")) {
+            player.sendMessage("§c✗ §7The Tempest Spawner only works inside the §5Ancient Realm§7!");
+            return;
+        }
+
+        player.sendMessage("§c☠ §4Your strike on the Spawner has awakened the Tempest Overlord!");
+        spawnTempestOverlord(null);
     }
 
     private void announceSpawn(Location loc) {
@@ -771,6 +1144,23 @@ public class CrimsonBossManager implements Listener {
                             p.playSound(p.getLocation(), Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 2.0f, 0.8f);
                         }
                         world.strikeLightningEffect(skyFlash);
+
+                        // 5. 8-Direction Firestorm
+                        world.playSound(boss.getLocation(), Sound.ENTITY_GENERIC_EXPLODE, 1.5f, 1.0f);
+                        world.spawnParticle(Particle.EXPLOSION_EMITTER, boss.getLocation(), 5, 0.5, 0.5, 0.5, 0.1);
+                        double[][] directions = {
+                            {1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1},
+                            {1, 0, 1}, {-1, 0, -1}, {1, 0, -1}, {-1, 0, 1}
+                        };
+                        for (double[] d : directions) {
+                            Vector dirVec = new Vector(d[0], d[1], d[2]).normalize();
+                            SmallFireball sfb = (SmallFireball) world.spawnEntity(
+                                boss.getLocation().add(0, 1.5, 0).add(dirVec.clone().multiply(1.5)), 
+                                EntityType.SMALL_FIREBALL
+                            );
+                            sfb.setShooter(boss);
+                            sfb.setDirection(dirVec.multiply(1.5));
+                        }
                     }
                     cancel();
                     return;
@@ -782,12 +1172,30 @@ public class CrimsonBossManager implements Listener {
                 Location tpLoc = new Location(world, rx, SPAWN_Y, rz);
                 
                 world.playSound(boss.getLocation(), Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 1.0f);
-                world.spawnParticle(Particle.PORTAL, boss.getLocation(), 50, 1.0, 1.0, 1.0, 0.1);
+                
+                // Spawn variant-specific particles on teleporting
+                if (boss.hasMetadata("de_is_vortex")) {
+                    world.spawnParticle(Particle.DRAGON_BREATH, boss.getLocation(), 50, 1.0, 1.0, 1.0, 0.1);
+                } else if (boss.hasMetadata("de_is_inferno") || boss.hasMetadata("de_is_split_inferno")) {
+                    world.spawnParticle(Particle.LAVA, boss.getLocation(), 50, 1.0, 1.0, 1.0, 0.1);
+                } else if (boss.hasMetadata("de_is_dual_amalgam")) {
+                    world.spawnParticle(Particle.SOUL, boss.getLocation(), 50, 1.0, 1.0, 1.0, 0.1);
+                } else {
+                    world.spawnParticle(Particle.PORTAL, boss.getLocation(), 50, 1.0, 1.0, 1.0, 0.1);
+                }
                 
                 boss.teleport(tpLoc);
                 
                 world.playSound(boss.getLocation(), Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 1.0f);
-                world.spawnParticle(Particle.PORTAL, boss.getLocation(), 50, 1.0, 1.0, 1.0, 0.1);
+                if (boss.hasMetadata("de_is_vortex")) {
+                    world.spawnParticle(Particle.DRAGON_BREATH, boss.getLocation(), 50, 1.0, 1.0, 1.0, 0.1);
+                } else if (boss.hasMetadata("de_is_inferno") || boss.hasMetadata("de_is_split_inferno")) {
+                    world.spawnParticle(Particle.LAVA, boss.getLocation(), 50, 1.0, 1.0, 1.0, 0.1);
+                } else if (boss.hasMetadata("de_is_dual_amalgam")) {
+                    world.spawnParticle(Particle.SOUL, boss.getLocation(), 50, 1.0, 1.0, 1.0, 0.1);
+                } else {
+                    world.spawnParticle(Particle.PORTAL, boss.getLocation(), 50, 1.0, 1.0, 1.0, 0.1);
+                }
                 
                 teleports++;
             }
