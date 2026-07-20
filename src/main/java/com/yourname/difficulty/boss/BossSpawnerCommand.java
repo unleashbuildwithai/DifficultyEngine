@@ -74,7 +74,7 @@ public class BossSpawnerCommand implements CommandExecutor, TabCompleter {
                 wither.setCustomNameVisible(true);
                 wither.setRemoveWhenFarAway(false);
 
-                var hp = wither.getAttribute(org.bukkit.attribute.Attribute.MAX_HEALTH);
+                var hp = wither.getAttribute(org.bukkit.attribute.Attribute.GENERIC_MAX_HEALTH);
                 if (hp != null) hp.setBaseValue(TEMPEST_MAX_HP);
                 wither.setHealth(TEMPEST_MAX_HP);
 

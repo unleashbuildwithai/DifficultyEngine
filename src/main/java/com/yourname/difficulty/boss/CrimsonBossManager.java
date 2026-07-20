@@ -149,7 +149,7 @@ public class CrimsonBossManager implements Listener {
         boss.setFireTicks(Integer.MAX_VALUE);
 
         // Boost HP
-        var hpAttr = boss.getAttribute(Attribute.MAX_HEALTH);
+        var hpAttr = boss.getAttribute(Attribute.GENERIC_MAX_HEALTH);
         if (hpAttr != null) hpAttr.setBaseValue(hp);
         boss.setHealth(hp);
 
@@ -472,7 +472,7 @@ public class CrimsonBossManager implements Listener {
             Location origin = boss.getLocation().add(0, 1.8, 0);
             Location dest   = target.getLocation().add(0, 1.2, 0);
             Vector dir = vecTo(origin, dest).normalize().add(new Vector(0, 0.25, 0));
-            ThrownEnderpearl pearl = (ThrownEnderpearl) boss.getWorld()
+            EnderPearl pearl = (EnderPearl) boss.getWorld()
                     .spawnEntity(origin, EntityType.ENDER_PEARL);
             pearl.setShooter(boss);
             pearl.setVelocity(dir.multiply(1.6));
@@ -506,7 +506,7 @@ public class CrimsonBossManager implements Listener {
             minion.setCustomNameVisible(true);
             minion.setFireTicks(Integer.MAX_VALUE);
             minion.setRemoveWhenFarAway(true);
-            var hpAttr = minion.getAttribute(Attribute.MAX_HEALTH);
+            var hpAttr = minion.getAttribute(Attribute.GENERIC_MAX_HEALTH);
             if (hpAttr != null) hpAttr.setBaseValue(40.0);
             minion.setHealth(40.0);
             minion.addPotionEffect(new PotionEffect(
@@ -580,7 +580,7 @@ public class CrimsonBossManager implements Listener {
         if (isBossAlive()) {
             Entity be = plugin.getServer().getEntity(bossUuid);
             if (be instanceof LivingEntity le) {
-                double newHp = Math.min(le.getAttribute(Attribute.MAX_HEALTH).getValue(),
+                double newHp = Math.min(le.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue(),
                         le.getHealth() + PEARL_REGEN);
                 le.setHealth(newHp);
                 le.getWorld().spawnParticle(Particle.HEART,
