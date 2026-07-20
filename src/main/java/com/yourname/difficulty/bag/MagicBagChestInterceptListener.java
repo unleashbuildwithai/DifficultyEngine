@@ -1,4 +1,4 @@
- package com.yourname.difficulty.bag;
+package com.yourname.difficulty.bag;
 
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
