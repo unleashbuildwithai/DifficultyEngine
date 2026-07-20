@@ -6,6 +6,24 @@ A comprehensive skill & combat enhancement plugin for Paper/Spigot servers.
 
 ## 🆕 Latest Changes (July 2026)
 
+### ⚡ Lightning Catching Block
+- Place a Catching Block (Lodestone) and right-click it to open its GUI.
+- Store Empty Magic Bottles in the block.
+- When a lightning strikes a nearby Lightning Rod during rain, an empty bottle converts to a **Charged Magic Bottle** (4 casts).
+- Drink a Charged Magic Bottle to store **Lightning Charges** (displayed over food bar), or use it directly to cast lightning and retain 3 charges!
+
+### 🔥 Crimson Boss Mechanics
+- The Infernal Blazefiend now spawns via a dramatic sequence: Warden emerge sound, 5 random enderman-style teleports, a custom 6-bolt lightning cluster, and a global sky flash in a 200-block radius.
+- **Phase 2:** At ≤ 30% HP, changes to `SOUL_FIRE_FLAME` particles, moves faster, and its physical damage is doubled.
+
+### 🌌 Ancient Debris Portal
+- Striking a standard 4x5 nether portal frame made out of **Ancient Debris** will ignite it with special water blocks.
+- Entering the portal triggers a glitch/nausea effect and teleport players to the Ancient Realm safely to `Y=77.0`.
+
+### 🎢 Turbo Minecart Slope Booster
+- Turbo Minecarts now pre-read the track up to 5 blocks ahead.
+- If a slope or vertical transition is detected, the cart injects a **2.5x velocity multiplier** to override vanilla friction and prevent the cart from losing momentum and stalling when going up or down!
+
 ### 🎇 Staff Particle Fix
 - Elemental staff glow particles now render at **back-right of hand** using horizontal-only yaw math
 - Looking straight down no longer brings particles into your first-person view

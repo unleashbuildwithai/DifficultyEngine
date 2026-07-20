@@ -49,13 +49,21 @@ public class FavoritesGUI {
     public void open(Player player) {
         Inventory inv = Bukkit.createInventory(null, 27, TITLE);
 
-        Set<String> favs = favManager.getFavorites(player.getUniqueId());
+        Set<String> favs         = favManager.getFavorites(player.getUniqueId());
+        Set<Integer> unlocked    = spellBookManager.getUnlockedPages(player.getUniqueId());
 
-        // ── Row 1: 8 chain items ───────────────────────────────────────────────
+        // ── Row 1: 8 chain items — gated behind their Arcane Tome page ────────
         for (int i = 0; i < ComboFavoritesManager.ALL_TAGS.size(); i++) {
-            String tag  = ComboFavoritesManager.ALL_TAGS.get(i);
-            boolean starred = favs.contains(tag);
-            inv.setItem(i, buildChainItem(tag, starred));
+            String  tag          = ComboFavoritesManager.ALL_TAGS.get(i);
+            Integer requiredPage = ComboFavoritesManager.CHAIN_REQUIRED_PAGE.get(tag);
+            boolean pageUnlocked = (requiredPage == null) || unlocked.contains(requiredPage);
+
+            if (pageUnlocked) {
+                boolean starred = favs.contains(tag);
+                inv.setItem(i, buildChainItem(tag, starred));
+            } else {
+                inv.setItem(i, buildLockedChainItem(tag, requiredPage));
+            }
         }
 
         // Slot 8 — Info item
@@ -132,6 +140,40 @@ public class FavoritesGUI {
             item.setItemMeta(meta);
         }
         return item;
+    }
+
+    /**
+     * Builds a locked placeholder item for a chain whose Arcane Tome page
+     * has not yet been unlocked by the player.
+     */
+    private ItemStack buildLockedChainItem(String tag, int requiredPageIndex) {
+        ItemStack item = new ItemStack(Material.GRAY_DYE);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§8🔒 §7???");
+            meta.setLore(List.of(
+                "§8" + "─".repeat(24),
+                "§7This combo chain is hidden.",
+                "§8" + "─".repeat(24),
+                "§7Unlock §dArcane Tome §7page §d" + (requiredPageIndex + 1),
+                "§7to reveal this chain hint.",
+                "§8" + "─".repeat(24),
+                "§8Find §dSpell Pages §8(4% mob drop)",
+                "§8and right-click to absorb them!"
+            ));
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    /**
+     * Returns true if the item in the given slot is a locked chain placeholder.
+     * Used by FavoritesGUIListener to skip toggle on locked slots.
+     */
+    public static boolean isLockedSlot(ItemStack item) {
+        if (item == null || item.getType() != Material.GRAY_DYE) return false;
+        if (!item.hasItemMeta() || !item.getItemMeta().hasDisplayName()) return false;
+        return item.getItemMeta().getDisplayName().startsWith("§8🔒");
     }
 
     private ItemStack buildInfoItem() {

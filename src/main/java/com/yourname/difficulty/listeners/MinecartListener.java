@@ -147,20 +147,73 @@ public class MinecartListener implements Listener {
             return;
         }
 
-        // ── Momentum injection ("imaginary cutout") ────────────────────────────
-        // If the cart has slowed due to block-edge friction, re-apply full speed
-        // in the last known direction so it pushes through without stopping.
-        if (horizSpeedSq < MIN_TURBO_SPEED_SQ) {
-            Vector dir = lastDirection.get(uid);
-            if (dir != null) {
-                cart.setVelocity(new Vector(
-                    dir.getX() * TURBO_MAX_SPEED,
-                    vel.getY(),
-                    dir.getZ() * TURBO_MAX_SPEED
-                ));
-            }
+    // ── Track Scanner & Velocity Booster ──────────────────────────────────
+    boolean slopeDetected = false;
+    Vector dir = lastDirection.get(uid);
+    if (dir != null && onRail) {
+        slopeDetected = hasSlopeAhead(current, dir);
+    }
+    
+    // Dynamic friction override max speed
+    if (slopeDetected) {
+        cart.setMaxSpeed(TURBO_MAX_SPEED * 2.5);
+    } else {
+        cart.setMaxSpeed(TURBO_MAX_SPEED);
+    }
+
+    // ── Momentum injection ("imaginary cutout") ────────────────────────────
+    // If the cart has slowed due to block-edge friction or is on a slope, re-apply speed
+    if (horizSpeedSq < MIN_TURBO_SPEED_SQ || slopeDetected) {
+        if (dir != null) {
+            double speedMult = slopeDetected ? 2.5 : 1.0;
+            
+            // Anti-stall override vanilla friction
+            cart.setVelocity(new Vector(
+                dir.getX() * TURBO_MAX_SPEED * speedMult,
+                slopeDetected ? vel.getY() : vel.getY(), // Let vanilla handle Y naturally, but horizontal boost forces it up/down
+                dir.getZ() * TURBO_MAX_SPEED * speedMult
+            ));
         }
     }
+}
+
+private boolean hasSlopeAhead(Block start, Vector dir) {
+    if (dir == null || (Math.abs(dir.getX()) < 0.1 && Math.abs(dir.getZ()) < 0.1)) return false;
+    
+    // Check if current block itself is a slope
+    if (start.getBlockData() instanceof org.bukkit.block.data.Rail railData) {
+        org.bukkit.block.data.Rail.Shape shape = railData.getShape();
+        if (shape == org.bukkit.block.data.Rail.Shape.ASCENDING_NORTH ||
+            shape == org.bukkit.block.data.Rail.Shape.ASCENDING_SOUTH ||
+            shape == org.bukkit.block.data.Rail.Shape.ASCENDING_EAST ||
+            shape == org.bukkit.block.data.Rail.Shape.ASCENDING_WEST) {
+            return true;
+        }
+    }
+    
+    int dx = Math.abs(dir.getX()) > Math.abs(dir.getZ()) ? (dir.getX() > 0 ? 1 : -1) : 0;
+    int dz = Math.abs(dir.getZ()) > Math.abs(dir.getX()) ? (dir.getZ() > 0 ? 1 : -1) : 0;
+    
+    if (dx == 0 && dz == 0) return false;
+    
+    Block current = start;
+    // Track pre-read: scan 5 blocks ahead
+    for (int i = 0; i < 5; i++) {
+        Block nextFlat = current.getRelative(dx, 0, dz);
+        Block nextUp = current.getRelative(dx, 1, dz);
+        Block nextDown = current.getRelative(dx, -1, dz);
+        
+        if (Tag.RAILS.isTagged(nextUp.getType()) || Tag.RAILS.isTagged(nextDown.getType())) {
+            return true; 
+        } else if (Tag.RAILS.isTagged(nextFlat.getType())) {
+            current = nextFlat; 
+        } else {
+            break; 
+        }
+    }
+    
+    return false;
+}
 
     // ── Entity collision bypass ───────────────────────────────────────────────
 

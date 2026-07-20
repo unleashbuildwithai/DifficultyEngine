@@ -113,6 +113,7 @@ public class Main extends JavaPlugin {
     private AdminLightCommand       adminLightCommand;
     private LightningAdminCommand   lightningAdminCommand;
     private MagicBottleManager      magicBottleManager;
+    private com.yourname.difficulty.magic.LightningChargeManager lightningChargeManager;
     private CapeVisualTask          capeVisualTask;
     private CapeDataManager         capeDataManager;
     private SandstormManager        sandstormManager;
@@ -231,6 +232,9 @@ public class Main extends JavaPlugin {
         this.magicBottleManager = new MagicBottleManager();
         getServer().getPluginManager().registerEvents(
             new CatchingBlockListener(itemFactory, magicBottleManager), this);
+            
+        this.lightningChargeManager = new com.yourname.difficulty.magic.LightningChargeManager(this, itemFactory);
+        getServer().getPluginManager().registerEvents(lightningChargeManager, this);
 
         this.sandstormManager = new SandstormManager(this);
         magicStaffListener.setSandstormManager(sandstormManager);

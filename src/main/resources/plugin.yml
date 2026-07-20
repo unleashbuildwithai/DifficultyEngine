@@ -138,6 +138,78 @@ commands:
     permission: difficultyengine.use
     permission-message: You do not have permission to use this command.
 
+  spawnboss:
+    description: Spawn a dungeon boss at its arena (tempest or crimson).
+    usage: /spawnboss <tempest|crimson>
+    aliases: [bossspawn]
+    permission: difficultyengine.cape.admin
+    permission-message: §cThis command is for admins only.
+
+  spawnmob:
+    description: Spawn a custom monster from monsters.yml at your location.
+    usage: /spawnmob <monster_id>
+    aliases: [custommob, spawnmonster]
+    permission: difficultyengine.cape.admin
+    permission-message: §cThis command is for admins only.
+
+  inventory:
+    description: Open your Gold Vault to view your balance and transaction history.
+    usage: /inventory
+    aliases: [vault, goldvault]
+    permission: difficultyengine.use
+    permission-message: You do not have permission to use this command.
+
+  vipshop:
+    description: Open or spawn the VIP Shop (admin only for spawn).
+    usage: /vipshop [spawn]
+    aliases: [vip]
+    permission: difficultyengine.use
+    permission-message: You do not have permission to use this command.
+
+  magicbag:
+    description: Open your Magic Bag GUI (or right-click the bag item).
+    usage: /magicbag
+    aliases: [bag, mbag]
+    permission: difficultyengine.use
+    permission-message: You do not have permission to use this command.
+
+  givebag:
+    description: Give a Magic Bag to yourself or another player (admin).
+    usage: /givebag [player]
+    permission: difficultyengine.cape.admin
+    permission-message: §cThis command is for admins only.
+
+  commands:
+    description: Show the welcome message with all available player commands.
+    usage: /commands
+    aliases: [help, cmds]
+    permission: difficultyengine.use
+    permission-message: You do not have permission to use this command.
+
+  hardcore:
+    description: Toggle Nightmare Hardcore mode (permanent death on Nightmare).
+    usage: /hardcore
+    permission: difficultyengine.use
+    permission-message: You do not have permission to use this command.
+
+  questnpc:
+    description: Manage quest NPC spawners (admin).
+    usage: /questnpc <spawn|remove|list>
+    permission: difficultyengine.cape.admin
+    permission-message: §cThis command is for admins only.
+
+  skilllvl:
+    description: Set a skill level for a player (admin).
+    usage: /skilllvl <player> <skill> <level>
+    permission: difficultyengine.cape.admin
+    permission-message: §cThis command is for admins only.
+
+  mycape:
+    description: Open the Cape Wardrobe GUI.
+    usage: /mycape
+    permission: difficultyengine.use
+    permission-message: You do not have permission to use this command.
+
 permissions:
   difficultyengine.use:
     description: Allows players to set difficulty, use /hpbar, /sit, /registry, /skills, and /mystats.

@@ -161,7 +161,7 @@ public class CrimsonBossManager implements Listener {
 
         startBossAI();
         if (!legendary) announceSpawn(loc); // legendary already announced globally above
-        thunderEntrance(loc, loc.getWorld());
+        customSpawnSequence(boss);
 
         return boss;
     }
@@ -253,8 +253,18 @@ public class CrimsonBossManager implements Listener {
                 // ── Block-breaking in path (every 5 ticks) ───────────────────
                 if (tick % 5 == 0) breakBlocksInPath(boss);
 
-                // ── Flame particles (every 5 ticks) ──────────────────────────
-                if (tick % 5 == 0) spawnFlameSpiral(boss.getLocation());
+                // ── Phase Mechanics ──────────────────────────────────────────
+                boolean isPhase2 = boss.getHealth() <= (boss.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue() * 0.30);
+                
+                if (isPhase2) {
+                    if (boss.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED) != null && boss.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED).getBaseValue() < 0.4) {
+                        boss.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED).setBaseValue(0.5);
+                    }
+                    if (tick % 5 == 0) spawnSoulFlameSpiral(boss.getLocation());
+                } else {
+                    if (tick % 5 == 0) spawnFlameSpiral(boss.getLocation());
+                }
+                
                 if (tick % 10 == 0) spawnLavaDrips(boss.getLocation());
 
                 List<Player> nearby = nearbyPlayers(boss.getLocation(), ENGAGE_RADIUS);
@@ -550,6 +560,18 @@ public class CrimsonBossManager implements Listener {
                     center.clone().add(x, y, z), 2, 0.05, 0.05, 0.05, 0.005);
         }
     }
+    
+    private void spawnSoulFlameSpiral(Location center) {
+        double time = (System.currentTimeMillis() % 10_000) / 500.0;
+        for (int i = 0; i < 6; i++) {
+            double angle = time + (i * Math.PI * 2.0 / 6.0);
+            double x = Math.cos(angle) * 1.8;
+            double z = Math.sin(angle) * 1.8;
+            double y = Math.sin(time * 2 + i) * 0.4 + 1.2;
+            center.getWorld().spawnParticle(Particle.SOUL_FIRE_FLAME,
+                    center.clone().add(x, y, z), 2, 0.05, 0.05, 0.05, 0.005);
+        }
+    }
 
     private void spawnLavaDrips(Location center) {
         center.getWorld().spawnParticle(Particle.DRIPPING_LAVA,
@@ -559,6 +581,21 @@ public class CrimsonBossManager implements Listener {
     }
 
     // ══ Event Handlers ═════════════════════════════════════════════════════════
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onBossDamagePlayer(org.bukkit.event.entity.EntityDamageByEntityEvent event) {
+        if (bossUuid == null) return;
+        if (!event.getDamager().getUniqueId().equals(bossUuid)) return;
+        
+        Entity e = plugin.getServer().getEntity(bossUuid);
+        if (e instanceof Blaze boss) {
+            boolean isPhase2 = boss.getHealth() <= (boss.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue() * 0.30);
+            if (isPhase2) {
+                // Double physical "clobber" damage in Phase 2
+                event.setDamage(event.getDamage() * 2.0);
+            }
+        }
+    }
 
     @EventHandler(priority = EventPriority.HIGH)
     public void onProjectileHit(ProjectileHitEvent event) {
@@ -698,15 +735,78 @@ public class CrimsonBossManager implements Listener {
         }
     }
 
-    private void thunderEntrance(Location loc, World world) {
-        for (int i = 0; i < 8; i++) {
-            final int fi = i;
-            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-                double angle = fi * Math.PI * 2.0 / 8.0;
-                world.strikeLightningEffect(loc.clone().add(
-                        Math.cos(angle) * 5, 0, Math.sin(angle) * 5));
-            }, fi * 4L);
+    private void customSpawnSequence(Blaze boss) {
+        Location startLoc = boss.getLocation();
+        World world = boss.getWorld();
+        
+        // 1. Warden emerge animation
+        world.playSound(startLoc, Sound.ENTITY_WARDEN_EMERGE, 1.5f, 1.0f);
+        world.spawnParticle(Particle.BLOCK, startLoc, 100, 1.0, 1.0, 1.0, 0, Material.CRIMSON_NYLIUM.createBlockData());
+        
+        boss.setAI(false);
+        boss.setInvulnerable(true);
+        
+        // 2. 5 Teleports with 10 tick delay
+        new BukkitRunnable() {
+            int teleports = 0;
+            
+            @Override
+            public void run() {
+                if (!isBossAlive() || teleports >= 5) {
+                    if (isBossAlive()) {
+                        boss.setAI(true);
+                        boss.setInvulnerable(false);
+                        
+                        // 3. Custom lightning cluster
+                        for (int i = 0; i < 6; i++) {
+                            double angle = i * Math.PI * 2.0 / 6.0;
+                            Location lLoc = boss.getLocation().clone().add(Math.cos(angle) * 4, 0, Math.sin(angle) * 4);
+                            spawnCustomLightningVisual(lLoc);
+                        }
+                        
+                        // 4. Sky flash globally (200 block radius)
+                        Location skyFlash = boss.getLocation().clone();
+                        skyFlash.setY(319);
+                        for (Player p : nearbyPlayers(boss.getLocation(), 200.0)) {
+                            p.playSound(p.getLocation(), Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 2.0f, 0.8f);
+                        }
+                        world.strikeLightningEffect(skyFlash);
+                    }
+                    cancel();
+                    return;
+                }
+                
+                // Teleport randomly near spawn
+                double rx = SPAWN_X + (random.nextDouble() - 0.5) * 15;
+                double rz = SPAWN_Z + (random.nextDouble() - 0.5) * 15;
+                Location tpLoc = new Location(world, rx, SPAWN_Y, rz);
+                
+                world.playSound(boss.getLocation(), Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 1.0f);
+                world.spawnParticle(Particle.PORTAL, boss.getLocation(), 50, 1.0, 1.0, 1.0, 0.1);
+                
+                boss.teleport(tpLoc);
+                
+                world.playSound(boss.getLocation(), Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 1.0f);
+                world.spawnParticle(Particle.PORTAL, boss.getLocation(), 50, 1.0, 1.0, 1.0, 0.1);
+                
+                teleports++;
+            }
+        }.runTaskTimer(plugin, 20L, 10L);
+    }
+    
+    private void spawnCustomLightningVisual(Location loc) {
+        Location start = loc.clone().add(0, 15, 0);
+        double distance = start.distance(loc);
+        Vector dir = loc.toVector().subtract(start.toVector()).normalize();
+        
+        for (double d = 0; d < distance; d += 0.5) {
+            Location pt = start.clone().add(dir.clone().multiply(d));
+            loc.getWorld().spawnParticle(Particle.DUST, pt, 5, 0.1, 0.1, 0.1, 0, new Particle.DustOptions(Color.WHITE, 1.5f));
+            loc.getWorld().spawnParticle(Particle.DUST, pt, 10, 0.3, 0.3, 0.3, 0, new Particle.DustOptions(Color.BLUE, 1.0f));
+            loc.getWorld().spawnParticle(Particle.DUST, pt, 3, 0.4, 0.4, 0.4, 0, new Particle.DustOptions(Color.BLACK, 0.5f));
         }
+        loc.getWorld().spawnParticle(Particle.FLAME, loc, 15, 1.0, 0.5, 1.0, 0.05);
+        loc.getWorld().strikeLightningEffect(loc); 
     }
 
     private List<Player> nearbyPlayers(Location loc, double radius) {

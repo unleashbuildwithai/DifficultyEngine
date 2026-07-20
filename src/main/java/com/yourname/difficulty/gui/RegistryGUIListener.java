@@ -133,18 +133,10 @@ public class RegistryGUIListener implements Listener {
         player.getInventory().addItem(copy);
         player.sendMessage("§8[§6DifficultyEngine§8] §7Received: §f" + formatName(clicked));
 
-        // ── Auto-open WRITTEN_BOOK items so players can read them immediately ─
-        // Exception: Ancient Kill Tome — just deliver to inventory for admin use;
-        //            do NOT close the registry or auto-open the book.
-        if (clicked.getType() == Material.WRITTEN_BOOK && !itemFactory.isAncientKillTome(clicked)) {
-            // Schedule close first (1 tick), then open book (2 ticks) to avoid
-            // inventory-state conflicts that silently prevent openBook from working.
-            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-                if (!player.isOnline()) return;
-                player.closeInventory();
-                plugin.getServer().getScheduler().runTaskLater(plugin,
-                    () -> { if (player.isOnline()) player.openBook(copy); }, 2L);
-            }, 1L);
+        // Books are given to inventory — player right-clicks them to read at their leisure.
+        // (Auto-opening a book from the registry would close the registry unexpectedly.)
+        if (clicked.getType() == Material.WRITTEN_BOOK) {
+            player.sendActionBar("§8✦ §7Book added to inventory — §dright-click §8it to read!");
         }
     }
 

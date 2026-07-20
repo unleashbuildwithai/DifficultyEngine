@@ -58,6 +58,31 @@ public class ComboFavoritesManager {
         BLAZING_CHAIN, SCORCHED_CHAIN, STATUE_CHAIN, EARTH_TRAP
     );
 
+    /**
+     * Maps each chain tag to the Arcane Tome page index (0-based) that teaches it.
+     * The FavoritesGUI uses this to show a locked item (§8🔒 ???) for chains whose
+     * corresponding page has not yet been unlocked by the player.
+     *
+     *  WET_CHAIN     → page index  7  (Page  8 in the book — §b[WET])
+     *  MUDDY_CHAIN   → page index  8  (Page  9 — §6[MUDDY])
+     *  CHILLED_CHAIN → page index  9  (Page 10 — §b[CHILLED])
+     *  FROZEN_CHAIN  → page index 10  (Page 11 — §b[FROZEN])
+     *  BLAZING_CHAIN → page index 13  (Page 14 — §c[BLAZING])
+     *  SCORCHED_CHAIN→ page index 12  (Page 13 — §c[SCORCHED])
+     *  STATUE_CHAIN  → page index 11  (Page 12 — §e[STATUE])
+     *  EARTH_TRAP    → page index  4  (Page  5 — Earth Staff)
+     */
+    public static final Map<String, Integer> CHAIN_REQUIRED_PAGE = Map.of(
+        WET_CHAIN,      7,
+        MUDDY_CHAIN,    8,
+        CHILLED_CHAIN,  9,
+        FROZEN_CHAIN,   10,
+        BLAZING_CHAIN,  13,
+        SCORCHED_CHAIN, 12,
+        STATUE_CHAIN,   11,
+        EARTH_TRAP,     4
+    );
+
     // ── Display info for each tag (used by FavoritesGUI) ─────────────────────
     public record ChainInfo(String displayName, String trigger, String hint, String color) {}
 

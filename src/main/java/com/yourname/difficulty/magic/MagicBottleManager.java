@@ -27,71 +27,70 @@ import java.util.Set;
  */
 public class MagicBottleManager {
 
+    public static class CatchingBlockState {
+        public int emptyBottles = 0;
+        public int fullBottles = 0;
+    }
+
     /** Maximum empty bottles that can be stored per catching block. */
-    public static final int MAX_BOTTLES = 8;
+    public static final int MAX_BOTTLES = 4; // Slots 0-3 for empty, slots 5-8 for full
 
     /**
-     * Normalised Location (block coords) → count of empty magic bottles stored.
-     * Normalisation strips sub-block precision, yaw and pitch so that block
-     * comparisons from different event contexts always match.
+     * Normalised Location (block coords) → CatchingBlockState.
      */
-    private final Map<Location, Integer> storedBottles = new HashMap<>();
+    private final Map<Location, CatchingBlockState> blocks = new HashMap<>();
 
     // ── Block registration ────────────────────────────────────────────────────
 
-    /** Registers a placed Catching Block location (starts with 0 bottles). */
+    /** Registers a placed Catching Block location. */
     public void register(Location loc) {
-        storedBottles.putIfAbsent(norm(loc), 0);
+        blocks.putIfAbsent(norm(loc), new CatchingBlockState());
     }
 
-    /** Removes the catching block entry (call after the block is broken). */
+    /** Removes the catching block entry. */
     public void unregister(Location loc) {
-        storedBottles.remove(norm(loc));
+        blocks.remove(norm(loc));
     }
 
     /** Returns {@code true} if this block location is a tracked Catching Block. */
     public boolean isTracked(Location loc) {
-        return storedBottles.containsKey(norm(loc));
+        return blocks.containsKey(norm(loc));
     }
 
-    /** An unmodifiable view of all currently tracked catching block locations. */
+    public CatchingBlockState getState(Location loc) {
+        return blocks.get(norm(loc));
+    }
+
     public Set<Location> getTrackedLocations() {
-        return Collections.unmodifiableSet(storedBottles.keySet());
+        return Collections.unmodifiableSet(blocks.keySet());
     }
 
     // ── Bottle operations ─────────────────────────────────────────────────────
 
-    /** Returns how many empty bottles are stored at this location (0 if not tracked). */
     public int getBottleCount(Location loc) {
-        return storedBottles.getOrDefault(norm(loc), 0);
+        CatchingBlockState state = getState(loc);
+        return state == null ? 0 : state.emptyBottles;
+    }
+    
+    public int getFullBottleCount(Location loc) {
+        CatchingBlockState state = getState(loc);
+        return state == null ? 0 : state.fullBottles;
     }
 
-    /**
-     * Deposits one Empty Magic Bottle into the catching block.
-     *
-     * @return {@code true} if accepted; {@code false} if full ({@value #MAX_BOTTLES} bottles)
-     *         or if the location is not a tracked Catching Block.
-     */
     public boolean depositBottle(Location loc) {
-        Location key = norm(loc);
-        if (!storedBottles.containsKey(key)) return false;
-        int current = storedBottles.get(key);
-        if (current >= MAX_BOTTLES) return false;
-        storedBottles.put(key, current + 1);
+        CatchingBlockState state = getState(loc);
+        if (state == null) return false;
+        if (state.emptyBottles >= MAX_BOTTLES) return false;
+        state.emptyBottles++;
         return true;
     }
 
-    /**
-     * Consumes one empty bottle from the catching block (lightning charge event).
-     *
-     * @return {@code true} if a bottle was consumed and a Charged Bottle should
-     *         be produced; {@code false} if no bottles are stored.
-     */
     public boolean consumeBottleForCharge(Location loc) {
-        Location key = norm(loc);
-        Integer count = storedBottles.get(key);
-        if (count == null || count <= 0) return false;
-        storedBottles.put(key, count - 1);
+        CatchingBlockState state = getState(loc);
+        if (state == null || state.emptyBottles <= 0) return false;
+        if (state.fullBottles >= MAX_BOTTLES) return false; // Full bottles output full!
+        state.emptyBottles--;
+        state.fullBottles++;
         return true;
     }
 

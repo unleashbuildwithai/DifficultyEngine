@@ -123,17 +123,24 @@ public class CatchingBlockListener implements Listener {
         Location loc = event.getBlock().getLocation();
         if (!bottleManager.isTracked(loc)) return;
 
-        // Drop all stored empty bottles
-        int count = bottleManager.getBottleCount(loc);
-        if (count > 0) {
+        // Drop all stored bottles
+        int emptyCount = bottleManager.getBottleCount(loc);
+        if (emptyCount > 0) {
             ItemStack empties = itemFactory.buildEmptyMagicBottle();
-            empties.setAmount(count);
+            empties.setAmount(emptyCount);
             loc.getWorld().dropItemNaturally(loc.clone().add(0.5, 0.5, 0.5), empties);
+        }
+        
+        int fullCount = bottleManager.getFullBottleCount(loc);
+        if (fullCount > 0) {
+            ItemStack fulls = itemFactory.buildChargedMagicBottle(4);
+            fulls.setAmount(fullCount);
+            loc.getWorld().dropItemNaturally(loc.clone().add(0.5, 0.5, 0.5), fulls);
         }
 
         bottleManager.unregister(loc);
         event.getPlayer().sendMessage(
-            "§b⚡ §7Catching Block removed. §8(" + count + " bottle(s) dropped)");
+            "§b⚡ §7Catching Block removed. §8(" + emptyCount + " empty, " + fullCount + " full dropped)");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -152,50 +159,9 @@ public class CatchingBlockListener implements Listener {
 
         event.setCancelled(true);
         Player player = event.getPlayer();
-        ItemStack hand = player.getInventory().getItemInMainHand();
         Location loc   = clicked.getLocation();
-        int stored     = bottleManager.getBottleCount(loc);
-
-        // ── Deposit an Empty Magic Bottle ─────────────────────────────────────
-        if (itemFactory.isEmptyMagicBottle(hand)) {
-            if (stored >= MagicBottleManager.MAX_BOTTLES) {
-                player.sendActionBar(
-                    "§c✗ §7Catching Block is full! §8("
-                    + stored + "/" + MagicBottleManager.MAX_BOTTLES + " bottles)");
-                return;
-            }
-            boolean ok = bottleManager.depositBottle(loc);
-            if (ok) {
-                // Remove one from hand
-                if (hand.getAmount() > 1) hand.setAmount(hand.getAmount() - 1);
-                else player.getInventory().setItemInMainHand(new ItemStack(Material.AIR));
-
-                int newCount = bottleManager.getBottleCount(loc);
-                clicked.getWorld().playSound(clicked.getLocation(),
-                    Sound.ITEM_BOTTLE_FILL, 1.0f, 1.5f);
-                clicked.getWorld().spawnParticle(Particle.DRIPPING_WATER,
-                    loc.clone().add(0.5, 1.1, 0.5), 12, 0.2, 0.1, 0.2, 0.02);
-                player.sendActionBar(
-                    "§b✦ §7Bottle deposited! §8("
-                    + newCount + "/" + MagicBottleManager.MAX_BOTTLES
-                    + ") — §7Wait for rain + lightning rod strike.");
-            }
-            return;
-        }
-
-        // ── Inspect (empty hand or other item) ────────────────────────────────
-        boolean raining    = clicked.getWorld().hasStorm();
-        boolean hasRod     = findNearbyLightningRod(loc, ROD_SEARCH_RADIUS) != null;
-        String rainStatus  = raining ? "§aRaining ✔" : "§cNo rain ✗";
-        String rodStatus   = hasRod  ? "§aRod nearby ✔" : "§cNo rod within 5 blocks ✗";
-
-        player.sendMessage("§b§l⚡ Catching Block §r§8[" + loc.getBlockX()
-            + ", " + loc.getBlockY() + ", " + loc.getBlockZ() + "§8]");
-        player.sendMessage("§7  Bottles stored: §b" + stored + " §8/ §7" + MagicBottleManager.MAX_BOTTLES);
-        player.sendMessage("§7  Weather:  " + rainStatus);
-        player.sendMessage("§7  Rod:      " + rodStatus);
-        player.sendMessage("§8  Right-click with §bEmpty Magic Bottle §8to deposit.");
-        clicked.getWorld().playSound(clicked.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_HIT, 0.6f, 1.8f);
+        
+        openCatchingBlockGUI(player, loc);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -235,13 +201,9 @@ public class CatchingBlockListener implements Listener {
             return;
         }
 
-        // ── Drop a Charged Magic Bottle (4 casts) at the catching block ───────
-        Location dropLoc = catchLoc.clone().add(0.5, 1.0, 0.5);
-        ItemStack charged = itemFactory.buildChargedMagicBottle(4);
-        catchLoc.getWorld().dropItemNaturally(dropLoc, charged);
-
         // ── Visual feedback ───────────────────────────────────────────────────
         // Channel particles: rod → catching block
+        Location dropLoc = catchLoc.clone().add(0.5, 1.0, 0.5);
         spawnChannel(rodLoc, catchLoc);
 
         catchLoc.getWorld().spawnParticle(Particle.ELECTRIC_SPARK,
@@ -255,12 +217,151 @@ public class CatchingBlockListener implements Listener {
         catchLoc.getWorld().playSound(catchLoc, Sound.BLOCK_AMETHYST_BLOCK_CHIME,     1.0f,  1.2f);
         catchLoc.getWorld().playSound(catchLoc, Sound.ENTITY_EXPERIENCE_ORB_PICKUP,   0.8f,  1.5f);
 
-        int remaining = bottleManager.getBottleCount(catchLoc);
+        MagicBottleManager.CatchingBlockState state = bottleManager.getState(catchLoc);
+        int remaining = state != null ? state.emptyBottles : 0;
         for (Player p : catchLoc.getWorld().getNearbyPlayers(catchLoc, 24)) {
             p.sendMessage("§b⚡ §7Lightning charged a §bMagic Bottle§7! "
-                + "§84 casts inside. §8(" + remaining + " bottle(s) remain)");
-            p.sendActionBar("§b⚡ §6Charged Magic Bottle §7dropped! §8(4 casts)");
+                + "§8(" + remaining + " empty bottle(s) remain)");
+            p.sendActionBar("§b⚡ §6Charged Magic Bottle §7ready in block! §8(4 casts)");
         }
+        
+        // Update any open GUIs
+        for (java.util.Map.Entry<java.util.UUID, Location> entry : playerGuiMap.entrySet()) {
+            if (entry.getValue().equals(catchLoc)) {
+                Player p = org.bukkit.Bukkit.getPlayer(entry.getKey());
+                if (p != null && p.isOnline()) {
+                    openCatchingBlockGUI(p, catchLoc);
+                }
+            }
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  GUI LOGIC
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private void openCatchingBlockGUI(Player player, Location loc) {
+        org.bukkit.inventory.Inventory inv = org.bukkit.Bukkit.createInventory(null, 9, "Catching Block");
+        
+        MagicBottleManager.CatchingBlockState state = bottleManager.getState(loc);
+        if (state == null) return;
+        
+        // Slots 0-3: Empty Bottles
+        for (int i = 0; i < 4; i++) {
+            if (i < state.emptyBottles) {
+                inv.setItem(i, itemFactory.buildEmptyMagicBottle());
+            } else {
+                inv.setItem(i, new ItemStack(Material.AIR));
+            }
+        }
+        
+        // Slot 4: Divider / Info
+        ItemStack info = new ItemStack(Material.LODESTONE);
+        org.bukkit.inventory.meta.ItemMeta meta = info.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§b⚡ Catching Block");
+            boolean raining = loc.getWorld().hasStorm();
+            boolean hasRod = findNearbyLightningRod(loc, ROD_SEARCH_RADIUS) != null;
+            meta.setLore(java.util.Arrays.asList(
+                "§7Click empty bottles in your",
+                "§7inventory to add them.",
+                "",
+                "§7Status:",
+                raining ? "§aRaining ✔" : "§cNo rain ✗",
+                hasRod ? "§aRod nearby ✔" : "§cNo rod within 5 blocks ✗",
+                "",
+                "§eLocation: §7" + loc.getBlockX() + ", " + loc.getBlockY() + ", " + loc.getBlockZ()
+            ));
+            info.setItemMeta(meta);
+        }
+        inv.setItem(4, info);
+        
+        // Slots 5-8: Full Bottles
+        for (int i = 5; i < 9; i++) {
+            if ((i - 5) < state.fullBottles) {
+                inv.setItem(i, itemFactory.buildChargedMagicBottle(4));
+            } else {
+                inv.setItem(i, new ItemStack(Material.AIR));
+            }
+        }
+        
+        playerGuiMap.put(player.getUniqueId(), loc);
+        player.openInventory(inv);
+        loc.getWorld().playSound(loc, Sound.BLOCK_AMETHYST_BLOCK_HIT, 0.6f, 1.8f);
+    }
+
+    private final java.util.Map<java.util.UUID, Location> playerGuiMap = new java.util.HashMap<>();
+
+    @EventHandler
+    public void onInventoryClick(org.bukkit.event.inventory.InventoryClickEvent event) {
+        Player player = (Player) event.getWhoClicked();
+        if (!playerGuiMap.containsKey(player.getUniqueId())) return;
+        if (!event.getView().getTitle().equals("Catching Block")) return;
+        
+        event.setCancelled(true);
+        Location loc = playerGuiMap.get(player.getUniqueId());
+        MagicBottleManager.CatchingBlockState state = bottleManager.getState(loc);
+        if (state == null) {
+            player.closeInventory();
+            return;
+        }
+        
+        org.bukkit.inventory.Inventory clickedInv = event.getClickedInventory();
+        if (clickedInv == null) return;
+        
+        if (clickedInv.equals(event.getView().getTopInventory())) {
+            // Clicked top inventory
+            int slot = event.getSlot();
+            if (slot >= 0 && slot <= 3) {
+                // Try to take empty bottle
+                if (state.emptyBottles > 0) {
+                    state.emptyBottles--;
+                    player.getInventory().addItem(itemFactory.buildEmptyMagicBottle()).values().forEach(
+                        item -> player.getWorld().dropItemNaturally(player.getLocation(), item)
+                    );
+                    player.playSound(player.getLocation(), Sound.ENTITY_ITEM_PICKUP, 1f, 1f);
+                    openCatchingBlockGUI(player, loc); // Refresh
+                }
+            } else if (slot >= 5 && slot <= 8) {
+                // Try to take full bottle
+                if (state.fullBottles > 0) {
+                    state.fullBottles--;
+                    player.getInventory().addItem(itemFactory.buildChargedMagicBottle(4)).values().forEach(
+                        item -> player.getWorld().dropItemNaturally(player.getLocation(), item)
+                    );
+                    player.playSound(player.getLocation(), Sound.ENTITY_ITEM_PICKUP, 1f, 1f);
+                    openCatchingBlockGUI(player, loc); // Refresh
+                }
+            }
+        } else {
+            // Clicked bottom inventory (player's inventory)
+            ItemStack clickedItem = event.getCurrentItem();
+            if (clickedItem != null && itemFactory.isEmptyMagicBottle(clickedItem)) {
+                if (state.emptyBottles < MagicBottleManager.MAX_BOTTLES) {
+                    state.emptyBottles++;
+                    clickedItem.setAmount(clickedItem.getAmount() - 1);
+                    player.playSound(player.getLocation(), Sound.ITEM_BOTTLE_FILL, 1f, 1.5f);
+                    openCatchingBlockGUI(player, loc); // Refresh
+                } else {
+                    player.sendMessage("§cCatching block is full of empty bottles!");
+                }
+            } else if (clickedItem != null && itemFactory.isChargedMagicBottle(clickedItem)) {
+                if (state.fullBottles < MagicBottleManager.MAX_BOTTLES) {
+                    state.fullBottles++;
+                    clickedItem.setAmount(clickedItem.getAmount() - 1);
+                    player.playSound(player.getLocation(), Sound.ITEM_BOTTLE_FILL, 1f, 1.5f);
+                    openCatchingBlockGUI(player, loc); // Refresh
+                } else {
+                    player.sendMessage("§cCatching block is full of charged bottles!");
+                }
+            }
+        }
+    }
+
+    @EventHandler
+    public void onInventoryClose(org.bukkit.event.inventory.InventoryCloseEvent event) {
+        Player player = (Player) event.getPlayer();
+        playerGuiMap.remove(player.getUniqueId());
     }
 
     // ══════════════════════════════════════════════════════════════════════════
