@@ -49,6 +49,8 @@ import com.yourname.difficulty.listeners.RangedSpeedListener;
 import com.yourname.difficulty.listeners.SitListener;
 import com.yourname.difficulty.listeners.SoulfurPotionListener;
 import com.yourname.difficulty.magic.MagicElement;
+import com.yourname.difficulty.magic.CatchingBlockListener;
+import com.yourname.difficulty.magic.MagicBottleManager;
 import com.yourname.difficulty.magic.MagicStaffListener;
 import com.yourname.difficulty.magic.RuneDropListener;
 import com.yourname.difficulty.magic.SandstormManager;
@@ -109,6 +111,8 @@ public class Main extends JavaPlugin {
     private SkillManager            skillManager;
     private SkillCapeManager        skillCapeManager;
     private AdminLightCommand       adminLightCommand;
+    private LightningAdminCommand   lightningAdminCommand;
+    private MagicBottleManager      magicBottleManager;
     private CapeVisualTask          capeVisualTask;
     private CapeDataManager         capeDataManager;
     private SandstormManager        sandstormManager;
@@ -156,9 +160,9 @@ public class Main extends JavaPlugin {
 
         // ── Default config ────────────────────────────────────────────────────
         saveDefaultConfig();
-        getConfig().addDefault("ancient-realm.spawn-x", 0.0);
-        getConfig().addDefault("ancient-realm.spawn-y", 64.0);
-        getConfig().addDefault("ancient-realm.spawn-z", 0.0);
+        getConfig().addDefault("ancient-realm.spawn-x", -23.320);
+        getConfig().addDefault("ancient-realm.spawn-y", 77.0);
+        getConfig().addDefault("ancient-realm.spawn-z", 1.450);
         getConfig().options().copyDefaults(true);
         saveConfig();
 
@@ -198,7 +202,7 @@ public class Main extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new NightmareAggroListener(difficultyManager), this);
         getServer().getPluginManager().registerEvents(
-                new RegistryGUIListener(itemFactory, registryGUI), this);
+                new RegistryGUIListener(itemFactory, registryGUI, this), this);
 
         this.sitListener = new SitListener();
         getServer().getPluginManager().registerEvents(sitListener, this);
@@ -209,7 +213,7 @@ public class Main extends JavaPlugin {
                 new SkillListener(this, skillManager, skillCapeManager, difficultyManager, itemFactory), this);
         getServer().getPluginManager().registerEvents(new SkillGUIListener(), this);
         getServer().getPluginManager().registerEvents(
-                new CapeEquipListener(skillManager, skillCapeManager), this);
+                new CapeEquipListener(skillManager, skillCapeManager, this), this);
         getServer().getPluginManager().registerEvents(
                 new ItemLevelListener(skillManager), this);
         getServer().getPluginManager().registerEvents(
@@ -220,6 +224,13 @@ public class Main extends JavaPlugin {
         this.magicStaffListener = new MagicStaffListener(itemFactory, skillManager, this);
         this.magicStaffListener.setCastingEngine(castingEngine);
         getServer().getPluginManager().registerEvents(magicStaffListener, this);
+
+        // ── Lightning Admin + Catching Block system ────────────────────────────
+        this.lightningAdminCommand = new LightningAdminCommand();
+        magicStaffListener.setLightningAdminCommand(lightningAdminCommand);
+        this.magicBottleManager = new MagicBottleManager();
+        getServer().getPluginManager().registerEvents(
+            new CatchingBlockListener(itemFactory, magicBottleManager), this);
 
         this.sandstormManager = new SandstormManager(this);
         magicStaffListener.setSandstormManager(sandstormManager);
@@ -309,6 +320,13 @@ public class Main extends JavaPlugin {
         castingEngine.setPartyManager(partyManager);
         this.partyListener = new PartyListener(partyManager, difficultyManager, this);
         getServer().getPluginManager().registerEvents(partyListener, this);
+        // Wire PartyManager into MagicStaffListener for water-splash auto-heal
+        magicStaffListener.setPartyManagerRef(partyManager);
+
+        // ── /bring — party portal travel toggle ───────────────────────────────
+        BringCommand bringCommand = new BringCommand(this, partyManager);
+        getServer().getPluginManager().registerEvents(bringCommand, this);
+        registerCmd("bring", bringCommand);
 
         this.tradeListener = new TradeListener(this);
         getServer().getPluginManager().registerEvents(tradeListener, this);
@@ -332,6 +350,7 @@ public class Main extends JavaPlugin {
         this.ancientPortalListener = new AncientDebrisPortalListener(this, skillManager, itemFactory);
         getServer().getPluginManager().registerEvents(ancientPortalListener, this);
         this.magicStaffListener.setPortalListener(ancientPortalListener);
+        ancientPortalListener.setBringCommand(bringCommand);
 
         // ── Nightmare Hardcore Mode ────────────────────────────────────────────
         this.hardcoreListener = new NightmareHardcoreListener(
@@ -368,6 +387,8 @@ public class Main extends JavaPlugin {
 
         this.adminLightCommand = new AdminLightCommand(this);
         registerCmd("adminlight", adminLightCommand);
+
+        registerCmd("lightningadmin", lightningAdminCommand);
 
         SkillLvlCommand skillLvlCmd = new SkillLvlCommand(skillManager);
         org.bukkit.command.PluginCommand skilllvlPluginCmd = getCommand("skilllvl");
@@ -579,7 +600,8 @@ public class Main extends JavaPlugin {
     public void onDisable() {
         if (difficultyManager  != null) difficultyManager.saveAll();
         if (skillManager       != null) skillManager.saveAll();
-        if (adminLightCommand  != null) adminLightCommand.disableAll();
+        if (adminLightCommand      != null) adminLightCommand.disableAll();
+        if (lightningAdminCommand  != null) lightningAdminCommand.disableAll();
         if (capeVisualTask     != null) capeVisualTask.cleanup();
         if (capeDataManager    != null) capeDataManager.saveAll();
         if (sandstormManager   != null) sandstormManager.shutdown();
@@ -818,6 +840,18 @@ public class Main extends JavaPlugin {
                 Material.BOOK, Material.NETHER_STAR, Material.PAPER);
         addBookRecipe("mage_gear_guide_recipe", itemFactory.buildMageGearGuide(),
                 Material.BOOK, Material.LEATHER, Material.PURPLE_DYE);
+
+        // ── Empty Magic Bottle — lightning capture vessel ──────────────────────
+        // Recipe: 4× Glass Pane + Leather + String + Enchanted Book → 1 Empty Magic Bottle
+        NamespacedKey emptyBottleKey = new NamespacedKey(this, "empty_magic_bottle_recipe");
+        ShapelessRecipe emptyBottleRecipe = new ShapelessRecipe(emptyBottleKey,
+                new ItemStack(Material.GLASS_BOTTLE));
+        emptyBottleRecipe.addIngredient(4, Material.GLASS_PANE);
+        emptyBottleRecipe.addIngredient(Material.LEATHER);
+        emptyBottleRecipe.addIngredient(Material.STRING);
+        emptyBottleRecipe.addIngredient(Material.ENCHANTED_BOOK);
+        getServer().addRecipe(emptyBottleRecipe);
+        allRecipeKeys.add(emptyBottleKey);
 
         getLogger().info("DifficultyEngine: Registered " + allRecipeKeys.size() + " crafting recipes.");
     }

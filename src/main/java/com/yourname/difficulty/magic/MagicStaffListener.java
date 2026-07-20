@@ -1,5 +1,6 @@
 package com.yourname.difficulty.magic;
 
+import com.yourname.difficulty.LightningAdminCommand;
 import com.yourname.difficulty.casting.CastingEngine;
 import com.yourname.difficulty.items.EarthBlockTier;
 import com.yourname.difficulty.items.ItemFactory;
@@ -122,6 +123,12 @@ public class MagicStaffListener implements Listener {
     private       ComboFavoritesManager              favoritesManager   = null;
     /** Player UUID → repeating task that keeps them on fire after a lightning burn. */
     private final Map<UUID, BukkitTask>              lightningBurnTasks = new HashMap<>();
+    /** Optional LightningAdminCommand — zero-cooldown fast-cast for tagged players. */
+    private       LightningAdminCommand              lightningAdminCommand = null;
+    /** Tracks Water Wave bolt UUIDs so handleWaterHit can apply 2× damage. */
+    private final Set<UUID>                          waveProjectiles       = new HashSet<>();
+    /** Optional PartyManager reference — used for Water splash auto-heal. */
+    private       com.yourname.difficulty.party.PartyManager partyManagerRef = null;
 
     private static final long MAGIC_XP_CAST  = 10L;
     private static final long MAGIC_XP_HIT   =  5L;
@@ -149,6 +156,12 @@ public class MagicStaffListener implements Listener {
 
     /** Wires in the ComboFavoritesManager so hints only show for starred chains. */
     public void setFavoritesManager(ComboFavoritesManager fm) { this.favoritesManager = fm; }
+
+    /** Wires in the LightningAdminCommand for per-player instant-cast support. */
+    public void setLightningAdminCommand(LightningAdminCommand cmd) { this.lightningAdminCommand = cmd; }
+
+    /** Wires in the PartyManager for water-splash party auto-heal. */
+    public void setPartyManagerRef(com.yourname.difficulty.party.PartyManager pm) { this.partyManagerRef = pm; }
 
     /**
      * Returns true if a combo hint for {@code chainTag} should appear in the action bar.
@@ -232,20 +245,80 @@ public class MagicStaffListener implements Listener {
                     return;
                 }
                 awardMagicXp(player, MAGIC_XP_CAST);
-                if (guidedPlayers.add(player.getUniqueId())) {
-                    player.getInventory().addItem(itemFactory.buildMageGearGuide());
-                    player.sendMessage("§5✦ §7You received a §5Mage Gear Guide§7! Check your inventory.");
-                }
+                giveGuideIfNew(player);
                 castFire(player, magicLevel);
                 return;
             }
         }
 
+        // ── Water Staff Lv99: dual-click power mode ───────────────────────────
+        // Left-click  → normal water bolt (with AoE splash)
+        // Right-click + full Master Mage Gear (≥2000ms bonus) → Water Wave
+        //   (2× damage · 3× rune cost · ½ cooldown)
+        if (element == MagicElement.WATER && magicLevel >= 99) {
+            long baseCooldown = getCooldownMs(player, magicLevel);
+            boolean canWave   = isRightClick && itemFactory.getMageGearCooldownBonus(player) >= 2000L;
+            long effectiveCd  = canWave ? Math.max(1L, baseCooldown / 2) : baseCooldown;
+
+            if (!checkAndSetCooldown(player.getUniqueId(), MagicElement.WATER, effectiveCd)) {
+                long msLeft = msUntilReady(player.getUniqueId(), MagicElement.WATER, effectiveCd);
+                player.sendActionBar("§b[Water" + (canWave ? " Wave" : "") + "] §8cooldown: §e"
+                    + String.format("%.1f", msLeft / 1000.0) + "s");
+                return;
+            }
+
+            if (canWave) {
+                int avail = countRunes(player, MagicElement.WATER);
+                if (avail < 3) {
+                    player.sendActionBar("§c✗ §7Water Wave needs §b3× Water Runes §8(you have " + avail + ")");
+                    return;
+                }
+                consumeRune(player, MagicElement.WATER);
+                consumeRune(player, MagicElement.WATER);
+                consumeRune(player, MagicElement.WATER);
+            } else {
+                if (!consumeRune(player, MagicElement.WATER)) {
+                    player.sendActionBar("§c✗ §7No §bWater Rune§7 — craft from §e4x ICE§7.");
+                    return;
+                }
+            }
+
+            awardMagicXp(player, MAGIC_XP_CAST);
+            if (canWave) {
+                castWaterWave(player, magicLevel, action);
+            } else {
+                castWater(player, magicLevel, action);
+            }
+            return;
+        }
+
+        // ── Air Staff Lv99: dual-click mode ───────────────────────────────────
+        // Left-click  → Gust Blast (forward air bolt, same rune + cooldown)
+        // Right-click → Air Hover  (slow fall; levitate up if Lv99 + Mage Gear)
+        if (element == MagicElement.AIR && magicLevel >= 99 && isLeftClick) {
+            long cooldownMs = getCooldownMs(player, magicLevel);
+            if (!checkAndSetCooldown(player.getUniqueId(), MagicElement.AIR, cooldownMs)) {
+                long msLeft = msUntilReady(player.getUniqueId(), MagicElement.AIR, cooldownMs);
+                player.sendActionBar("§f[Air Lv99] §8cooldown: §e"
+                    + String.format("%.1f", msLeft / 1000.0) + "s");
+                return;
+            }
+            if (!consumeRune(player, MagicElement.AIR)) {
+                player.sendActionBar("§c✗ §7No §fAir Rune§7 for Gust Blast!");
+                return;
+            }
+            awardMagicXp(player, MAGIC_XP_CAST);
+            castAir(player, magicLevel);
+            if (castingEngine != null) castingEngine.onElementCast(player, MagicElement.AIR);
+            return;
+        }
+
         // ── All other elements: right-click only ──────────────────────────────
         if (!isRightClick) return;
 
-        // Air hover — at Lv99 works even from ground; below Lv99 requires being airborne.
-        // Levitation lifts the player; combine with Jump Boost potions to go higher.
+        // Air hover — at Lv99 works from ground; below Lv99 requires being airborne.
+        // LEVITATION (going up) is locked to Lv99 + Mage Gear; otherwise slow fall only.
+        // Hover drains Air Runes — higher level & more gear = slower drain rate.
         if (element == MagicElement.AIR && (magicLevel >= 99 || !player.isOnGround())) {
             activateAirHover(player, magicLevel);
             return;
@@ -267,12 +340,7 @@ public class MagicStaffListener implements Listener {
         }
 
         awardMagicXp(player, MAGIC_XP_CAST);
-
-        if (guidedPlayers.add(player.getUniqueId())) {
-            player.getInventory().addItem(itemFactory.buildMageGearGuide());
-            player.sendMessage("§5✦ §7You received a §5Mage Gear Guide§7! Check your inventory.");
-        }
-
+        giveGuideIfNew(player);
         castSpell(player, element, magicLevel, action, event.getClickedBlock());
     }
 
@@ -281,6 +349,10 @@ public class MagicStaffListener implements Listener {
     // ══════════════════════════════════════════════════════════════════════════
 
     private long getCooldownMs(Player player, int magicLevel) {
+        // Lightning admin players cast with zero cooldown (runes still consumed)
+        if (lightningAdminCommand != null && lightningAdminCommand.hasFastCast(player.getUniqueId())) {
+            return 0L;
+        }
         long cd = 3000L;
         cd -= (long) ((magicLevel / 99.0) * 2000L);
         cd -= itemFactory.getMageGearCooldownBonus(player);
@@ -374,8 +446,8 @@ public class MagicStaffListener implements Listener {
                 .add(player.getLocation().getDirection().multiply(40));
         }
 
-        // ── Visual strike (no block damage) ───────────────────────────────────
-        player.getWorld().strikeLightningEffect(strikeAt);
+        // ── Visual strike — particles only, no screen-flashing lightning entity ─
+        spawnLightningVisual(strikeAt);
 
         // ── 10% chance to ignite a dirt/grass block near the strike ──────────
         if (RAND.nextInt(10) == 0) {
@@ -414,9 +486,10 @@ public class MagicStaffListener implements Listener {
             if (e.equals(player)) continue;
             le.damage(baseDmg, player);
             applyScorched(le, 80);
-            le.getWorld().strikeLightningEffect(le.getLocation());
             le.getWorld().spawnParticle(Particle.ELECTRIC_SPARK,
-                le.getLocation().add(0, 1, 0), 20, 0.3, 0.5, 0.3, 0.05);
+                le.getLocation().add(0, 1, 0), 40, 0.3, 0.5, 0.3, 0.12);
+            le.getWorld().spawnParticle(Particle.FLAME,
+                le.getLocation().add(0, 1, 0), 12, 0.25, 0.4, 0.25, 0.04);
 
             if (le instanceof Player tp) {
                 // ── 100% permanent burn on player hit ────────────────────────
@@ -472,7 +545,7 @@ public class MagicStaffListener implements Listener {
         }, 5L, 40L); // tick 5, every 2 s
         lightningBurnTasks.put(target.getUniqueId(), task);
 
-        target.sendTitle("§e⚡ §c§lLIGHTNING BURNED!", "§7Eat food or use Water Magic!", 5, 80, 20);
+        target.sendTitle("§e⚡ §cLightning Burned", "§7Eat food or use Water Magic to extinguish!", 4, 40, 8);
         if (attacker != null)
             attacker.sendActionBar("§e⚡ §c§lLIGHTNING BURNED! §7They'll burn to death without aid!");
     }
@@ -512,6 +585,9 @@ public class MagicStaffListener implements Listener {
     // ══════════════════════════════════════════════════════════════════════════
 
     private void castWater(Player player, int magicLevel, Action action) {
+        // AoE splash on EVERY water cast — cures lightning burns self + nearby, party heal
+        applyWaterSplashAoe(player, magicLevel);
+
         if (action == Action.RIGHT_CLICK_BLOCK) {
             RayTraceResult ray = player.getWorld().rayTraceBlocks(
                 player.getEyeLocation(), player.getLocation().getDirection(), 5,
@@ -574,6 +650,159 @@ public class MagicStaffListener implements Listener {
         if (yaw < 135) return BlockFace.WEST;
         if (yaw < 225) return BlockFace.NORTH;
         return BlockFace.EAST;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  WATER SPLASH AoE — extinguish lightning burns + support staff heal
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Called on every Water cast. Handles:
+     *  • Self-extinguish if the caster has lightning burn.
+     *  • AoE splash extinguish of nearby lightning-burned players (6–10 blocks).
+     *  • Mild splash damage + WET status to nearby mobs/players.
+     *  • Auto-heal party members if the caster holds a Support Staff.
+     */
+    private void applyWaterSplashAoe(Player player, int magicLevel) {
+        // ── Self-extinguish ───────────────────────────────────────────────────
+        if (player.hasMetadata(META_LIGHTNING_BURNING)) {
+            clearLightningBurn(player);
+            player.sendMessage("§b💧 §aYour Water Magic extinguished your own Lightning Burn!");
+            player.sendActionBar("§b💧 §aLightning Burn extinguished!");
+            player.getWorld().spawnParticle(Particle.CLOUD,
+                player.getLocation().add(0, 1, 0), 20, 0.4, 0.4, 0.4, 0.05);
+            player.getWorld().playSound(player.getLocation(),
+                Sound.BLOCK_FIRE_EXTINGUISH, 1.0f, 1.2f);
+        }
+
+        double radius = 6.0 + (magicLevel / 99.0) * 4.0; // scales 6→10 with level
+        int burnsCured = 0;
+
+        for (Entity e : player.getWorld().getNearbyEntities(
+                player.getLocation(), radius, radius / 2, radius)) {
+            if (e.equals(player)) continue;
+
+            if (e instanceof Player nearby) {
+                // Cure nearby lightning burns
+                if (nearby.hasMetadata(META_LIGHTNING_BURNING)) {
+                    clearLightningBurn(nearby);
+                    nearby.sendTitle("§b§l💧 BURN OUT", "§7Water splash cured you!", 5, 30, 10);
+                    nearby.sendActionBar("§b💧 §a" + player.getName()
+                        + "§a's Water Magic cured your Lightning Burn!");
+                    nearby.getWorld().spawnParticle(Particle.CLOUD,
+                        nearby.getLocation().add(0, 1, 0), 15, 0.3, 0.3, 0.3, 0.05);
+                    nearby.getWorld().playSound(nearby.getLocation(),
+                        Sound.BLOCK_FIRE_EXTINGUISH, 1.0f, 1.2f);
+                    burnsCured++;
+                }
+                // Apply WET status to nearby players caught in the splash
+                if (!isWet(nearby)) applyWet(nearby, 80);
+
+            } else if (e instanceof LivingEntity le) {
+                // Mild splash damage to nearby mobs
+                double splashDmg = 1.0 + SkillBonusManager.magicDamageBonus(magicLevel);
+                le.damage(splashDmg, player);
+                le.getWorld().spawnParticle(Particle.SPLASH,
+                    le.getLocation().add(0, 1, 0), 8, 0.3, 0.3, 0.3, 0.08);
+            }
+        }
+
+        if (burnsCured > 0) {
+            player.sendActionBar("§b💧 §aWater splash cured §b" + burnsCured + " §aLightning Burn(s)!");
+        }
+
+        // Visual splash at caster origin
+        player.getWorld().spawnParticle(Particle.SPLASH,
+            player.getLocation().add(0, 1, 0), 25, 2.0, 0.4, 2.0, 0.15);
+        player.getWorld().spawnParticle(Particle.DRIPPING_WATER,
+            player.getLocation().add(0, 1, 0), 15, 1.5, 0.4, 1.5, 0.0);
+
+        // ── Support Staff auto-heal nearby party members ──────────────────────
+        if (castingEngine != null && partyManagerRef != null
+                && partyManagerRef.isInParty(player.getUniqueId())) {
+            boolean hasSupportStaff = false;
+            for (ItemStack s : player.getInventory().getContents()) {
+                if (castingEngine.isSupportStaff(s)) { hasSupportStaff = true; break; }
+            }
+            if (hasSupportStaff) {
+                Set<UUID> partyMembers = partyManagerRef.getPartyMembers(player.getUniqueId());
+                int healed = 0;
+                for (Entity e : player.getWorld().getNearbyEntities(
+                        player.getLocation(), 10, 5, 10)) {
+                    if (!(e instanceof Player nearby) || e.equals(player)) continue;
+                    if (!partyMembers.contains(nearby.getUniqueId())) continue;
+                    double newHp = Math.min(nearby.getMaxHealth(), nearby.getHealth() + 3.0);
+                    nearby.setHealth(newHp);
+                    nearby.sendActionBar("§b💧 §a+1.5❤ §7Water support heal from §b"
+                        + player.getName() + "§7!");
+                    nearby.getWorld().spawnParticle(Particle.HEART,
+                        nearby.getLocation().add(0, 2, 0), 5, 0.3, 0.3, 0.3, 0.05);
+                    healed++;
+                }
+                if (healed > 0) {
+                    player.sendActionBar("§b💧 §aSupport Water splash healed §b" + healed + " §aparty members!");
+                }
+            }
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  WATER WAVE — Lv99 power cast (requires full Master Mage Gear)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Water Wave: supercharged bolt available at Magic Lv99 when wearing full
+     * Master Mage Gear (getMageGearCooldownBonus ≥ 2000ms = 4× Master pieces).
+     *
+     * Stats vs normal water cast:
+     *   2× damage on all hits
+     *   3× rune cost (3 Water Runes instead of 1)
+     *   ½ cooldown (so you cast it faster than a normal spell)
+     *   Faster projectile, richer particle trail
+     */
+    private void castWaterWave(Player player, int magicLevel, Action action) {
+        // AoE splash + party heal (same as normal cast)
+        applyWaterSplashAoe(player, magicLevel);
+
+        // Block-stream on right-click-block (same as castWater)
+        if (action == Action.RIGHT_CLICK_BLOCK) {
+            RayTraceResult ray = player.getWorld().rayTraceBlocks(
+                player.getEyeLocation(), player.getLocation().getDirection(), 5,
+                FluidCollisionMode.NEVER, true);
+            if (ray != null && ray.getHitBlock() != null) {
+                if (!hasWaterBucket(player)) {
+                    player.sendActionBar("§b§7Need a Water Bucket to create a river!");
+                    return;
+                }
+                placeWaterStream(player, ray.getHitBlock());
+                player.sendActionBar("§b§l[Water Wave] §7Wide river placed!");
+                return;
+            }
+        }
+
+        // Fire a faster, visually enhanced bolt flagged as a wave projectile
+        Snowball bolt = player.launchProjectile(Snowball.class);
+        bolt.setItem(new ItemStack(Material.PRISMARINE_SHARD));
+        bolt.setVelocity(player.getLocation().getDirection().multiply(3.5)); // faster
+
+        trackedProjectiles.put(bolt.getUniqueId(), MagicElement.WATER);
+        projectileShooters.put(bolt.getUniqueId(), player.getUniqueId());
+        projectileLevels.put(bolt.getUniqueId(), magicLevel);
+        waveProjectiles.add(bolt.getUniqueId()); // flag for 2× damage in handleWaterHit
+
+        plugin.getServer().getScheduler().runTaskTimer(plugin, task -> {
+            if (!bolt.isValid()) { task.cancel(); return; }
+            bolt.getWorld().spawnParticle(Particle.DRIPPING_WATER, bolt.getLocation(), 15, 0.2, 0.2, 0.2, 0.0);
+            bolt.getWorld().spawnParticle(Particle.SPLASH,         bolt.getLocation(), 10, 0.15, 0.15, 0.15, 0.05);
+            bolt.getWorld().spawnParticle(Particle.BUBBLE_POP,     bolt.getLocation(),  8, 0.1, 0.1, 0.1, 0.08);
+            bolt.getWorld().spawnParticle(Particle.END_ROD,        bolt.getLocation(),  4, 0.06, 0.06, 0.06, 0.03);
+        }, 0L, 1L);
+
+        player.getWorld().playSound(player.getLocation(), Sound.ITEM_BUCKET_FILL, 1.2f, 0.7f);
+        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_DOLPHIN_SPLASH, 0.8f, 1.5f);
+        player.sendActionBar("§b§l[Water Wave] §7Power bolt! §8(2× dmg · 3 runes · ½ cd)");
+
+        if (castingEngine != null) castingEngine.onElementCast(player, MagicElement.WATER);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -1886,6 +2115,15 @@ public class MagicStaffListener implements Listener {
         return false;
     }
 
+    /** Counts the total number of {@code element} runes in the player's inventory. */
+    private int countRunes(Player player, MagicElement element) {
+        int total = 0;
+        for (ItemStack item : player.getInventory().getContents()) {
+            if (itemFactory.isRune(item, element)) total += item.getAmount();
+        }
+        return total;
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     //  COOLDOWN HELPERS
     // ══════════════════════════════════════════════════════════════════════════
@@ -1973,27 +2211,119 @@ public class MagicStaffListener implements Listener {
     //  AIR HOVER
     // ══════════════════════════════════════════════════════════════════════════
 
+    /**
+     * Activates or toggles the Air Hover effect.
+     *
+     * Rules:
+     *   Any level airborne    → Slow Fall only (drift down safely)
+     *   Lv99 + no Mage Gear  → Slow Fall only (no levitation yet)
+     *   Lv99 + ≥1 Mage Gear  → Slow Fall + LEVITATION (can fly UP)
+     *
+     * Air Runes drain while hovering:
+     *   Low level  = 1 rune per ~1s   (expensive, discourages extended hover)
+     *   Lv99 base  = 1 rune per ~9s
+     *   Lv99 + full Master set = 1 rune per ~13.5s
+     *
+     * Right-clicking again while hovering toggles it OFF.
+     */
     private void activateAirHover(Player player, int magicLevel) {
         UUID uid = player.getUniqueId();
-        BukkitTask old = airHoverTasks.remove(uid);
-        if (old != null) old.cancel();
 
-        player.addPotionEffect(new PotionEffect(PotionEffectType.SLOW_FALLING, 80, 0, false, true, true));
-        player.addPotionEffect(new PotionEffect(PotionEffectType.LEVITATION,   10, 0, false, false, false));
+        // Toggle off if already hovering
+        if (airHoverTasks.containsKey(uid)) {
+            cancelHoverTask(uid);
+            player.removePotionEffect(PotionEffectType.SLOW_FALLING);
+            player.removePotionEffect(PotionEffectType.LEVITATION);
+            player.sendActionBar("§7☁ §7Hover cancelled.");
+            return;
+        }
+
+        // Need at least 1 rune to start
+        if (!consumeRune(player, MagicElement.AIR)) {
+            player.sendActionBar("§c✗ §7No §fAir Runes§7! Hover requires Air Runes to sustain.");
+            return;
+        }
+
+        // Levitation requires Lv99 AND at least one piece of Mage Gear
+        final boolean canLevitate = (magicLevel >= 99)
+                && (itemFactory.getMageGearCooldownBonus(player) > 0);
+
+        // Rune drain interval: higher level = longer gap = less consumption
+        // Lv1=20t (1s), Lv99=180t (9s); Mage Gear adds up to +50% on top
+        double levelFactor = magicLevel / 99.0;
+        int    baseInterval = (int) (20 + (1.0 - levelFactor) * 160);
+        double gearBonus    = Math.min(0.50, itemFactory.getMageGearCooldownBonus(player) / 4000.0);
+        final int runeInterval = Math.max(10, (int) (baseInterval * (1.0 + gearBonus)));
+
+        // Apply initial effects
+        player.addPotionEffect(new PotionEffect(PotionEffectType.SLOW_FALLING, 60, 0, false, true, true));
+        if (canLevitate) {
+            player.addPotionEffect(new PotionEffect(PotionEffectType.LEVITATION, 10, 0, false, false, false));
+        }
 
         player.getWorld().spawnParticle(Particle.CLOUD,
             player.getLocation().add(0, 0.5, 0), 8, 0.4, 0.1, 0.4, 0.02);
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_PHANTOM_FLAP, 0.6f, 2.0f);
-        player.sendActionBar("§7 §fHovering... §8(land to stop · tap on ground for air blast)");
 
+        if (canLevitate) {
+            player.sendActionBar("§7☁ §f⬆ LEVITATING §8— Air Runes drain while airborne. Right-click to stop.");
+        } else if (magicLevel >= 99) {
+            player.sendActionBar("§7☁ §fHovering §8(Equip Mage Gear to fly up!) §7Runes draining...");
+        } else {
+            player.sendActionBar("§7☁ §fHovering §8(Lv99 + Mage Gear = fly up!)");
+        }
+
+        // Sustain task: runs every 5 ticks
+        final int[] tickCount = {0};
         BukkitTask task = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
             if (!player.isOnline()) { cancelHoverTask(uid); return; }
-            if (player.isOnGround()) { cancelHoverTask(uid); return; }
+            if (player.isOnGround()) {
+                cancelHoverTask(uid);
+                player.sendActionBar("§7☁ §7Hover ended — landed.");
+                return;
+            }
+
+            tickCount[0]++;
+
+            // Re-apply effects each cycle
             player.addPotionEffect(new PotionEffect(PotionEffectType.SLOW_FALLING, 30, 0, false, true, true));
+            if (canLevitate) {
+                player.addPotionEffect(new PotionEffect(PotionEffectType.LEVITATION, 15, 0, false, false, false));
+            }
+
+            // Consume rune at calculated interval
+            if (tickCount[0] % runeInterval == 0) {
+                if (!consumeRune(player, MagicElement.AIR)) {
+                    cancelHoverTask(uid);
+                    player.removePotionEffect(PotionEffectType.LEVITATION);
+                    player.sendActionBar("§c✗ §7Out of §fAir Runes§7! Hover cancelled!");
+                    player.sendTitle("§c✗ No Air Runes", "§7Hover ended!", 5, 25, 8);
+                    return;
+                }
+                int remaining = countRunes(player, MagicElement.AIR);
+                player.sendActionBar("§7☁ §f" + (canLevitate ? "⬆ Levitating" : "Hovering")
+                    + " §8— §f" + remaining + " §7Air Rune" + (remaining == 1 ? "" : "s") + " left");
+            }
         }, 5L, 5L);
         airHoverTasks.put(uid, task);
+    }
 
-        plugin.getServer().getScheduler().runTaskLater(plugin, () -> cancelHoverTask(uid), 80L);
+    /**
+     * Gives the Mage Gear Guide to a player on their FIRST-EVER spell cast.
+     * Checks inventory for an existing copy — prevents spam on server restart.
+     */
+    private void giveGuideIfNew(Player player) {
+        // Skip if player already has the guide anywhere in their inventory
+        for (ItemStack s : player.getInventory().getContents()) {
+            if (s != null && s.getType() == org.bukkit.Material.WRITTEN_BOOK && s.hasItemMeta()) {
+                org.bukkit.inventory.meta.BookMeta bm = (org.bukkit.inventory.meta.BookMeta) s.getItemMeta();
+                if ("§5Mage Gear Guide".equals(bm.getTitle())) return;
+            }
+        }
+        // Skip if already guided this session
+        if (!guidedPlayers.add(player.getUniqueId())) return;
+        player.getInventory().addItem(itemFactory.buildMageGearGuide());
+        player.sendMessage("§5✦ §7You received a §5Mage Gear Guide§7! Check your inventory.");
     }
 
     private void cancelHoverTask(UUID uid) {
@@ -2050,6 +2380,50 @@ public class MagicStaffListener implements Listener {
         }
         return converted;
     }
+    // ══════════════════════════════════════════════════════════════════════════
+    //  LIGHTNING VISUAL — no screen flash
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Spawns a lightning-bolt visual using particles only — no lightning entity,
+     * so there is NO blinding white screen flash for nearby players.
+     *
+     * Uses a vertical column of ELECTRIC_SPARK + SMOKE particles to simulate
+     * the bolt, plus a large burst at the strike point for impact.
+     */
+    private void spawnLightningVisual(Location loc) {
+        if (loc == null || loc.getWorld() == null) return;
+        var world = loc.getWorld();
+
+        // Vertical channel (top → impact)
+        for (int y = 0; y <= 8; y++) {
+            Location pt = loc.clone().add(
+                (RAND.nextDouble() - 0.5) * 0.3,
+                y,
+                (RAND.nextDouble() - 0.5) * 0.3
+            );
+            world.spawnParticle(Particle.ELECTRIC_SPARK, pt, 4, 0.1, 0.05, 0.1, 0.05);
+        }
+
+        // Secondary zigzag branch
+        for (int y = 2; y <= 7; y++) {
+            if (RAND.nextInt(3) == 0) {
+                Location branch = loc.clone().add(
+                    (RAND.nextDouble() - 0.5) * 0.7,
+                    y,
+                    (RAND.nextDouble() - 0.5) * 0.7
+                );
+                world.spawnParticle(Particle.ELECTRIC_SPARK, branch, 2, 0.08, 0.08, 0.08, 0.03);
+            }
+        }
+
+        // Impact burst at ground
+        world.spawnParticle(Particle.ELECTRIC_SPARK, loc, 50, 0.5, 0.3, 0.5, 0.18);
+        world.spawnParticle(Particle.FLAME,          loc, 20, 0.4, 0.2, 0.4, 0.06);
+        world.spawnParticle(Particle.SMOKE,          loc, 15, 0.3, 0.2, 0.3, 0.02);
+        world.spawnParticle(Particle.END_ROD,        loc, 10, 0.2, 0.8, 0.2, 0.04);
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     //  EARTH MAGIC PAGE — RIGHT-CLICK TO READ
     // ══════════════════════════════════════════════════════════════════════════

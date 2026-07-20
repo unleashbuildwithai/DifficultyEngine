@@ -59,6 +59,9 @@ public class CustomItemCraftListener implements Listener {
             case "magic_bag_recipe" ->
                 event.getInventory().setResult(itemFactory.buildMagicBag());
 
+            case "empty_magic_bottle_recipe" ->
+                event.getInventory().setResult(itemFactory.buildEmptyMagicBottle());
+
             default -> {
                 // Check Earth Magic Page recipes (one per EarthBlockTier)
                 for (EarthBlockTier tier : EarthBlockTier.values()) {

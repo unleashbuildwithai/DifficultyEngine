@@ -1,5 +1,6 @@
 package com.yourname.difficulty.realm;
 
+import com.yourname.difficulty.BringCommand;
 import com.yourname.difficulty.skills.SkillManager;
 import com.yourname.difficulty.skills.SkillType;
 import com.yourname.difficulty.items.ItemFactory;
@@ -22,12 +23,13 @@ import java.util.*;
  *
  * ── Activation Sequence ──────────────────────────────────────────────────
  *  1. Player must have Magic level ≥ 99
- *  2. Player right-clicks an ANCIENT_DEBRIS block while holding an Air Staff
+ *  2. Player right-clicks an ANCIENT_DEBRIS block while holding a Fire Staff
  *  3. Lightning effect strikes + vortex particles
  *  4. After 2 seconds: player teleported to "ancient_realm" world
+ *     If /bring is ON, party members are pulled through with a vortex visual.
  *
  * ── Return Portal ─────────────────────────────────────────────────────────
- *  Inside the ancient_realm: right-click any ANCIENT_DEBRIS block with Air Staff
+ *  Inside the ancient_realm: right-click any ANCIENT_DEBRIS block with Fire Staff
  *  → teleport back to entry point in Overworld
  *
  * ── MultiverseCore Integration ────────────────────────────────────────────
@@ -36,18 +38,21 @@ import java.util.*;
  *  Create it with: /mv create ancient_realm NORMAL
  *
  * ── Spawn location ────────────────────────────────────────────────────────
- *  Default spawn in ancient_realm: 0, 64, 0
+ *  Default spawn in ancient_realm: -23.320, 77, 1.450
  *  Customizable via config.yml: ancient-realm.spawn-x/y/z
  */
 public class AncientDebrisPortalListener implements Listener {
 
-    private static final String REALM_WORLD_NAME = "ancient_realm";
-    private static final int    REQUIRED_MAGIC   = 99;
-    private static final long   PORTAL_DELAY_TICKS = 40L; // 2 seconds
+    private static final String REALM_WORLD_NAME    = "ancient_realm";
+    private static final int    REQUIRED_MAGIC       = 99;
+    private static final long   PORTAL_DELAY_TICKS   = 40L; // 2 seconds
 
     private final JavaPlugin   plugin;
     private final SkillManager skillManager;
     private final ItemFactory  itemFactory;
+
+    /** Optional BringCommand — pulls party members through the portal if /bring is ON. */
+    private BringCommand bringCommand = null;
 
     /** Tracks which players are currently in the portal activation animation. */
     private final Set<UUID> activating = Collections.synchronizedSet(new HashSet<>());
@@ -61,6 +66,9 @@ public class AncientDebrisPortalListener implements Listener {
         this.skillManager = skillManager;
         this.itemFactory  = itemFactory;
     }
+
+    /** Wires in the BringCommand so the portal can pull party members through. */
+    public void setBringCommand(BringCommand bc) { this.bringCommand = bc; }
 
     // ── PlayerInteractEvent ───────────────────────────────────────────────────
 
@@ -155,28 +163,33 @@ public class AncientDebrisPortalListener implements Listener {
                 return;
             }
 
-            // Get spawn location from config
-            double spawnX = plugin.getConfig().getDouble("ancient-realm.spawn-x", 0);
-            double spawnY = plugin.getConfig().getDouble("ancient-realm.spawn-y", 64);
-            double spawnZ = plugin.getConfig().getDouble("ancient-realm.spawn-z", 0);
+            // Get spawn location from config (defaults set in Main.java to -23.320, 77, 1.450)
+            double spawnX = plugin.getConfig().getDouble("ancient-realm.spawn-x", -23.320);
+            double spawnY = plugin.getConfig().getDouble("ancient-realm.spawn-y", 77.0);
+            double spawnZ = plugin.getConfig().getDouble("ancient-realm.spawn-z", 1.450);
             Location dest = new Location(ancientWorld, spawnX, spawnY, spawnZ, 0, 0);
 
             player.teleport(dest);
             activating.remove(uuid);
 
-            // Arrival effects
+            // ── Bring party if /bring is enabled ──────────────────────────────
+            if (bringCommand != null && bringCommand.isBringEnabled(uuid)) {
+                bringCommand.bringParty(player, dest, 10L);
+            }
+
+            // Arrival effects — use final ref for lambda capture
+            final World realmRef = ancientWorld;
             plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
                 if (!player.isOnline()) return;
                 player.sendTitle("§5§l⚡ ANCIENT REALM", "§7Welcome to the forbidden dimension.", 10, 80, 20);
                 player.sendMessage("§5⚡ §7You have entered the §5§lAncient Realm§7!");
-                player.sendMessage("§7Use an §bAir Staff §7on §5Ancient Debris §7to return.");
+                player.sendMessage("§7Use a §cFire Staff §7on §5Ancient Debris §7to return.");
                 player.playSound(player.getLocation(), Sound.AMBIENT_NETHER_WASTES_MOOD, 2f, 0.8f);
-                // Set permanent night in ancient realm
-                ancientWorld.setTime(18000);
+                realmRef.setTime(18000);
             }, 5L);
 
         }, PORTAL_DELAY_TICKS);
-    }
+    } // end openPortal
 
     // ── Return portal ─────────────────────────────────────────────────────────
 
@@ -222,24 +235,6 @@ public class AncientDebrisPortalListener implements Listener {
     /**
      * Called by {@code MagicStaffListener.castLightning()} when the lightning
      * ray-trace hits an ANCIENT_DEBRIS block.
-     *
-     * <p>Equivalent to the direct right-click ritual but the lightning visual
-     * is already shown by the caller — this method handles the ritual delay,
-     * vortex particles, and teleport.
-     *
-     * <p>To create the island / void world for the Ancient Realm, use your
-     * world-creation plugin (e.g. MultiverseCore):
-     * <pre>
-     *   /mv create ancient_realm NORMAL -g VoidGen    (void generator)
-     *   /mv create ancient_realm SKYBLOCK             (skyblock island)
-     * </pre>
-     * Then configure the spawn in config.yml:
-     * <pre>
-     *   ancient-realm:
-     *     spawn-x: 0.5
-     *     spawn-y: 64
-     *     spawn-z: 0.5
-     * </pre>
      *
      * @param player   the player who cast the lightning
      * @param blockLoc the world location of the struck Ancient Debris block

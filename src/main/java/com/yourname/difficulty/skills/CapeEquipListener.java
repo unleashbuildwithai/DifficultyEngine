@@ -1,5 +1,7 @@
 package com.yourname.difficulty.skills;
 
+import org.bukkit.NamespacedKey;
+import org.bukkit.entity.Axolotl;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -7,6 +9,10 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
+import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.plugin.java.JavaPlugin;
+
+import java.util.Random;
 
 /**
  * CapeEquipListener — Enforces level requirements for skill capes.
@@ -27,12 +33,21 @@ public class CapeEquipListener implements Listener {
     /** Slot index in the player's inventory that corresponds to the chestplate. */
     private static final int CHESTPLATE_SLOT = 38;
 
+    /** PDC key stored on the Player entity — records which axolotl variant they rolled. */
+    private static final String AXOLOTL_VARIANT_KEY = "de_cape_axolotl_variant";
+
+    private static final Random RAND = new Random();
+
     private final SkillManager     skillManager;
     private final SkillCapeManager capeManager;
+    private final JavaPlugin        plugin;
+    private final NamespacedKey     axolotlVariantNsk;
 
-    public CapeEquipListener(SkillManager skillManager, SkillCapeManager capeManager) {
-        this.skillManager = skillManager;
-        this.capeManager  = capeManager;
+    public CapeEquipListener(SkillManager skillManager, SkillCapeManager capeManager, JavaPlugin plugin) {
+        this.skillManager      = skillManager;
+        this.capeManager       = capeManager;
+        this.plugin            = plugin;
+        this.axolotlVariantNsk = new NamespacedKey(plugin, AXOLOTL_VARIANT_KEY);
     }
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
@@ -72,6 +87,15 @@ public class CapeEquipListener implements Listener {
             event.setCancelled(true);
             sendRequirementMessage(player, capeCandidate);
         }
+        // ── Roll axolotl variant on any Lv99 skill cape equip ────────────────
+        // Only roll if the player doesn't already have one stored.
+        if (!capeManager.isBossCape(capeCandidate) && !capeManager.isMaxCape(capeCandidate)) {
+            SkillType skill = capeManager.getCapeSkill(capeCandidate);
+            if (skill != null) {
+                rollAxolotlVariant(player);
+            }
+        }
+
         // If requirement met, allow equip silently (no admin perk granted)
     }
 
@@ -104,6 +128,54 @@ public class CapeEquipListener implements Listener {
                     + " §7to wear this cape.");
             player.sendMessage("  §7Your level: §e" + current + " §8/ §a99");
             player.sendMessage("  §7Use §e/mystats §7to view your skill progress.");
+        }
+    }
+
+    // ── Axolotl variant rolling ────────────────────────────────────────────────
+
+    /**
+     * Rolls a random axolotl variant for the player if they don't already have one.
+     * Stored permanently in the player's PDC so it survives restarts.
+     * Variants: LEUCISTIC (white), WILD (brown), GOLD, CYAN, BLUE (rarest).
+     */
+    private void rollAxolotlVariant(Player player) {
+        // Don't re-roll if already assigned
+        if (player.getPersistentDataContainer().has(axolotlVariantNsk, PersistentDataType.STRING)) return;
+
+        Axolotl.Variant[] variants = Axolotl.Variant.values();
+        // Weight BLUE (rarest) at 1-in-20 chance; others equally weighted
+        Axolotl.Variant chosen;
+        if (RAND.nextInt(20) == 0) {
+            chosen = Axolotl.Variant.BLUE;
+        } else {
+            Axolotl.Variant[] common = { Axolotl.Variant.LUCY, Axolotl.Variant.WILD,
+                                          Axolotl.Variant.GOLD, Axolotl.Variant.CYAN };
+            chosen = common[RAND.nextInt(common.length)];
+        }
+
+        player.getPersistentDataContainer().set(axolotlVariantNsk, PersistentDataType.STRING, chosen.name());
+
+        String colour = switch (chosen) {
+            case LUCY  -> "§fLeuci (White)";
+            case WILD  -> "§6Wild (Brown)";
+            case GOLD  -> "§eGold";
+            case CYAN  -> "§bCyan";
+            case BLUE  -> "§9§lBlue §8(★ Rare!)";
+            default    -> chosen.name();
+        };
+
+        player.sendMessage("§d✦ §7Your cape bound a §d" + colour + "§7 axolotl variant!");
+        player.sendMessage("  §8This variant will follow you as a companion when fishing.");
+    }
+
+    /** Returns the stored axolotl variant for a player, or LUCY as default. */
+    public Axolotl.Variant getAxolotlVariant(Player player) {
+        String stored = player.getPersistentDataContainer()
+                .getOrDefault(axolotlVariantNsk, PersistentDataType.STRING, "LUCY");
+        try {
+            return Axolotl.Variant.valueOf(stored);
+        } catch (IllegalArgumentException e) {
+            return Axolotl.Variant.LUCY;
         }
     }
 

@@ -6,7 +6,13 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.java.JavaPlugin;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * RegistryGUIListener — Handles all click interactions inside the 8-page RegistryGUI.
@@ -22,22 +28,33 @@ import org.bukkit.inventory.ItemStack;
  */
 public class RegistryGUIListener implements Listener {
 
-    private final ItemFactory itemFactory;
-    private final RegistryGUI registryGUI;
+    private final ItemFactory       itemFactory;
+    private final RegistryGUI       registryGUI;
+    private final JavaPlugin        plugin;
+    /** Tracks which registry page each player is currently on (for in-place updates). */
+    private final Map<UUID, Integer> pageTracker = new HashMap<>();
 
     private static final int SLOT_PREV  = 45;
     private static final int SLOT_LABEL = 49;
     private static final int SLOT_NEXT  = 53;
 
-    public RegistryGUIListener(ItemFactory itemFactory, RegistryGUI registryGUI) {
+    public RegistryGUIListener(ItemFactory itemFactory, RegistryGUI registryGUI, JavaPlugin plugin) {
         this.itemFactory = itemFactory;
         this.registryGUI = registryGUI;
+        this.plugin      = plugin;
     }
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
         String title = event.getView().getTitle();
-        int page = RegistryGUI.pageFromTitle(title);
+        // Use tracked page first (in-place updates don't change title), fall back to title
+        int page;
+        if (event.getWhoClicked() instanceof Player whoClicked) {
+            page = pageTracker.getOrDefault(whoClicked.getUniqueId(),
+                    RegistryGUI.pageFromTitle(title));
+        } else {
+            page = RegistryGUI.pageFromTitle(title);
+        }
         if (page < 1) return;
 
         // Always cancel — items must never leave the registry inventory
@@ -54,14 +71,16 @@ public class RegistryGUIListener implements Listener {
         // ── Navigation ────────────────────────────────────────────────────────
 
         if (slot == SLOT_PREV && page > 1) {
-            player.closeInventory();
-            registryGUI.openPage(player, page - 1);
+            int newPage = page - 1;
+            pageTracker.put(player.getUniqueId(), newPage);
+            registryGUI.updateInventoryPage(event.getView().getTopInventory(), newPage);
             return;
         }
 
         if (slot == SLOT_NEXT && page < RegistryGUI.PAGE_COUNT) {
-            player.closeInventory();
-            registryGUI.openPage(player, page + 1);
+            int newPage = page + 1;
+            pageTracker.put(player.getUniqueId(), newPage);
+            registryGUI.updateInventoryPage(event.getView().getTopInventory(), newPage);
             return;
         }
 
@@ -114,8 +133,29 @@ public class RegistryGUIListener implements Listener {
         }
 
         // ── Give item ─────────────────────────────────────────────────────────
-        player.getInventory().addItem(clicked.clone());
+        ItemStack copy = clicked.clone();
+        player.getInventory().addItem(copy);
         player.sendMessage("§8[§6DifficultyEngine§8] §7Received: §f" + formatName(clicked));
+
+        // ── Auto-open WRITTEN_BOOK items so players can read them immediately ─
+        if (clicked.getType() == Material.WRITTEN_BOOK) {
+            player.closeInventory();
+            plugin.getServer().getScheduler().runTaskLater(plugin,
+                () -> { if (player.isOnline()) player.openBook(copy); }, 1L);
+        }
+    }
+
+    /** Clean up page tracker when the registry is closed. */
+    @EventHandler
+    public void onInventoryClose(InventoryCloseEvent event) {
+        String title = event.getView().getTitle();
+        if (RegistryGUI.pageFromTitle(title) >= 1
+                || (event.getPlayer() instanceof Player p
+                    && pageTracker.containsKey(p.getUniqueId()))) {
+            if (event.getPlayer() instanceof Player p) {
+                pageTracker.remove(p.getUniqueId());
+            }
+        }
     }
 
     private String formatName(ItemStack item) {

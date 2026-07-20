@@ -59,6 +59,12 @@ public class ItemFactory {
     public static final String RANGED_GEAR_KEY       = "ranged_gear";
     public static final String RAINBOW_AXOLOTL_KEY   = "rainbow_axolotl";
 
+    // ── Lightning Magic system ────────────────────────────────────────────────
+    public static final String CATCHING_BLOCK_KEY       = "de_catching_block";
+    public static final String EMPTY_MAGIC_BOTTLE_KEY   = "de_empty_magic_bottle";
+    public static final String CHARGED_MAGIC_BOTTLE_KEY = "de_charged_magic_bottle";
+    public static final String QUEST_OVERVIEW_BOOK_KEY  = "de_quest_overview_book";
+
     // ── Support Staff keys ────────────────────────────────────────────────────
     public static final String SUPPORT_RUNE_KEY          = "de_support_rune";
     public static final String SUPPORT_PAGE_HEALING_KEY  = "de_support_page_healing";
@@ -85,6 +91,11 @@ public class ItemFactory {
     private final NamespacedKey meleeGearKey;
     private final NamespacedKey rangedGearKey;
     private final NamespacedKey rainbowAxolotlKey;
+    // ── Lightning Magic NamespacedKeys ────────────────────────────────────────
+    private final NamespacedKey catchingBlockKey;
+    private final NamespacedKey emptyMagicBottleKey;
+    private final NamespacedKey chargedMagicBottleKey;
+    private final NamespacedKey questOverviewBookKey;
     // ── Support Staff NamespacedKeys ──────────────────────────────────────────
     private final NamespacedKey supportRuneKey;
     private final NamespacedKey supportPageHealingKey;
@@ -137,7 +148,11 @@ public class ItemFactory {
         // Melee & Ranged tier keys
         this.meleeGearKey       = new NamespacedKey(plugin, MELEE_GEAR_KEY);
         this.rangedGearKey      = new NamespacedKey(plugin, RANGED_GEAR_KEY);
-        this.rainbowAxolotlKey  = new NamespacedKey(plugin, RAINBOW_AXOLOTL_KEY);
+        this.rainbowAxolotlKey      = new NamespacedKey(plugin, RAINBOW_AXOLOTL_KEY);
+        this.catchingBlockKey       = new NamespacedKey(plugin, CATCHING_BLOCK_KEY);
+        this.emptyMagicBottleKey    = new NamespacedKey(plugin, EMPTY_MAGIC_BOTTLE_KEY);
+        this.chargedMagicBottleKey  = new NamespacedKey(plugin, CHARGED_MAGIC_BOTTLE_KEY);
+        this.questOverviewBookKey   = new NamespacedKey(plugin, QUEST_OVERVIEW_BOOK_KEY);
         for (MeleeGearTier tier : MeleeGearTier.values()) {
             meleeGearTierKeys.put(tier, new NamespacedKey(plugin, tier.pdcKey));
         }
@@ -1467,7 +1482,8 @@ public class ItemFactory {
             case 6 -> buildRegistryPage6();
             case 7 -> buildRegistryPage7();
             case 8 -> buildRegistryPage8();
-            case 9 -> buildRegistryPage9();
+            case 9  -> buildRegistryPage9();
+            case 10 -> buildRegistryPage10();
             default -> java.util.Collections.emptyList();
         };
     }
@@ -1672,6 +1688,212 @@ public class ItemFactory {
             item.setItemMeta(meta);
         }
         return item;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  LIGHTNING MAGIC ITEMS — Catching Block + Magic Bottles
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Builds the Catching Block item (LODESTONE with PDC tag).
+     * Place it in the world near a Lightning Rod.  Right-click to deposit
+     * Empty Magic Bottles.  When the rod is struck during rain, a bottle is charged.
+     *
+     * Obtained by: mining ANCIENT_DEBRIS with Silk Touch (25% chance).
+     * Also accessible from the Item Registry (Page 10).
+     */
+    public ItemStack buildCatchingBlock() {
+        ItemStack item = new ItemStack(Material.LODESTONE);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§b⚡ Catching Block");
+            meta.addEnchant(Enchantment.UNBREAKING, 1, true);
+            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS, ItemFlag.HIDE_ATTRIBUTES);
+            meta.setLore(List.of(
+                "§8" + "─".repeat(28),
+                "§7A lodestone attuned to lightning energy.",
+                "§7Place near a §eLightning Rod §7to harvest",
+                "§7storm magic into §bMagic Bottles§7.",
+                "§8" + "─".repeat(28),
+                "§b✦ §7Right-click to §bdeposit Empty Bottles§7.",
+                "§b✦ §7Requires §arain §7+ §eLightning Rod §7within §e5 blocks§7.",
+                "§b✦ §7Each lightning strike §bcharges 1 bottle §7(4 casts).",
+                "§8" + "─".repeat(28),
+                "§8Obtain: Mine §5Ancient Debris §8with Silk Touch §8(25% drop).",
+                "§8[DifficultyEngine — Catching Block]"
+            ));
+            meta.getPersistentDataContainer()
+                    .set(catchingBlockKey, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    /** Returns {@code true} if the item is a Catching Block. */
+    public boolean isCatchingBlock(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer()
+                   .has(catchingBlockKey, PersistentDataType.BYTE);
+    }
+
+    /**
+     * Builds an Empty Magic Bottle (GLASS_BOTTLE + PDC tag).
+     *
+     * Crafting recipe (shapeless):
+     *   4× Glass Pane + Leather + String + Enchanted Book → 1 Empty Magic Bottle
+     *
+     * Right-click a placed Catching Block to deposit.
+     * When charged by lightning, transforms into a Charged Magic Bottle.
+     */
+    public ItemStack buildEmptyMagicBottle() {
+        ItemStack item = new ItemStack(Material.GLASS_BOTTLE);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§b✦ Empty Magic Bottle");
+            meta.setLore(List.of(
+                "§8" + "─".repeat(28),
+                "§7A glass bottle etched with arcane runes,",
+                "§7ready to capture lightning energy.",
+                "§8" + "─".repeat(28),
+                "§b✦ §7Right-click a §bCatching Block §7to deposit.",
+                "§b✦ §7Must be raining + §eLightning Rod §7nearby.",
+                "§b✦ §7When the rod is struck → bottle is §bcharged§7.",
+                "§8" + "─".repeat(28),
+                "§6Craft: §74× Glass Pane + Leather + String + Enchanted Book",
+                "§8[DifficultyEngine — Empty Magic Bottle]"
+            ));
+            meta.getPersistentDataContainer()
+                    .set(emptyMagicBottleKey, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    /** Returns {@code true} if the item is an Empty Magic Bottle. */
+    public boolean isEmptyMagicBottle(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer()
+                   .has(emptyMagicBottleKey, PersistentDataType.BYTE);
+    }
+
+    /**
+     * Builds a Charged Magic Bottle with {@code charges} uses remaining.
+     * Uses a POTION with electric-blue colour and PDC integer for charge count.
+     *
+     * Produced automatically when a Catching Block absorbs a lightning strike.
+     * Each bottle contains 4 casts — right-click to consume one charge.
+     */
+    public ItemStack buildChargedMagicBottle(int charges) {
+        ItemStack item = new ItemStack(Material.POTION);
+        PotionMeta meta = (PotionMeta) item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§b⚡ §6Charged Magic Bottle §b⚡ §8[" + charges + " casts]");
+            meta.setColor(Color.fromRGB(0, 180, 255)); // electric blue
+            meta.setLore(List.of(
+                "§8" + "─".repeat(30),
+                "§7A bottle crackling with captured lightning.",
+                "§7Contains §b" + charges + " §7magical cast charges.",
+                "§8" + "─".repeat(30),
+                "§b✦ §7Right-click to consume §b1 charge §7and empower",
+                "§7your next magic spell (instant rune-free cast).",
+                "§8" + "─".repeat(30),
+                "§8Produced by: Catching Block + Lightning Rod strike.",
+                "§8[DifficultyEngine — Charged Magic Bottle]"
+            ));
+            meta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+            meta.getPersistentDataContainer()
+                    .set(chargedMagicBottleKey, PersistentDataType.INTEGER, charges);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    /** Returns {@code true} if the item is a Charged Magic Bottle. */
+    public boolean isChargedMagicBottle(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer()
+                   .has(chargedMagicBottleKey, PersistentDataType.INTEGER);
+    }
+
+    /**
+     * Returns the number of remaining charges on a Charged Magic Bottle,
+     * or 0 if the item is not a Charged Magic Bottle.
+     */
+    public int getChargedBottleCharges(ItemStack item) {
+        if (!isChargedMagicBottle(item)) return 0;
+        Integer charges = item.getItemMeta().getPersistentDataContainer()
+                              .get(chargedMagicBottleKey, PersistentDataType.INTEGER);
+        return charges != null ? charges : 0;
+    }
+
+    /**
+     * Builds a Quest Overview Book (WRITTEN_BOOK) listing all quests.
+     * Shown as a readable book in the Item Registry Page 10.
+     */
+    public ItemStack buildQuestOverviewBook() {
+        ItemStack item = new ItemStack(Material.WRITTEN_BOOK);
+        BookMeta meta = (BookMeta) item.getItemMeta();
+        if (meta != null) {
+            meta.setTitle("§6Quest Overview");
+            meta.setAuthor("§7DifficultyEngine");
+            meta.setGeneration(BookMeta.Generation.ORIGINAL);
+
+            // Page 1: Introduction
+            meta.addPage(
+                "§6§l─ Quest Journal ─\n\n" +
+                "§7Complete quests to\nearn gold and XP.\n\n" +
+                "§7Open: §e/questbook\n\n" +
+                "§7§8Repeatable quests\nreset after claiming\nthe reward.\n\n" +
+                "§8Permanent quests can\nonly be completed once."
+            );
+
+            // Page 2: Kill quests
+            meta.addPage(
+                "§c§l─ Kill Quests (Rep) ─\n\n" +
+                "§cBlaze Hunter\n§7Kill 50 Blazes\n§6→ 64 Fire Runes + 500g\n\n" +
+                "§bDepths Diver\n§7Kill 30 Drowned\n§6→ 64 Water Runes + 500g\n\n" +
+                "§2Undead Slayer\n§7Kill 60 Zombies\n§6→ 64 Earth Runes + 500g"
+            );
+
+            // Page 3: More kill quests
+            meta.addPage(
+                "§7§l─ More Kill Quests ─\n\n" +
+                "§7Sky Terror\n§7Kill 40 Phantoms\n§6→ 64 Air Runes + 500g\n\n" +
+                "§7Monster Hunter\n§7Kill 100 Monsters\n§6→ 250g + 500 XP\n\n" +
+                "§bGuardian Slayer\n§7Kill 20 Guardians\n§6→ 32 Water Runes + 400g"
+            );
+
+            // Page 4: More repeatable
+            meta.addPage(
+                "§7§l─ Repeatable (cont) ─\n\n" +
+                "§7Ghast Hunter\n§7Kill 15 Ghasts\n§6→ 32 Air Runes + 400g\n\n" +
+                "§2Spider Slayer\n§7Kill 40 Spiders\n§6→ 32 Earth Runes + 300g\n\n" +
+                "§8All repeatable quests\nreset on completion!"
+            );
+
+            // Page 5: Permanent
+            meta.addPage(
+                "§5§l─ Boss Quests (1x) ─\n\n" +
+                "§7First Blood\n§7Kill any boss\n§6→ 500g + 1000 XP\n\n" +
+                "§cWither Slayer\n§7Kill the Wither\n§6→ 1000g + 2000 XP\n\n" +
+                "§5Dragon Slayer\n§7Kill Ender Dragon\n§6→ 2000g + 3000 XP"
+            );
+
+            meta.getPersistentDataContainer()
+                    .set(questOverviewBookKey, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    /** Registry page 10 — Lightning Magic system items + Quest Book. */
+    private List<ItemStack> buildRegistryPage10() {
+        List<ItemStack> p = new ArrayList<>();
+        p.add(buildCatchingBlock());
+        p.add(buildEmptyMagicBottle());
+        p.add(buildChargedMagicBottle(4));
+        p.add(buildQuestOverviewBook());
+        return p;
     }
 
     /** Builds all 7 support pages + rune for registry page 9. */

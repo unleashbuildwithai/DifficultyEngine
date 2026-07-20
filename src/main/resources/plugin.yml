@@ -14,7 +14,7 @@ commands:
     permission-message: You do not have permission to use this command.
 
   hpbar:
-    description: Toggle the live HP display (❤ current / max) above mob heads when you hit them.
+    description: Toggle the live HP display (โ�ค current / max) above mob heads when you hit them.
     usage: /hpbar
     aliases: [showhp, healthbar, hpdisplay]
     permission: difficultyengine.use
@@ -25,7 +25,7 @@ commands:
     usage: /gear [player]
     aliases: [godgear, ng]
     permission: difficultyengine.gear
-    permission-message: §cThis command is for admins only.
+    permission-message: ยงcThis command is for admins only.
 
   sit:
     description: Toggle right-click-to-sit on slabs and stairs. Sneak to stand up.
@@ -39,21 +39,21 @@ commands:
     usage: /registry
     aliases: [itemregistry, items]
     permission: difficultyengine.registry
-    permission-message: §cThis command is for admins only.
+    permission-message: ยงcThis command is for admins only.
 
   curecosmetic:
     description: Remove all cosmetic effects (blindness, nausea, darkness, etc.) from yourself or a player.
     usage: /curecosmetic [player]
     aliases: [cureblind, cureffect, cleansight]
     permission: difficultyengine.curecosmetic
-    permission-message: §cThis command is for admins only.
+    permission-message: ยงcThis command is for admins only.
 
   adminlight:
     description: Toggle permanent personal Night Vision so you can see in the dark (admin only).
     usage: /adminlight [on|off]
     aliases: [alight, nightvision, nv]
     permission: difficultyengine.adminlight
-    permission-message: §cThis command is for admins only.
+    permission-message: ยงcThis command is for admins only.
 
   skills:
     description: View your skill levels and XP in chat.
@@ -122,7 +122,21 @@ commands:
     usage: /spellpage [player]
     aliases: [givepage, givespellpage]
     permission: difficultyengine.spellpage
-    permission-message: §cThis command is for admins only.
+    permission-message: ยงcThis command is for admins only.
+
+  lightningadmin:
+    description: Toggle instant-cast (zero cooldown) on all magic staffs for a player.
+    usage: /lightningadmin [player] [on|off]
+    aliases: [fastcast, ladmin]
+    permission: difficultyengine.lightningadmin
+    permission-message: ยงcThis command is for admins only.
+
+  bring:
+    description: Toggle whether your party members are pulled with you through portals (Nether, End, Ancient Realm).
+    usage: /bring [on|off]
+    aliases: [partybring, bringparty]
+    permission: difficultyengine.use
+    permission-message: You do not have permission to use this command.
 
 permissions:
   difficultyengine.use:
@@ -175,4 +189,8 @@ permissions:
 
   difficultyengine.spellpage:
     description: Allows use of /spellpage to give Spell Pages to players.
+    default: op
+
+  difficultyengine.lightningadmin:
+    description: Allows use of /lightningadmin to toggle instant-cast (zero cooldown) for players.
     default: op

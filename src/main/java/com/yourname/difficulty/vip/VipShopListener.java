@@ -9,15 +9,20 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
+import org.bukkit.entity.Axolotl;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Villager;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -57,6 +62,8 @@ public class VipShopListener implements Listener {
     // Shop item slots and prices
     private static final int  SLOT_SLIPPERS  = 13;
     private static final long PRICE_SLIPPERS = 5_000L;
+    private static final int  SLOT_AXOLOTL   = 11;
+    private static final long PRICE_AXOLOTL  = 5_000L;
 
     private final JavaPlugin  plugin;
     private final ItemFactory itemFactory;
@@ -124,6 +131,14 @@ public class VipShopListener implements Listener {
             "§7Purely cosmetic — works over any boots."
         ));
 
+        // Rainbow Axolotl
+        inv.setItem(SLOT_AXOLOTL, makeShopItem(
+            itemFactory.buildRainbowAxolotl(),
+            PRICE_AXOLOTL,
+            "§7Right-click to summon a §dBlue Axolotl §7companion!",
+            "§7Spawns with a §drainbow shimmer trail§7."
+        ));
+
         player.openInventory(inv);
         player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_TRADE, 1.0f, 1.2f);
     }
@@ -141,6 +156,9 @@ public class VipShopListener implements Listener {
 
         if (slot == SLOT_SLIPPERS) {
             handlePurchase(player, itemFactory.buildUnicornSlippers(), PRICE_SLIPPERS, "Unicorn Slippers");
+        }
+        if (slot == SLOT_AXOLOTL) {
+            handlePurchase(player, itemFactory.buildRainbowAxolotl(), PRICE_AXOLOTL, "Rainbow Axolotl");
         }
     }
 
@@ -203,6 +221,91 @@ public class VipShopListener implements Listener {
                         new Particle.DustOptions(RAINBOW[i], 1.8f) // large vibrant dots
                     );
                 }
+            }
+        }, 5L, 3L);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  RAINBOW AXOLOTL — right-click to release companion
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * When a player right-clicks while holding the Rainbow Axolotl bucket:
+     *  1. Consume 1 Rainbow Axolotl item from their hand.
+     *  2. Return 1 regular AXOLOTL_BUCKET (the "preserved original").
+     *  3. Spawn a BLUE-variant Axolotl companion 2 blocks in front of the player.
+     *  4. Start a rainbow particle trail orbiting the axolotl.
+     */
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onRainbowAxolotlUse(PlayerInteractEvent event) {
+        if (event.getHand() != EquipmentSlot.HAND) return;
+        Action action = event.getAction();
+        if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) return;
+
+        Player    player = event.getPlayer();
+        ItemStack hand   = player.getInventory().getItemInMainHand();
+        if (!itemFactory.isRainbowAxolotl(hand)) return;
+
+        event.setCancelled(true);
+
+        // Consume the Rainbow Axolotl item
+        if (hand.getAmount() > 1) hand.setAmount(hand.getAmount() - 1);
+        else player.getInventory().setItemInMainHand(new ItemStack(Material.AIR));
+
+        // Return a regular axolotl bucket (original preserved)
+        player.getInventory().addItem(new ItemStack(Material.AXOLOTL_BUCKET));
+
+        // Spawn Blue axolotl companion 2 blocks in front
+        Location spawnLoc = player.getLocation().add(
+            player.getLocation().getDirection().setY(0).normalize().multiply(2));
+        spawnLoc.setY(player.getLocation().getY());
+
+        Axolotl companion = (Axolotl) player.getWorld().spawnEntity(spawnLoc, EntityType.AXOLOTL);
+        companion.setVariant(Axolotl.Variant.BLUE);
+        companion.setCustomName("§d✨ §bRainbow Companion");
+        companion.setCustomNameVisible(true);
+        companion.setAI(true);
+        companion.setRemoveWhenFarAway(false);
+
+        // Start rainbow shimmer trail on the axolotl
+        startAxolotlRainbowTrail(companion);
+
+        player.sendMessage("§d🌈 §7Your §dRainbow Axolotl §7companion has been released!");
+        player.sendMessage("  §8A regular axolotl bucket was returned to preserve the original.");
+        player.playSound(player.getLocation(), Sound.ENTITY_AXOLOTL_IDLE_WATER, 1.0f, 1.5f);
+        player.getWorld().spawnParticle(Particle.HEART,
+            companion.getLocation().add(0, 1, 0), 8, 0.4, 0.2, 0.4, 0.05);
+        player.getWorld().spawnParticle(Particle.ENCHANT,
+            companion.getLocation().add(0, 1, 0), 20, 0.5, 0.5, 0.5, 0.1);
+    }
+
+    /**
+     * Starts a rainbow shimmer particle ring that orbits the given axolotl entity.
+     * Uses the same 12-colour RAINBOW array as the slippers, cycling through with
+     * a slow rotation every 3 ticks for a smooth iridescent effect.
+     */
+    private void startAxolotlRainbowTrail(Axolotl axolotl) {
+        final int[] tickRef = {0};
+        plugin.getServer().getScheduler().runTaskTimer(plugin, task -> {
+            if (!axolotl.isValid() || axolotl.isDead()) { task.cancel(); return; }
+
+            int tick = tickRef[0]++;
+            double baseAngle = tick * 0.25;
+            Location center  = axolotl.getLocation().clone().add(0, 0.3, 0);
+            double   radius  = 0.60;
+
+            for (int i = 0; i < RAINBOW.length; i++) {
+                double angle = baseAngle + (2.0 * Math.PI * i / RAINBOW.length);
+                double dx    = Math.cos(angle) * radius;
+                double dz    = Math.sin(angle) * radius;
+                Location dot = center.clone().add(dx, 0.0, dz);
+                axolotl.getWorld().spawnParticle(
+                    Particle.DUST,
+                    dot, 1,
+                    0.02, 0.02, 0.02,
+                    0.0,
+                    new Particle.DustOptions(RAINBOW[i], 1.6f)
+                );
             }
         }, 5L, 3L);
     }

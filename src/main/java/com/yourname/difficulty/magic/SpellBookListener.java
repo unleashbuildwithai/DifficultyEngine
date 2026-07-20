@@ -116,18 +116,38 @@ public class SpellBookListener implements Listener {
     }
 
     // ── Hostile mob death: 4% chance to drop a Spell Page ────────────────────
+    //
+    // Rules:
+    //   1. Only from monsters killed by a PLAYER (not environmental, not other mobs).
+    //   2. Player must NOT already have an unabsorbed Spell Page in inventory.
+    //   3. Player must NOT have all pages already unlocked.
+    //   4. Lore books (WRITTEN_BOOK) never drop from monsters — only Spell Pages.
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onEntityDeath(EntityDeathEvent event) {
         LivingEntity entity = event.getEntity();
         Player       killer = entity.getKiller();
-        if (killer == null) return;
+        if (killer == null) return; // not killed by a player
 
-        // Only drops from monsters (Zombie, Skeleton, Blaze, Witch, etc.)
+        // Only from hostile monsters
         if (!(entity instanceof Monster)) return;
+
+        // Suppress drop if player already has an unabsorbed Spell Page in inventory
+        if (playerHasSpellPage(killer)) return;
+
+        // Suppress drop if player has already unlocked all pages
+        if (manager.allUnlocked(killer.getUniqueId())) return;
 
         if (RAND.nextDouble() < PAGE_DROP_CHANCE) {
             event.getDrops().add(manager.buildSpellPageItem());
         }
+    }
+
+    /** Returns true if the player has an unabsorbed Spell Page anywhere in their inventory. */
+    private boolean playerHasSpellPage(Player player) {
+        for (org.bukkit.inventory.ItemStack s : player.getInventory().getContents()) {
+            if (manager.isSpellPage(s)) return true;
+        }
+        return false;
     }
 }
