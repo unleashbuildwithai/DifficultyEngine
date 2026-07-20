@@ -1,0 +1,7 @@
+# DifficultyEngine Configuration
+
+ancient-realm:
+  # Spawn coordinates inside the ancient_realm world
+  spawn-x: 0.0
+  spawn-y: 64.0
+  spawn-z: 0.0

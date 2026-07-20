@@ -385,6 +385,40 @@ public final class NpcQuestRegistry {
         q.add(collect(299,"Void Ascension", "Ascension Sage",    EN, Material.DRAGON_BREATH,256,20000).secret().hidden(NETHER_STAR,1,10000).build());
         q.add(kill(300,  "The Omega",       "The Omega",         EN, ENDER_DRAGON,   1,50000).secret().hidden(Material.DRAGON_BREATH,256,25000).build());
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  BOSS ROOM QUESTS (301 – 306) — placed FAR from the boss room coords
+        //  Abyssal Chamber  (-21, -39, -69)   → NPC far north at (-21, 70, -270)
+        //  Crimson Pit      (-108, -26, -14)  → NPC far east  at ( 92, 70,  -14)
+        //  Verdant Shrine   ( 61, -43, 100)   → NPC far west  at (-140,70,  100)
+        //  Tempest Sanctum  (115, -38, -47)   → NPC far south at (115, 70,  153)
+        //  Void Sanctum     (-16, -57,  99)   → NPC far north at (-16, 70, -101)
+        //  Gilded Sanctum   (-14, -42, 267)   → NPC far east  at (186, 70,  267)
+        // ══════════════════════════════════════════════════════════════════════
+
+        q.add(kill(301, "Depths of the Abyss", "Deep Sea Oracle",
+                OW, GUARDIAN, 50, 5000)
+                .secret().hidden(PRISMARINE_CRYSTALS, 16, 2000).build());
+
+        q.add(kill(302, "Embers of the Pit",   "Ember Sage",
+                NT, WITHER_SKELETON, 30, 5000)
+                .secret().hidden(Material.BLAZE_ROD, 16, 2000).build());
+
+        q.add(kill(303, "Verdant Curse",        "Forest Keeper",
+                OW, CAVE_SPIDER, 60, 5000)
+                .secret().hidden(STRING, 64, 2000).build());
+
+        q.add(kill(304, "Storm Wrath",          "Storm Caller",
+                OW, PHANTOM, 40, 5000)
+                .secret().hidden(Material.PHANTOM_MEMBRANE, 16, 2000).build());
+
+        q.add(kill(305, "The Void Stirs",       "Void Scholar",
+                EN, ENDERMAN, 100, 6000)
+                .secret().hidden(Material.ENDER_PEARL, 32, 3000).build());
+
+        q.add(collect(306, "Gold of the Sanctum", "Gold Baron",
+                NT, GOLD_BLOCK, 5, 6000)
+                .secret().hidden(NETHERITE_INGOT, 1, 3000).build());
+
         ALL = Collections.unmodifiableList(q);
     }
 

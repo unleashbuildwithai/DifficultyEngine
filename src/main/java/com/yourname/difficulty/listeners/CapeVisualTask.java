@@ -91,15 +91,18 @@ public class CapeVisualTask extends BukkitRunnable {
 
     private int tick = 0;
 
-    // ── Fishing cape orbit system ─────────────────────────────────────────────
-    /** Axolotls in a vertical great-circle ring (poles), rotating around Y-axis. */
-    private static final int    AXOLOTL_COUNT  = 6;
-    private static final double AXOLOTL_RADIUS = 1.10;
-    /** Tropical fish in a horizontal equator ring at waist height. */
-    private static final int    FISH_COUNT     = 8;
-    private static final double FISH_RADIUS    = 1.20;
-    /** Radians the rings advance per 10-tick run cycle. */
-    private static final double ORBIT_SPEED    = 0.040;
+    // ── Fishing cape — single rainbow axolotl companion ──────────────────────
+    /** One rainbow axolotl lazily swimming behind the player. */
+    private static final int    AXOLOTL_COUNT  = 1;
+    /** Swim-path amplitudes and frequencies. */
+    private static final double SWIM_SIDE_AMP  = 1.80;   // wider side-to-side (was 0.80)
+    private static final double SWIM_SIDE_FREQ = 0.42;   // side-to-side speed
+    private static final double SWIM_VERT_AMP  = 1.20;   // larger up-down range (was 0.25)
+    private static final double SWIM_VERT_FREQ = 0.65;   // slower vertical bob (was 1.10)
+    private static final double SWIM_BACK_DIST = 3.20;   // further behind player (was 0.65)
+    private static final double SWIM_HEIGHT    = 1.40;   // base height above feet
+    /** Time-counter advance per run cycle. */
+    private static final double ORBIT_SPEED    = 0.055;
 
     private final Map<UUID, List<org.bukkit.entity.Entity>> fishingOrbit  = new HashMap<>();
     private final Map<UUID, Double>                         fishingAngles = new HashMap<>();
@@ -286,10 +289,12 @@ public class CapeVisualTask extends BukkitRunnable {
         Vector pFacing = player.getLocation().getDirection();
         Vector pBack   = new Vector(-pFacing.getX(), 0, -pFacing.getZ());
         if (pBack.lengthSquared() > 1e-6) pBack.normalize();
-        pBack.multiply(0.45);
+        // Push particles 1.2 blocks behind and BELOW eye-level (1.62 m) so they
+        // never clip into first-person view even at wide FoV or when looking upward.
+        pBack.multiply(1.2);
 
-        Location loc  = player.getLocation().clone().add(pBack).add(0, 1.0, 0);
-        Location locH = player.getLocation().clone().add(pBack).add(0, 1.5, 0);
+        Location loc  = player.getLocation().clone().add(pBack).add(0, 0.85, 0);
+        Location locH = player.getLocation().clone().add(pBack).add(0, 1.20, 0);
 
         // Right-hand vector (perpendicular to facing, horizontal)
         // right = (-fz, 0, fx) — same as facing × (0,1,0)
@@ -557,128 +562,102 @@ public class CapeVisualTask extends BukkitRunnable {
     // ═══════════════════════════════════════════════════════════════════════
 
     /**
-     * Maintains (or creates) two persistent orbit rings for the fishing cape:
-     * <ol>
-     *   <li><b>Vertical ring</b> — {@value #AXOLOTL_COUNT} axolotls arranged on a
-     *       great circle (longitude loop) rotating slowly around the player's Y-axis.</li>
-     *   <li><b>Horizontal ring</b> — {@value #FISH_COUNT} tropical fish at waist height
-     *       orbiting in the opposite direction.</li>
-     * </ol>
-     * Called from {@link #spawnCapeParticles} every run cycle while the player
-     * wears a Fishing Cape.
+     * Moves the single rainbow axolotl companion along a sinusoidal swim path
+     * behind the player and renders cycling rainbow DUST particles around it.
      */
     private void updateFishingOrbit(Player player) {
-        UUID uuid  = player.getUniqueId();
-        double angle = fishingAngles.getOrDefault(uuid, 0.0) + ORBIT_SPEED;
-        fishingAngles.put(uuid, angle);
+        UUID uuid = player.getUniqueId();
+        double t  = fishingAngles.getOrDefault(uuid, 0.0) + ORBIT_SPEED;
+        fishingAngles.put(uuid, t);
 
         List<org.bukkit.entity.Entity> entities = fishingOrbit.get(uuid);
         boolean needRespawn = (entities == null
-                || entities.size() < AXOLOTL_COUNT + FISH_COUNT
+                || entities.size() < AXOLOTL_COUNT
                 || entities.stream().anyMatch(e -> e == null || e.isDead()));
 
         if (needRespawn) {
-            spawnFishingOrbit(player, angle);
+            spawnFishingOrbit(player, t);
             return;
         }
 
-        // Centre point: player torso height
-        Location centre = player.getLocation().clone().add(0, 1.0, 0);
+        org.bukkit.entity.Entity axolotl = entities.get(0);
 
-        // ── Move axolotls (vertical great-circle ring) ─────────────────────
-        for (int i = 0; i < AXOLOTL_COUNT; i++) {
-            org.bukkit.entity.Entity e = entities.get(i);
-            double circAngle = 2 * Math.PI * i / AXOLOTL_COUNT;
-            double rx = Math.cos(circAngle) * Math.cos(angle) * AXOLOTL_RADIUS;
-            double ry = Math.sin(circAngle)                   * AXOLOTL_RADIUS;
-            double rz = Math.cos(circAngle) * Math.sin(angle) * AXOLOTL_RADIUS;
-            e.teleport(centre.clone().add(rx, ry, rz));
+        // ── Compute swim destination in player-local space ────────────────
+        Vector facing = player.getLocation().getDirection();
+        Vector back   = new Vector(-facing.getX(), 0, -facing.getZ());
+        if (back.lengthSquared() > 1e-6) back.normalize();
+        Vector side = new Vector(-facing.getZ(), 0, facing.getX());
+        if (side.lengthSquared() > 1e-6) side.normalize();
+
+        double sideOff = SWIM_SIDE_AMP * Math.sin(t * SWIM_SIDE_FREQ);
+        double vertOff = SWIM_VERT_AMP * Math.sin(t * SWIM_VERT_FREQ);
+
+        Location dest = player.getLocation().clone()
+                .add(back.clone().multiply(SWIM_BACK_DIST))
+                .add(side.clone().multiply(sideOff))
+                .add(0, SWIM_HEIGHT + vertOff, 0);
+
+        // Orient axolotl to face direction of travel
+        Vector vel = dest.toVector().subtract(axolotl.getLocation().toVector());
+        if (vel.lengthSquared() > 0.001) {
+            dest.setYaw((float) Math.toDegrees(Math.atan2(-vel.getX(), vel.getZ())));
         }
+        axolotl.teleport(dest);
 
-        // ── Move fish (horizontal equator ring, counter-rotating) ──────────
-        for (int i = 0; i < FISH_COUNT; i++) {
-            org.bukkit.entity.Entity e = entities.get(AXOLOTL_COUNT + i);
-            double fishAngle = 2 * Math.PI * i / FISH_COUNT - angle * 1.3;
-            double rx = Math.cos(fishAngle) * FISH_RADIUS;
-            double rz = Math.sin(fishAngle) * FISH_RADIUS;
-            e.teleport(centre.clone().add(rx, 0, rz));
+        // ── Rainbow particle ring around the axolotl ─────────────────────
+        float hue = (float)((tick * 0.022) % 1.0);
+        Color rainbowColor = hsbToColor(hue);
+        Particle.DustOptions rainbow = new Particle.DustOptions(rainbowColor, 1.2f);
+        Location axLoc = axolotl.getLocation().add(0, 0.3, 0);
+        for (int i = 0; i < 7; i++) {
+            double ang = Math.PI * 2.0 * i / 7;
+            Location pLoc = axLoc.clone().add(
+                    Math.cos(ang) * 0.40, 0.15, Math.sin(ang) * 0.40);
+            player.getWorld().spawnParticle(Particle.DUST, pLoc, 1, 0, 0, 0, 0, rainbow);
         }
     }
 
     /**
-     * Spawns all {@value #AXOLOTL_COUNT} axolotls + {@value #FISH_COUNT} tropical fish
-     * for the fishing orbit rings and stores them in {@link #fishingOrbit}.
-     * Flags are set atomically via the {@code world.spawn()} Consumer overload.
+     * Spawns the single BLUE axolotl companion for the Fishing Cape.
+     * One entity, no AI, no gravity, no collision — rainbow particles added each tick.
      */
-    private void spawnFishingOrbit(Player player, double angle) {
+    private void spawnFishingOrbit(Player player, double t) {
         UUID uuid = player.getUniqueId();
-        // Despawn any previous (partially dead) entities
+        // Despawn any previous entities
         List<org.bukkit.entity.Entity> old = fishingOrbit.get(uuid);
         if (old != null) {
             for (org.bukkit.entity.Entity e : old) if (e != null && !e.isDead()) e.remove();
         }
 
         List<org.bukkit.entity.Entity> entities = new ArrayList<>();
-        Location centre = player.getLocation().clone().add(0, 1.0, 0);
 
-        // ── Axolotls: vertical great-circle ring ──────────────────────────
-        org.bukkit.entity.Axolotl.Variant[] variants = org.bukkit.entity.Axolotl.Variant.values();
-        for (int i = 0; i < AXOLOTL_COUNT; i++) {
-            double circAngle = 2 * Math.PI * i / AXOLOTL_COUNT;
-            double rx = Math.cos(circAngle) * Math.cos(angle) * AXOLOTL_RADIUS;
-            double ry = Math.sin(circAngle)                   * AXOLOTL_RADIUS;
-            double rz = Math.cos(circAngle) * Math.sin(angle) * AXOLOTL_RADIUS;
-            final org.bukkit.entity.Axolotl.Variant variant = variants[i % variants.length];
+        // Initial position: directly behind player at swim height
+        Vector facing = player.getLocation().getDirection();
+        Vector back   = new Vector(-facing.getX(), 0, -facing.getZ());
+        if (back.lengthSquared() > 1e-6) back.normalize();
 
-            org.bukkit.entity.Axolotl axolotl = player.getWorld().spawn(
-                centre.clone().add(rx, ry, rz),
-                org.bukkit.entity.Axolotl.class,
-                a -> {
-                    a.setAI(false);
-                    a.setGravity(false);
-                    a.setPersistent(false);
-                    a.setInvulnerable(true);
-                    a.setSilent(true);
-                    a.setCustomNameVisible(false);
-                    a.setCollidable(false);
-                    a.setAdult();
-                    a.setVariant(variant);
-                    a.addScoreboardTag(FISH_TAG);
-                    capeEntityTeam.addEntry(a.getUniqueId().toString());
-                });
-            entities.add(axolotl);
-        }
+        Location spawnLoc = player.getLocation().clone()
+                .add(back.clone().multiply(SWIM_BACK_DIST))
+                .add(0, SWIM_HEIGHT, 0);
 
-        // ── Tropical fish: horizontal equator ring ─────────────────────────
-        TropicalFish.Pattern[]  patterns  = TropicalFish.Pattern.values();
-        org.bukkit.DyeColor[]   dyeColors = org.bukkit.DyeColor.values();
-        for (int i = 0; i < FISH_COUNT; i++) {
-            double fishAngle = 2 * Math.PI * i / FISH_COUNT - angle * 1.3;
-            double rx = Math.cos(fishAngle) * FISH_RADIUS;
-            double rz = Math.sin(fishAngle) * FISH_RADIUS;
-            final TropicalFish.Pattern pattern = patterns[i % patterns.length];
-            final org.bukkit.DyeColor  body    = dyeColors[(i * 3 + 1) % dyeColors.length];
-            final org.bukkit.DyeColor  pat     = dyeColors[(i * 2)     % dyeColors.length];
-
-            TropicalFish fish = player.getWorld().spawn(
-                centre.clone().add(rx, 0, rz),
-                TropicalFish.class,
-                f -> {
-                    f.setAI(false);
-                    f.setGravity(false);
-                    f.setPersistent(false);
-                    f.setInvulnerable(true);
-                    f.setSilent(true);
-                    f.setCustomNameVisible(false);
-                    f.setCollidable(false);
-                    f.setPattern(pattern);
-                    f.setBodyColor(body);
-                    f.setPatternColor(pat);
-                    f.addScoreboardTag(FISH_TAG);
-                    capeEntityTeam.addEntry(f.getUniqueId().toString());
-                });
-            entities.add(fish);
-        }
+        // Spawn ONE BLUE axolotl (rarest variant — complemented by rainbow particles)
+        org.bukkit.entity.Axolotl axolotl = player.getWorld().spawn(
+            spawnLoc,
+            org.bukkit.entity.Axolotl.class,
+            a -> {
+                a.setAI(false);
+                a.setGravity(false);
+                a.setPersistent(false);
+                a.setInvulnerable(true);
+                a.setSilent(true);
+                a.setCustomNameVisible(false);
+                a.setCollidable(false);
+                a.setAdult();
+                a.setVariant(org.bukkit.entity.Axolotl.Variant.BLUE);
+                a.addScoreboardTag(FISH_TAG);
+                capeEntityTeam.addEntry(a.getUniqueId().toString());
+            });
+        entities.add(axolotl);
 
         fishingOrbit.put(uuid, entities);
     }

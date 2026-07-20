@@ -102,6 +102,31 @@ commands:
     usage: /questnpc <spawn|remove|list|info> [id]
     aliases: [qnpc]
 
+  inventory:
+    description: Open your Gold Vault (separate gold coin storage).
+    usage: /inventory
+    aliases: [vault, goldvault]
+
+  commands:
+    description: Show the welcome message and command list again.
+    usage: /commands
+    aliases: [help, ?]
+
+  spawnmob:
+    description: Spawn a custom monster at your location (Admin).
+    usage: /spawnmob <monster_id>
+    aliases: [custommob, cmob]
+
+  hardcore:
+    description: Activate Nightmare Hardcore mode (level/gold reset on death).
+    usage: /hardcore
+    aliases: [nmhc, hardcoremode]
+
+  spawnboss:
+    description: Spawn a dungeon boss at its arena location (Admin).
+    usage: /spawnboss <tempest|crimson>
+    aliases: [bossspawn, dungeonboss]
+
 permissions:
   difficultyengine.use:
     description: Allows use of standard player commands.

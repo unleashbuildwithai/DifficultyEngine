@@ -1,5 +1,6 @@
 package com.yourname.difficulty.magic;
 
+import com.yourname.difficulty.casting.CastingEngine;
 import com.yourname.difficulty.items.EarthBlockTier;
 import com.yourname.difficulty.items.ItemFactory;
 import com.yourname.difficulty.skills.SkillBonusManager;
@@ -25,7 +26,9 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
+import com.yourname.difficulty.realm.AncientDebrisPortalListener;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BookMeta;
 import org.bukkit.metadata.FixedMetadataValue;
@@ -81,9 +84,11 @@ public class MagicStaffListener implements Listener {
     public static final String META_BLAZING    = "magic_blazing";
     public static final String META_MIND_BOMB  = "magic_mind_bomb";
     public static final String META_FALLEN     = "magic_fallen";
-    public static final String META_STAFF_HIT    = "magic_staff_hit";
-    public static final String META_EARTH_HITS   = "magic_earth_hits";
-    public static final String META_EARTH_TRAPPED = "magic_earth_trapped";
+    public static final String META_STAFF_HIT      = "magic_staff_hit";
+    public static final String META_EARTH_HITS     = "magic_earth_hits";
+    public static final String META_EARTH_TRAPPED  = "magic_earth_trapped";
+    /** Metadata key: player struck by Lv99 lightning — burns until eating or water magic. */
+    public static final String META_LIGHTNING_BURNING = "magic_lightning_burning";
 
     private static final int    AIR_RANGE = 20;
     private static final Random RAND      = new Random();
@@ -109,6 +114,12 @@ public class MagicStaffListener implements Listener {
     /** Dirt blocks placed by earth staff — tracked so fire can ignite them into lava. */
     private final Set<Location>                      magicDirtBlocks    = new HashSet<>();
     private       SandstormManager                   sandstormManager   = null;
+    /** Optional CastingEngine — notified on every successful spell cast for combo tracking. */
+    private       CastingEngine                      castingEngine      = null;
+    /** Optional portal listener — called when lightning hits Ancient Debris. */
+    private       AncientDebrisPortalListener        portalListener     = null;
+    /** Player UUID → repeating task that keeps them on fire after a lightning burn. */
+    private final Map<UUID, BukkitTask>              lightningBurnTasks = new HashMap<>();
 
     private static final long MAGIC_XP_CAST  = 10L;
     private static final long MAGIC_XP_HIT   =  5L;
@@ -121,6 +132,18 @@ public class MagicStaffListener implements Listener {
     }
 
     public void setSandstormManager(SandstormManager sm) { this.sandstormManager = sm; }
+
+    /**
+     * Wires in the CastingEngine so that every successful elemental cast
+     * updates the player's combo queue for SupportStaff activation.
+     */
+    public void setCastingEngine(CastingEngine ce) { this.castingEngine = ce; }
+
+    /**
+     * Wires in the AncientDebrisPortalListener so that a lightning strike
+     * aimed directly at an Ancient Debris block opens the Ancient Realm portal.
+     */
+    public void setPortalListener(AncientDebrisPortalListener pl) { this.portalListener = pl; }
 
     // ══════════════════════════════════════════════════════════════════════════
     //  RIGHT-CLICK CAST
@@ -145,8 +168,17 @@ public class MagicStaffListener implements Listener {
         // ── Fire Staff Lv99: dual-click mode ──────────────────────────────────
         // Left-click  → normal fireball
         // Right-click → lightning strike (admin = no cooldown, no rune cost)
+        // Right-click on ANCIENT_DEBRIS → portal ritual (handled by AncientDebrisPortalListener)
         if (element == MagicElement.FIRE && magicLevel >= 99) {
             if (isRightClick) {
+                // ── Ancient Debris portal check ───────────────────────────────
+                // If the player is right-clicking Ancient Debris, skip lightning
+                // and let AncientDebrisPortalListener (HIGHEST priority) handle it.
+                if (event.getClickedBlock() != null
+                        && event.getClickedBlock().getType() == org.bukkit.Material.ANCIENT_DEBRIS) {
+                    return; // Portal listener takes over — no lightning fired
+                }
+
                 // ── Lightning Strike ──────────────────────────────────────────
                 boolean isAdmin = player.hasPermission("difficultyengine.cape.admin");
                 if (!isAdmin) {
@@ -242,6 +274,11 @@ public class MagicStaffListener implements Listener {
         else if (element == MagicElement.WATER) castWater(player, magicLevel, action);
         else if (element == MagicElement.EARTH) castEarth(player, magicLevel);
         else if (element == MagicElement.AIR)   castAir(player, magicLevel);
+
+        // Notify the CastingEngine so this element is added to the combo queue
+        if (castingEngine != null) {
+            castingEngine.onElementCast(player, element);
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -278,16 +315,33 @@ public class MagicStaffListener implements Listener {
 
     /**
      * Casts a lightning strike at the point the player is looking (up to 40 blocks).
-     * Damages + scorches all entities within 3 × 4 × 3 blocks of the strike.
      *
-     * Admin players ({@code difficultyengine.cape.admin}) have no cooldown and
-     * no rune cost for this ability.
+     * NEW BEHAVIOURS:
+     *  • If the ray hits ANCIENT_DEBRIS → triggers the portal ritual instead.
+     *  • 10% chance per strike to ignite a nearby dirt/grass block on fire (30 s).
+     *  • Any PLAYER hit is set on fire PERMANENTLY (magic_lightning_burning) until
+     *    they eat food or are hit by a Water bolt.  They will burn to death without aid.
+     *
+     * Admin players ({@code difficultyengine.cape.admin}) have no cooldown/rune cost.
      */
     private void castLightning(Player player, int magicLevel) {
         // ── Find target location (raytrace 40 blocks) ────────────────────────
         RayTraceResult ray = player.getWorld().rayTraceBlocks(
             player.getEyeLocation(), player.getLocation().getDirection(), 40,
             FluidCollisionMode.NEVER, true);
+
+        // ── Ancient Debris portal check (ranged, via lightning) ───────────────
+        if (ray != null && ray.getHitBlock() != null
+                && ray.getHitBlock().getType() == Material.ANCIENT_DEBRIS
+                && portalListener != null) {
+            // Fire visual lightning AT the block, then trigger portal
+            Location debrisLoc = ray.getHitBlock().getLocation().add(0.5, 0, 0.5);
+            player.getWorld().strikeLightningEffect(debrisLoc.clone().add(0, 1, 0));
+            player.getWorld().spawnParticle(Particle.ELECTRIC_SPARK, debrisLoc.clone().add(0, 1, 0), 40, 0.4, 1.0, 0.4, 0.1);
+            player.getWorld().playSound(debrisLoc, Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 1.5f, 0.8f);
+            portalListener.triggerViaLightning(player, ray.getHitBlock().getLocation());
+            return;
+        }
 
         Location strikeAt;
         if (ray != null && ray.getHitBlock() != null) {
@@ -300,6 +354,36 @@ public class MagicStaffListener implements Listener {
         // ── Visual strike (no block damage) ───────────────────────────────────
         player.getWorld().strikeLightningEffect(strikeAt);
 
+        // ── 10% chance to ignite a dirt/grass block near the strike ──────────
+        if (RAND.nextInt(10) == 0) {
+            List<Block> dirtCandidates = new ArrayList<>();
+            for (int dx = -2; dx <= 2; dx++) {
+                for (int dz = -2; dz <= 2; dz++) {
+                    Block ground = strikeAt.getBlock().getRelative(dx, -1, dz);
+                    if (ground.getType() == Material.DIRT
+                            || ground.getType() == Material.GRASS_BLOCK
+                            || ground.getType() == Material.COARSE_DIRT
+                            || ground.getType() == Material.ROOTED_DIRT) {
+                        Block above = ground.getRelative(BlockFace.UP);
+                        if (above.getType().isAir()) {
+                            dirtCandidates.add(above);
+                        }
+                    }
+                }
+            }
+            if (!dirtCandidates.isEmpty()) {
+                Block fireBlock = dirtCandidates.get(RAND.nextInt(dirtCandidates.size()));
+                fireBlock.setType(Material.FIRE);
+                fireBlock.getWorld().spawnParticle(Particle.FLAME,
+                    fireBlock.getLocation().add(0.5, 0.5, 0.5), 15, 0.3, 0.3, 0.3, 0.05);
+                player.sendActionBar("§e⚡ §c🔥 Lightning ignited the ground!");
+                final Block fb = fireBlock;
+                plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                    if (fb.getType() == Material.FIRE) fb.setType(Material.AIR);
+                }, 600L); // auto-extinguish after 30 s
+            }
+        }
+
         // ── Damage & scorch entities nearby ───────────────────────────────────
         double baseDmg = 5.0 + (magicLevel / 99.0) * 7.0;
         for (Entity e : player.getWorld().getNearbyEntities(strikeAt, 3, 4, 3)) {
@@ -307,12 +391,18 @@ public class MagicStaffListener implements Listener {
             if (e.equals(player)) continue;
             le.damage(baseDmg, player);
             applyScorched(le, 80);
-            le.setFireTicks(60);
             le.getWorld().strikeLightningEffect(le.getLocation());
             le.getWorld().spawnParticle(Particle.ELECTRIC_SPARK,
                 le.getLocation().add(0, 1, 0), 20, 0.3, 0.5, 0.3, 0.05);
-            if (le instanceof Player tp)
-                tp.sendActionBar("§e⚡ §c§lLIGHTNING STRIKE! §7Struck by Lv99 Fire magic! §8(-" + (int)(baseDmg/2) + "❤)");
+
+            if (le instanceof Player tp) {
+                // ── 100% permanent burn on player hit ────────────────────────
+                startLightningBurn(tp, player);
+                tp.sendActionBar("§e⚡ §c§lLIGHTNING STRIKE! §cYou're on fire! §8Eat food or use Water Magic!");
+            } else {
+                le.setFireTicks(100);
+                le.sendMessage(""); // mobs — just normal fire
+            }
         }
 
         // ── Sounds & particles ────────────────────────────────────────────────
@@ -327,6 +417,71 @@ public class MagicStaffListener implements Listener {
         } else {
             player.sendActionBar("§e⚡ §c[Fire Lv99] §e§lLIGHTNING STRIKE! §8(" + (int)(baseDmg/2) + "❤ in 3-block radius)");
         }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  LIGHTNING BURN — permanent fire until food eaten or water magic
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Starts the Lightning Burn effect on a player.
+     * Re-applies fire ticks every 2 s so the player cannot roll it off.
+     * Cleared by eating any food or receiving a Water bolt.
+     */
+    private void startLightningBurn(Player target, Player attacker) {
+        target.setMetadata(META_LIGHTNING_BURNING, new FixedMetadataValue(plugin, true));
+        target.setFireTicks(200);
+
+        // Cancel any existing burn task first
+        BukkitTask old = lightningBurnTasks.remove(target.getUniqueId());
+        if (old != null) old.cancel();
+
+        BukkitTask task = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
+            if (!target.isOnline() || !target.isValid()
+                    || !target.hasMetadata(META_LIGHTNING_BURNING)) {
+                clearLightningBurn(target);
+                return;
+            }
+            target.setFireTicks(60); // re-apply so rolling/water never extinguishes it
+            target.getWorld().spawnParticle(Particle.FLAME,
+                target.getLocation().add(0, 1, 0), 8, 0.3, 0.4, 0.3, 0.04);
+            target.sendActionBar("§c🔥 §lLIGHTNING BURN! §7Eat food or use §bWater Magic §7to extinguish!");
+        }, 5L, 40L); // tick 5, every 2 s
+        lightningBurnTasks.put(target.getUniqueId(), task);
+
+        target.sendTitle("§e⚡ §c§lLIGHTNING BURNED!", "§7Eat food or use Water Magic!", 5, 80, 20);
+        if (attacker != null)
+            attacker.sendActionBar("§e⚡ §c§lLIGHTNING BURNED! §7They'll burn to death without aid!");
+    }
+
+    /**
+     * Removes the Lightning Burn effect from the player.
+     */
+    public void clearLightningBurn(Player target) {
+        target.removeMetadata(META_LIGHTNING_BURNING, plugin);
+        target.setFireTicks(0);
+        BukkitTask t = lightningBurnTasks.remove(target.getUniqueId());
+        if (t != null) t.cancel();
+    }
+
+    /**
+     * Eating any food extinguishes a Lightning Burn.
+     */
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    public void onPlayerEat(PlayerItemConsumeEvent event) {
+        Player p = event.getPlayer();
+        if (!p.hasMetadata(META_LIGHTNING_BURNING)) return;
+        if (!event.getItem().getType().isEdible()) return;
+        // Schedule clear 1 tick later so the food is actually consumed first
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            if (!p.isOnline() || !p.hasMetadata(META_LIGHTNING_BURNING)) return;
+            clearLightningBurn(p);
+            p.sendMessage("§a✓ §7Food extinguished your §cLightning Burn§7!");
+            p.sendTitle("§a§l✔ BURN OUT", "§7Food saved you!", 5, 30, 10);
+            p.getWorld().spawnParticle(Particle.CLOUD,
+                p.getLocation().add(0, 1, 0), 20, 0.4, 0.4, 0.4, 0.05);
+            p.getWorld().playSound(p.getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 1.0f, 1.2f);
+        }, 1L);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -403,27 +558,14 @@ public class MagicStaffListener implements Listener {
     // ══════════════════════════════════════════════════════════════════════════
 
     private void castEarth(Player player, int magicLevel) {
-        // ── NEW TIER SYSTEM (Magic Level 10+): throw block from inventory ─────
+        // ── TIER SYSTEM (Magic Level 10+): throw block from inventory ─────────
         if (magicLevel >= 10) {
             EarthBlockTier tier = findBestEarthTier(player, magicLevel);
             if (tier == null) {
-                // Refund the consumed earth rune — no valid block+page found
-                player.getInventory().addItem(itemFactory.buildRune(MagicElement.EARTH, 1));
-                // Tell the player exactly which Earth Magic Page to craft
-                EarthBlockTier missingPage = null;
-                for (EarthBlockTier t : EarthBlockTier.values()) {
-                    if (magicLevel >= t.levelRequired && playerHasBlock(player, t.material)) {
-                        missingPage = t;
-                    }
-                }
-                if (missingPage != null) {
-                    player.sendActionBar("§2[Earth] §7Craft §2Earth Page: " + missingPage.displayName
-                        + " §8(Book + " + missingPage.material.name() + " + String)"
-                        + " §7then §aright-click §7the page to read it!");
-                } else {
-                    player.sendActionBar("§2[Earth] §cNeed a throwable block + Earth Magic Page! "
-                        + "§8Craft: §7Book + Block + String §8(Lv §a" + magicLevel + "§8+)");
-                }
+                // No earth page/block — fall back to basic earth bolt.
+                // The rune is already consumed; just cast a plain dirt bolt
+                // so the player always gets SOMETHING without a page/block.
+                castEarthBasicBolt(player, magicLevel);
                 return;
             }
             // Consume 1 block from inventory
@@ -474,6 +616,35 @@ public class MagicStaffListener implements Listener {
 
         player.getWorld().playSound(player.getLocation(), Sound.BLOCK_GRAVEL_PLACE, 1.2f, 0.6f);
         player.sendActionBar("§2[Earth] §7Earth bolt fired! §8(Reach §aMagic Lv 10§8 for block throwing)");
+    }
+
+    /**
+     * Basic earth bolt fallback — fired when the player has no Earth Magic Page
+     * or no matching block in inventory.  Rune was already consumed.
+     * Deals scaled earth damage at the player's current magic level (no block needed).
+     */
+    private void castEarthBasicBolt(Player player, int magicLevel) {
+        Snowball bolt = player.launchProjectile(Snowball.class);
+        bolt.setItem(new ItemStack(Material.DIRT));
+        bolt.setVelocity(player.getLocation().getDirection().multiply(2.2));
+
+        trackedProjectiles.put(bolt.getUniqueId(), MagicElement.EARTH);
+        projectileShooters.put(bolt.getUniqueId(), player.getUniqueId());
+        projectileLevels.put(bolt.getUniqueId(), magicLevel);
+        // No earthBoltTier → uses old 2-hit suffocate path in handleEarthHit
+
+        plugin.getServer().getScheduler().runTaskTimer(plugin, task -> {
+            if (!bolt.isValid()) { task.cancel(); return; }
+            bolt.getWorld().spawnParticle(Particle.BLOCK, bolt.getLocation(), 9,
+                0.12, 0.12, 0.12, Material.DIRT.createBlockData());
+            bolt.getWorld().spawnParticle(Particle.BLOCK, bolt.getLocation(), 5,
+                0.08, 0.08, 0.08, Material.GRAVEL.createBlockData());
+            bolt.getWorld().spawnParticle(Particle.SMOKE, bolt.getLocation(), 2,
+                0.06, 0.06, 0.06, 0.005);
+        }, 0L, 1L);
+
+        player.getWorld().playSound(player.getLocation(), Sound.BLOCK_GRAVEL_PLACE, 1.2f, 0.6f);
+        player.sendActionBar("§2[Earth] §7Earth bolt fired! §8(Lv §a" + magicLevel + "§8 — no page/block)");
     }
 
     /** Returns the highest tier block the player can throw right now, or null. */
@@ -926,6 +1097,17 @@ public class MagicStaffListener implements Listener {
     // ══════════════════════════════════════════════════════════════════════════
 
     private void handleWaterHit(LivingEntity target, Player shooter, int lvl) {
+
+        // ── Water magic always clears Lightning Burn on any player target ─────
+        if (target instanceof Player tp && tp.hasMetadata(META_LIGHTNING_BURNING)) {
+            clearLightningBurn(tp);
+            tp.getWorld().spawnParticle(Particle.CLOUD,
+                tp.getLocation().add(0, 1, 0), 20, 0.4, 0.4, 0.4, 0.05);
+            tp.getWorld().playSound(tp.getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 1.0f, 1.2f);
+            tp.sendTitle("§b§l💧 BURN OUT", "§7Water Magic saved you!", 5, 30, 10);
+            tp.sendActionBar("§b💧 §aWater Magic extinguished your Lightning Burn!");
+            if (shooter != null) shooter.sendActionBar("§b💧 §7Water bolt extinguished their §cLightning Burn§7!");
+        }
 
         // Water slime: 15% chance to split
         if (target instanceof org.bukkit.entity.Slime slime) {

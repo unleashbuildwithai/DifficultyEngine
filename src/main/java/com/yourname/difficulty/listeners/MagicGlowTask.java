@@ -8,6 +8,7 @@ import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
+import org.bukkit.util.Vector;
 import org.bukkit.block.data.type.Light;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -85,13 +86,24 @@ public class MagicGlowTask extends BukkitRunnable {
                 continue;
             }
 
-            // Position near the player's right-hand hold area
-            Location eye  = player.getEyeLocation();
-            Location hand1 = eye.clone()
-                    .add(player.getLocation().getDirection().multiply(0.55))
-                    .add(0, -0.45, 0);
-            // Secondary aura at mid-chest
-            Location aura = player.getLocation().clone().add(0, 1.1, 0);
+            // ── Back-right hand position (pitch-independent) ───────────────
+            // Use horizontal yaw only so looking straight down never brings
+            // particles into the first-person camera frustum.
+            // horiz  = horizontal forward vector (no pitch)
+            // rightV = 90° clockwise of horiz in XZ plane
+            double yawRad = Math.toRadians(player.getLocation().getYaw());
+            Vector horiz  = new Vector(-Math.sin(yawRad), 0,  Math.cos(yawRad));
+            Vector rightV = new Vector( Math.cos(yawRad), 0,  Math.sin(yawRad));
+
+            Location hand1 = player.getLocation().clone()
+                    .add(horiz.clone().multiply(-0.55))   // 0.55 blocks behind
+                    .add(rightV.clone().multiply(0.32))   // 0.32 blocks to right
+                    .add(0, 0.85, 0);
+            // Aura ring: further behind + slightly right at mid-chest
+            Location aura = player.getLocation().clone()
+                    .add(horiz.clone().multiply(-0.65))   // 0.65 blocks behind
+                    .add(rightV.clone().multiply(0.28))   // 0.28 blocks to right
+                    .add(0, 1.10, 0);
 
             spawnElementGlow(player, el, hand1, aura);
 

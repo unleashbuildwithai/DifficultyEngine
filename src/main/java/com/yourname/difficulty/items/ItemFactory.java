@@ -59,6 +59,16 @@ public class ItemFactory {
     public static final String RANGED_GEAR_KEY       = "ranged_gear";
     public static final String RAINBOW_AXOLOTL_KEY   = "rainbow_axolotl";
 
+    // ── Support Staff keys ────────────────────────────────────────────────────
+    public static final String SUPPORT_RUNE_KEY          = "de_support_rune";
+    public static final String SUPPORT_PAGE_HEALING_KEY  = "de_support_page_healing";
+    public static final String SUPPORT_PAGE_SPEED_KEY    = "de_support_page_speed";
+    public static final String SUPPORT_PAGE_DEFENCE_KEY  = "de_support_page_defence";
+    public static final String SUPPORT_PAGE_COMBAT_KEY   = "de_support_page_combat";
+    public static final String SUPPORT_PAGE_STRENGTH_KEY = "de_support_page_strength";
+    public static final String SUPPORT_PAGE_CRIT_KEY     = "de_support_page_crit";
+    public static final String SUPPORT_PAGE_PRAYER_KEY   = "de_support_page_prayer";
+
     // ── NamespacedKeys ────────────────────────────────────────────────────────
     private final NamespacedKey soulfurPotionKey;
     private final NamespacedKey turboMinecartKey;
@@ -75,6 +85,15 @@ public class ItemFactory {
     private final NamespacedKey meleeGearKey;
     private final NamespacedKey rangedGearKey;
     private final NamespacedKey rainbowAxolotlKey;
+    // ── Support Staff NamespacedKeys ──────────────────────────────────────────
+    private final NamespacedKey supportRuneKey;
+    private final NamespacedKey supportPageHealingKey;
+    private final NamespacedKey supportPageSpeedKey;
+    private final NamespacedKey supportPageDefenceKey;
+    private final NamespacedKey supportPageCombatKey;
+    private final NamespacedKey supportPageStrengthKey;
+    private final NamespacedKey supportPageCritKey;
+    private final NamespacedKey supportPagePrayerKey;
     /** Per-tier PDC keys (MAGE tier maps to mageGearKey). */
     private final Map<MageGearTier,  NamespacedKey> mageGearTierKeys  = new EnumMap<>(MageGearTier.class);
     private final Map<MeleeGearTier, NamespacedKey> meleeGearTierKeys = new EnumMap<>(MeleeGearTier.class);
@@ -136,6 +155,16 @@ public class ItemFactory {
         for (EarthBlockTier tier : EarthBlockTier.values()) {
             earthPageKeys.put(tier, new NamespacedKey(plugin, tier.pageKey));
         }
+
+        // Support Staff keys
+        this.supportRuneKey          = new NamespacedKey(plugin, SUPPORT_RUNE_KEY);
+        this.supportPageHealingKey   = new NamespacedKey(plugin, SUPPORT_PAGE_HEALING_KEY);
+        this.supportPageSpeedKey     = new NamespacedKey(plugin, SUPPORT_PAGE_SPEED_KEY);
+        this.supportPageDefenceKey   = new NamespacedKey(plugin, SUPPORT_PAGE_DEFENCE_KEY);
+        this.supportPageCombatKey    = new NamespacedKey(plugin, SUPPORT_PAGE_COMBAT_KEY);
+        this.supportPageStrengthKey  = new NamespacedKey(plugin, SUPPORT_PAGE_STRENGTH_KEY);
+        this.supportPageCritKey      = new NamespacedKey(plugin, SUPPORT_PAGE_CRIT_KEY);
+        this.supportPagePrayerKey    = new NamespacedKey(plugin, SUPPORT_PAGE_PRAYER_KEY);
 
         this.capeManager = capeManager;
         register();
@@ -1438,6 +1467,7 @@ public class ItemFactory {
             case 6 -> buildRegistryPage6();
             case 7 -> buildRegistryPage7();
             case 8 -> buildRegistryPage8();
+            case 9 -> buildRegistryPage9();
             default -> java.util.Collections.emptyList();
         };
     }
@@ -1560,4 +1590,101 @@ public class ItemFactory {
     public NamespacedKey getMeleeGearKey()             { return meleeGearKey; }
     public NamespacedKey getRangedGearKey()            { return rangedGearKey; }
     public NamespacedKey getRainbowAxolotlKey()        { return rainbowAxolotlKey; }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  SUPPORT STAFF — Support Rune + 7 Support Pages
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /** Builds 1 Support Rune — consumed each time the Support Staff is used. */
+    public ItemStack buildSupportRune() {
+        ItemStack item = new ItemStack(Material.PHANTOM_MEMBRANE);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§5✦ Support Rune");
+            meta.setEnchantmentGlintOverride(true);
+            meta.setLore(List.of(
+                "§7Consumed when activating the §dSupport Staff§7.",
+                "§6Craft: §74× Phantom Membrane §8→ §58× Runes",
+                "§8[DifficultyEngine — Support Rune]"
+            ));
+            meta.getPersistentDataContainer().set(supportRuneKey, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    /** True if the item is a Support Rune. */
+    public boolean isSupportRune(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer()
+                .has(supportRuneKey, PersistentDataType.BYTE);
+    }
+
+    /** Resolves a support page PDC key constant string to its NamespacedKey. */
+    private NamespacedKey resolvePageKey(String keyConst) {
+        return switch (keyConst) {
+            case SUPPORT_PAGE_HEALING_KEY  -> supportPageHealingKey;
+            case SUPPORT_PAGE_SPEED_KEY    -> supportPageSpeedKey;
+            case SUPPORT_PAGE_DEFENCE_KEY  -> supportPageDefenceKey;
+            case SUPPORT_PAGE_COMBAT_KEY   -> supportPageCombatKey;
+            case SUPPORT_PAGE_STRENGTH_KEY -> supportPageStrengthKey;
+            case SUPPORT_PAGE_CRIT_KEY     -> supportPageCritKey;
+            case SUPPORT_PAGE_PRAYER_KEY   -> supportPagePrayerKey;
+            default                        -> null;
+        };
+    }
+
+    /**
+     * Returns true if the player carries the named support page in inventory.
+     * Called by CastingEngine to determine which buffs to apply.
+     */
+    public boolean hasSupportPage(Player player, String pdcKeyConst) {
+        NamespacedKey key = resolvePageKey(pdcKeyConst);
+        if (key == null) return false;
+        for (ItemStack s : player.getInventory().getContents()) {
+            if (s != null && s.hasItemMeta()
+                    && s.getItemMeta().getPersistentDataContainer().has(key, PersistentDataType.BYTE)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Builds a Support Spell Page with the given PDC key constant and description. */
+    public ItemStack buildSupportPage(String pdcKeyConst, String displayName, String effect, String lore1, String lore2) {
+        ItemStack item = new ItemStack(Material.BOOK);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§5✦ Support Page: §d" + displayName);
+            meta.addEnchant(Enchantment.UNBREAKING, 1, true);
+            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+            meta.setLore(List.of(
+                "§7Support Spell Page",
+                "§d✦ §7Effect: §a" + effect,
+                "§8" + lore1,
+                "§8" + lore2,
+                "§7Carry in inventory — not consumed.",
+                "§7Used by the §dSupport Staff §7combo.",
+                "§8[DifficultyEngine — Support Page]"
+            ));
+            NamespacedKey key = resolvePageKey(pdcKeyConst);
+            if (key != null) meta.getPersistentDataContainer().set(key, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    /** Builds all 7 support pages + rune for registry page 9. */
+    public List<ItemStack> buildRegistryPage9() {
+        List<ItemStack> p = new ArrayList<>();
+        p.add(buildSupportRune());
+        p.add(buildSupportPage(SUPPORT_PAGE_HEALING_KEY,  "Healing",       "+3 heal on target",    "Restores health to", "the buffed party member."));
+        p.add(buildSupportPage(SUPPORT_PAGE_SPEED_KEY,    "Faster Speed",  "Speed II (20s)",       "Grants swift movement", "to the party member."));
+        p.add(buildSupportPage(SUPPORT_PAGE_DEFENCE_KEY,  "Defence",       "Resistance II (15s)",  "Reduces damage taken", "by the party member."));
+        p.add(buildSupportPage(SUPPORT_PAGE_COMBAT_KEY,   "Combat Boost",  "Strength I (15s)",     "Increases melee damage", "for the party member."));
+        p.add(buildSupportPage(SUPPORT_PAGE_STRENGTH_KEY, "Strength",      "Strength II (10s)",    "Upgraded damage boost,", "requires Combat Boost too."));
+        p.add(buildSupportPage(SUPPORT_PAGE_CRIT_KEY,     "Crit Attack",   "Luck II (20s)",        "Raises crit chance", "for the party member."));
+        p.add(buildSupportPage(SUPPORT_PAGE_PRAYER_KEY,   "Prayer Pierce", "Haste I + clears Res", "Ignores prayer defence", "hit through protection."));
+        return p;
+    }
 }
