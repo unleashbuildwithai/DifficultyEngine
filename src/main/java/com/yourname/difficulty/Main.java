@@ -292,7 +292,7 @@ public class Main extends JavaPlugin {
         spellBookListener.setFavoritesGUI(favoritesGUI);
         getServer().getPluginManager().registerEvents(spellBookListener, this);
         getServer().getPluginManager().registerEvents(
-                new FavoritesGUIListener(favoritesGUI, comboFavoritesManager, spellBookManager), this);
+                new FavoritesGUIListener(favoritesGUI, comboFavoritesManager, spellBookManager, this), this);
         // Wire FavoritesManager into MagicStaffListener (must be wired after both created)
         magicStaffListener.setFavoritesManager(comboFavoritesManager);
 
@@ -334,6 +334,8 @@ public class Main extends JavaPlugin {
         // ── Magic Bag — freely moveable, survives death, right-click opens GUI ──
         this.magicBagManager = new MagicBagManager(this, itemFactory);
         this.magicBagGUI     = new MagicBagGUI(magicBagManager);
+        // Wire bag manager into staff listener so Spell Combo Book is found even when bagged
+        magicStaffListener.setMagicBagManager(magicBagManager);
         getServer().getPluginManager().registerEvents(
                 new MagicBagGUIListener(magicBagManager, magicBagGUI, this), this);
         getServer().getPluginManager().registerEvents(
@@ -377,6 +379,12 @@ public class Main extends JavaPlugin {
         registerCmd("registry", (sender, cmd, label, args) -> {
             if (!(sender instanceof Player player)) {
                 sender.sendMessage("§cOnly players can open the Item Registry.");
+                return true;
+            }
+            // Registry is the admin spawn list — requires admin permission
+            if (!player.hasPermission("difficultyengine.cape.admin")) {
+                player.sendMessage("§8[§6DifficultyEngine§8] §c✗ §7The Item Registry is §4Admin Only§c.");
+                player.sendMessage("§8  Permission: §fdifficultyengine.cape.admin");
                 return true;
             }
             registryGUI.open(player);

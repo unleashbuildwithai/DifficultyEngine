@@ -8,6 +8,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.plugin.java.JavaPlugin;
 
 /**
  * FavoritesGUIListener — Handles clicks in the Combo Favorites chest GUI.
@@ -27,13 +28,16 @@ public class FavoritesGUIListener implements Listener {
     private final FavoritesGUI          gui;
     private final ComboFavoritesManager favManager;
     private final SpellBookManager      spellBookManager;
+    private final JavaPlugin            plugin;
 
     public FavoritesGUIListener(FavoritesGUI gui,
                                 ComboFavoritesManager favManager,
-                                SpellBookManager spellBookManager) {
+                                SpellBookManager spellBookManager,
+                                JavaPlugin plugin) {
         this.gui              = gui;
         this.favManager       = favManager;
         this.spellBookManager = spellBookManager;
+        this.plugin           = plugin;
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = false)
@@ -75,19 +79,21 @@ public class FavoritesGUIListener implements Listener {
 
         // ── Slot 22: Read Full Tome ───────────────────────────────────────────
         if (slot == 22) {
-            player.closeInventory();
-            // Open the written-book view one tick later (avoids NullPointerException
-            // from trying to open a book while closing an inventory)
-            player.getServer().getScheduler().runTaskLater(
-                    getPlugin(player), () -> {
-                        if (player.isOnline()) {
-                            player.openBook(spellBookManager.buildBookForPlayer(player.getUniqueId()));
-                            int count = spellBookManager.getUnlockedCount(player.getUniqueId());
-                            player.sendActionBar("§5✦ §dArcane Tome §8— §7"
-                                    + count + "§8/§7" + SpellBookManager.TOTAL_PAGES
-                                    + " §dpages unlocked");
-                        }
-                    }, 1L);
+            // Schedule close on next tick, then open book 2 ticks later to avoid
+            // inventory-state conflicts that silently prevent openBook from firing.
+            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                if (!player.isOnline()) return;
+                player.closeInventory();
+                plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                    if (player.isOnline()) {
+                        player.openBook(spellBookManager.buildBookForPlayer(player.getUniqueId()));
+                        int count = spellBookManager.getUnlockedCount(player.getUniqueId());
+                        player.sendActionBar("§5✦ §dArcane Tome §8— §7"
+                                + count + "§8/§7" + SpellBookManager.TOTAL_PAGES
+                                + " §dpages unlocked");
+                    }
+                }, 2L);
+            }, 1L);
             return;
         }
 
@@ -107,18 +113,5 @@ public class FavoritesGUIListener implements Listener {
         if (!title.contains(FavoritesGUI.GUI_TAG)) return;
         // Auto-save on close (already saved after each toggle, but belt-and-suspenders)
         favManager.save();
-    }
-
-    // ── Helper ────────────────────────────────────────────────────────────────
-
-    /**
-     * Returns the server's plugin instance via the scheduler's owner.
-     * We use this because FavoritesGUIListener doesn't hold a plugin reference
-     * — we obtain it lazily from the player's server.
-     */
-    private org.bukkit.plugin.Plugin getPlugin(Player player) {
-        // Get the first plugin registered (DifficultyEngine will be first because
-        // it registered this listener). Fallback: just use the player's server scheduler.
-        return player.getServer().getPluginManager().getPlugins()[0];
     }
 }

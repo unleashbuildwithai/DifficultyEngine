@@ -129,6 +129,11 @@ public class MagicStaffListener implements Listener {
     private final Set<UUID>                          waveProjectiles       = new HashSet<>();
     /** Optional PartyManager reference — used for Water splash auto-heal. */
     private       com.yourname.difficulty.party.PartyManager partyManagerRef = null;
+    /**
+     * Optional MagicBagManager — allows hint/book checks to find books stored
+     * in the player's Magic Bag as well as their main inventory.
+     */
+    private       com.yourname.difficulty.bag.MagicBagManager magicBagManager = null;
 
     private static final long MAGIC_XP_CAST  = 10L;
     private static final long MAGIC_XP_HIT   =  5L;
@@ -164,17 +169,35 @@ public class MagicStaffListener implements Listener {
     public void setPartyManagerRef(com.yourname.difficulty.party.PartyManager pm) { this.partyManagerRef = pm; }
 
     /**
+     * Wires in the MagicBagManager so that hint/book checks find the Spell Combo
+     * Book even when it is stored inside the player's Magic Bag rather than in
+     * their main inventory.
+     */
+    public void setMagicBagManager(com.yourname.difficulty.bag.MagicBagManager mgr) {
+        this.magicBagManager = mgr;
+    }
+
+    /**
+     * Returns the contents of the player's Magic Bag, or {@code null} if the
+     * MagicBagManager has not been wired in.
+     */
+    private ItemStack[] getBagContents(Player player) {
+        if (magicBagManager == null || player == null) return null;
+        return magicBagManager.getBag(player.getUniqueId());
+    }
+
+    /**
      * Returns true if a combo hint for {@code chainTag} should appear in the action bar.
      *
      * Requirements:
      *  1. {@code shooter} is not null.
-     *  2. Shooter has a §5Spell Combo Book§r in inventory.
+     *  2. Shooter has a §5Spell Combo Book§r in inventory OR in their Magic Bag.
      *  3. {@code chainTag} is starred in the player's favorites.
      *     (If favorites set is empty → no hints show even with the book.)
      */
     private boolean showHint(Player shooter, String chainTag) {
         if (shooter == null) return false;
-        if (!itemFactory.hasSpellComboBook(shooter)) return false;
+        if (!itemFactory.hasSpellComboBook(shooter, getBagContents(shooter))) return false;
         if (favoritesManager == null) return false;
         return favoritesManager.isFavorited(shooter.getUniqueId(), chainTag);
     }
@@ -1027,7 +1050,7 @@ public class MagicStaffListener implements Listener {
                     && magicDirtBlocks.contains(block.getLocation().toBlockLocation())
                     && shooter != null && lvl >= 50
                     && hasLavaBucket(shooter)
-                    && itemFactory.hasSpellComboBook(shooter)) {
+                    && itemFactory.hasSpellComboBook(shooter, getBagContents(shooter))) {
                 // Fire + magic-dirt → lava pool (requires Lv50+, lava bucket, Spell Combo Book)
                 magicDirtBlocks.remove(block.getLocation().toBlockLocation());
                 block.setType(Material.AIR);
@@ -1058,7 +1081,7 @@ public class MagicStaffListener implements Listener {
             if (type == Material.LAVA) {
                 int converted = convertLavaToObsidian(block, shooter);
                 if (shooter != null && converted > 0) {
-                    if (itemFactory.hasSpellComboBook(shooter)) {
+                    if (itemFactory.hasSpellComboBook(shooter, getBagContents(shooter))) {
                         shooter.sendActionBar("§b§8§lOBSIDIAN TRAP! §7Converted §e" + converted + " §7lava blocks!");
                     } else {
                         shooter.sendActionBar("§b§7Lava solidified!");
@@ -1157,7 +1180,7 @@ public class MagicStaffListener implements Listener {
                 target.getLocation().add(0, 1, 0), 30, 0.4, 0.4, 0.4, 0.1);
             target.getWorld().playSound(target.getLocation(), Sound.ENTITY_BLAZE_SHOOT, 2.0f, 0.4f);
             if (shooter != null) {
-                if (itemFactory.hasSpellComboBook(shooter)) {
+                if (itemFactory.hasSpellComboBook(shooter, getBagContents(shooter))) {
                     shooter.sendActionBar("§c§f§l§oINFERNO VORTEX! §7Blazing + Fire = devastation!");
                 } else {
                     shooter.sendActionBar("§c§f§lINFERNO VORTEX!");
@@ -1517,7 +1540,7 @@ public class MagicStaffListener implements Listener {
                 target.getLocation().add(0, 1, 0), 40, 0.4, 0.4, 0.4, Material.COARSE_DIRT.createBlockData());
             target.getWorld().playSound(target.getLocation(), Sound.BLOCK_GRAVEL_PLACE, 2.0f, 0.5f);
             if (shooter != null) {
-                if (itemFactory.hasSpellComboBook(shooter)) {
+                if (itemFactory.hasSpellComboBook(shooter, getBagContents(shooter))) {
                     shooter.sendActionBar("§2§f§lSMOTHERED! §7Dirt extinguished the blaze - heavy damage!");
                 } else {
                     shooter.sendActionBar("§2§f§lSMOTHERED!");

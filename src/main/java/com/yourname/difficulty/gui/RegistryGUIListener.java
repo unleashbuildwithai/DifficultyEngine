@@ -125,12 +125,8 @@ public class RegistryGUIListener implements Listener {
             }
         }
 
-        if (itemFactory.isGunZSword(clicked)) {
-            if (!player.hasPermission("difficultyengine.cape.admin")) {
-                player.sendMessage("§8[§6DifficultyEngine§8] §c✗ The §cGunZ Sword §cis §4Admin Spawn Only§c.");
-                return;
-            }
-        }
+        // GunZ Sword — no longer admin-only; exclusive boss drop from the Infernal Blazefiend.
+        // It can still appear in the registry as a reference/preview item for admins.
 
         // ── Give item ─────────────────────────────────────────────────────────
         ItemStack copy = clicked.clone();
@@ -138,10 +134,17 @@ public class RegistryGUIListener implements Listener {
         player.sendMessage("§8[§6DifficultyEngine§8] §7Received: §f" + formatName(clicked));
 
         // ── Auto-open WRITTEN_BOOK items so players can read them immediately ─
-        if (clicked.getType() == Material.WRITTEN_BOOK) {
-            player.closeInventory();
-            plugin.getServer().getScheduler().runTaskLater(plugin,
-                () -> { if (player.isOnline()) player.openBook(copy); }, 1L);
+        // Exception: Ancient Kill Tome — just deliver to inventory for admin use;
+        //            do NOT close the registry or auto-open the book.
+        if (clicked.getType() == Material.WRITTEN_BOOK && !itemFactory.isAncientKillTome(clicked)) {
+            // Schedule close first (1 tick), then open book (2 ticks) to avoid
+            // inventory-state conflicts that silently prevent openBook from working.
+            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                if (!player.isOnline()) return;
+                player.closeInventory();
+                plugin.getServer().getScheduler().runTaskLater(plugin,
+                    () -> { if (player.isOnline()) player.openBook(copy); }, 2L);
+            }, 1L);
         }
     }
 

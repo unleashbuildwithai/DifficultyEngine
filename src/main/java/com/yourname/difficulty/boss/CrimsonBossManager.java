@@ -53,7 +53,12 @@ public class CrimsonBossManager implements Listener {
     public static final double SPAWN_Z = -14.444;
 
     // ── Tunables ──────────────────────────────────────────────────────────────
-    private static final double BOSS_MAX_HP       = 300.0;
+    /** Standard world-boss HP — tuned for Lv99 parties. */
+    private static final double BOSS_MAX_HP       = 2_500.0;
+    /** Legendary variant HP (1% chance on any spawn). */
+    private static final double LEGENDARY_HP      = 25_000.0;
+    /** 1% chance any spawn becomes the Legendary variant. */
+    private static final double LEGENDARY_CHANCE  = 0.01;
     private static final double ENGAGE_RADIUS     = 80.0;
     private static final double SCORCH_RADIUS     =  6.0;
     private static final double PEARL_REGEN       = 30.0;
@@ -63,6 +68,9 @@ public class CrimsonBossManager implements Listener {
     private static final long   WANDER_INTERVAL   = 60L; // 3 s
     /** Wandering: max horizontal wander distance per pick. */
     private static final double WANDER_DIST       = 25.0;
+
+    /** 15% chance to drop the GunZ Sword on death. */
+    private static final double GUNZ_DROP_CHANCE  = 0.15;
 
     /** Materials the boss will NOT break as it passes through. */
     private static final Set<Material> INDESTRUCTIBLE = Set.of(
@@ -103,6 +111,7 @@ public class CrimsonBossManager implements Listener {
 
     /**
      * Spawns (or replaces) the boss.
+     * 1% chance the spawn is a Legendary variant with 25 000 HP instead of 2 500.
      *
      * @param loc Spawn location.  If null, uses the default Crimson Pit coords.
      */
@@ -114,16 +123,35 @@ public class CrimsonBossManager implements Listener {
 
         dismissExisting();
 
+        // ── Legendary roll ────────────────────────────────────────────────────
+        boolean legendary = random.nextDouble() < LEGENDARY_CHANCE;
+        double  hp        = legendary ? LEGENDARY_HP : BOSS_MAX_HP;
+
         Blaze boss = (Blaze) loc.getWorld().spawnEntity(loc, EntityType.BLAZE);
-        boss.setCustomName("§c🔥 §l§4The Infernal Blazefiend");
+
+        if (legendary) {
+            boss.setCustomName("§4☠ §c§l⚡ THE LEGENDARY BLAZEFIEND ⚡ §4☠");
+            // Server-wide legendary announcement
+            for (Player online : plugin.getServer().getOnlinePlayers()) {
+                online.sendMessage("");
+                online.sendMessage("§4§l⚡ ☠ §c§lLEGENDARY BLAZEFIEND HAS AWAKENED! §4§l☠ ⚡");
+                online.sendMessage("§7§oA once-in-a-hundred terror rises from the Crimson Pit...");
+                online.sendMessage("§6§o  §e25 000 HP §6— §cBring everything you have!");
+                online.sendMessage("");
+                online.sendTitle("§4§l⚡ LEGENDARY BOSS ⚡", "§c25 000 HP — §6Crimson Pit!", 10, 100, 20);
+            }
+        } else {
+            boss.setCustomName("§c🔥 §l§4The Infernal Blazefiend");
+        }
+
         boss.setCustomNameVisible(true);
         boss.setRemoveWhenFarAway(false);
         boss.setFireTicks(Integer.MAX_VALUE);
 
         // Boost HP
         var hpAttr = boss.getAttribute(Attribute.MAX_HEALTH);
-        if (hpAttr != null) hpAttr.setBaseValue(BOSS_MAX_HP);
-        boss.setHealth(BOSS_MAX_HP);
+        if (hpAttr != null) hpAttr.setBaseValue(hp);
+        boss.setHealth(hp);
 
         // Register with effect system
         bossEffectListener.registerBoss(boss);
@@ -132,7 +160,7 @@ public class CrimsonBossManager implements Listener {
         bossUuid = boss.getUniqueId();
 
         startBossAI();
-        announceSpawn(loc);
+        if (!legendary) announceSpawn(loc); // legendary already announced globally above
         thunderEntrance(loc, loc.getWorld());
 
         return boss;
@@ -179,9 +207,9 @@ public class CrimsonBossManager implements Listener {
             event.getPlayer().sendMessage(
                     "§c☠ §4Your strike on the Ancient Debris has awakened the Infernal Blazefiend!");
         }
-        // Spawn near the debris block
-        Location spawnLoc = event.getBlock().getLocation().clone().add(0.5, 1, 0.5);
-        spawnBoss(spawnLoc);
+        // Always spawn at the Crimson Pit home location (-107.964, -26, -14.444)
+        // regardless of which debris block was struck — this is a world boss.
+        spawnBoss(null);
     }
 
     // ══ AI Task ═══════════════════════════════════════════════════════════════
@@ -587,6 +615,15 @@ public class CrimsonBossManager implements Listener {
             p.sendMessage("§8§oThe Blazefiend will return in §715 minutes§8§o...");
             p.sendMessage("");
             p.sendTitle("§6⚔ BOSS DEFEATED!", "§7The Blazefiend falls to darkness!", 10, 80, 20);
+        }
+
+        // ── 15% chance: drop the GunZ Sword ──────────────────────────────────
+        if (random.nextDouble() < GUNZ_DROP_CHANCE) {
+            loc.getWorld().dropItemNaturally(loc, itemFactory.buildGunZSword());
+            for (Player p : nearbyPlayers(loc, ENGAGE_RADIUS * 2)) {
+                p.sendMessage("§4⚔ §c§l★ RARE DROP: §4GunZ Sword §c§l★ §8— The Blazefiend's Blade dropped!");
+                p.sendTitle("§4§l★ RARE DROP!", "§c§l⚔ GunZ Sword — §7claim it fast!", 10, 80, 20);
+            }
         }
 
         // Death FX

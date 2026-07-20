@@ -205,13 +205,18 @@ public class MagicBagGUIListener implements Listener {
         // ── Item storage slots ────────────────────────────────────────────────
         if (!MagicBagGUI.isItemSlot(slot)) return; // header/nav pane clicked — ignore
 
-        // Left / right click — vanilla item swap (ANY item is allowed)
+        // Left / right click — vanilla item swap (magic items only)
         if (event.getClick() == ClickType.LEFT || event.getClick() == ClickType.RIGHT) {
             ItemStack cursor  = event.getCursor();
             ItemStack current = event.getCurrentItem();
             boolean cursorEmpty  = cursor  == null || cursor.getType().isAir();
             boolean currentEmpty = current == null || current.getType().isAir();
             if (cursorEmpty && currentEmpty) return;
+            // Block non-magic items from being placed into the bag
+            if (!cursorEmpty && !isMagicItem(cursor)) {
+                player.sendMessage("§c✗ §7Only §dMagic Items §7can be stored in the Magic Bag!");
+                return; // event stays cancelled
+            }
             event.setCancelled(false); // allow vanilla item exchange
             return;
         }
@@ -360,5 +365,29 @@ public class MagicBagGUIListener implements Listener {
         if (item.hasItemMeta() && item.getItemMeta().hasDisplayName())
             return item.getItemMeta().getDisplayName();
         return item.getType().name().toLowerCase().replace('_', ' ');
+    }
+
+    /**
+     * Returns true if the given item is considered a "magic item" that may be
+     * stored in the Magic Bag.  An item qualifies if its display name contains
+     * any of the recognised magic keywords.
+     */
+    private boolean isMagicItem(ItemStack item) {
+        if (item == null || item.getType().isAir()) return false;
+        org.bukkit.inventory.meta.ItemMeta meta = item.getItemMeta();
+        if (meta != null && meta.hasDisplayName()) {
+            String dn = org.bukkit.ChatColor.stripColor(meta.getDisplayName()).toLowerCase();
+            if (dn.contains("rune")   || dn.contains("staff")  || dn.contains("mage")
+             || dn.contains("spell")  || dn.contains("dragon") || dn.contains("dark bow")
+             || dn.contains("magic")  || dn.contains("tome")   || dn.contains("wand")
+             || dn.contains("bottle") || dn.contains("dust")   || dn.contains("crystal")
+             || dn.contains("orb")    || dn.contains("scroll") || dn.contains("sigil")) {
+                return true;
+            }
+        }
+        // Also accept items that have a PDC magic tag (runes / staves detected by manager)
+        // classifyItemToPage returns > 0 only for element-specific runes/staves,
+        // but both are magic; page 0 can also hold generic magic items via display name check above.
+        return bagManager.classifyItemToPage(item) > 0;
     }
 }

@@ -65,6 +65,15 @@ public class ItemFactory {
     public static final String CHARGED_MAGIC_BOTTLE_KEY = "de_charged_magic_bottle";
     public static final String QUEST_OVERVIEW_BOOK_KEY  = "de_quest_overview_book";
 
+    /**
+     * Shared PDC key strings with {@link com.yourname.difficulty.magic.SpellBookManager}.
+     * Tagging registry display items with these lets SpellBookListener recognise them
+     * so right-click on the Arcane Tome opens the Favorites GUI and right-click on
+     * a Spell Page absorbs it — even when the item was obtained from the Registry.
+     */
+    public static final String SPELL_TOME_DISPLAY_KEY = "spell_tome";
+    public static final String SPELL_PAGE_DISPLAY_KEY = "spell_page";
+
     // ── Support Staff keys ────────────────────────────────────────────────────
     public static final String SUPPORT_RUNE_KEY          = "de_support_rune";
     public static final String SUPPORT_PAGE_HEALING_KEY  = "de_support_page_healing";
@@ -96,6 +105,11 @@ public class ItemFactory {
     private final NamespacedKey emptyMagicBottleKey;
     private final NamespacedKey chargedMagicBottleKey;
     private final NamespacedKey questOverviewBookKey;
+    // ── Shared SpellBook display keys (same namespace:key as SpellBookManager) ─
+    /** Matches SpellBookManager.spellTomeKey so registry-given tomes open the FavoritesGUI. */
+    private final NamespacedKey spellTomeDisplayKey;
+    /** Matches SpellBookManager.spellPageKey so registry-given pages can be absorbed. */
+    private final NamespacedKey spellPageDisplayKey;
     // ── Support Staff NamespacedKeys ──────────────────────────────────────────
     private final NamespacedKey supportRuneKey;
     private final NamespacedKey supportPageHealingKey;
@@ -153,6 +167,9 @@ public class ItemFactory {
         this.emptyMagicBottleKey    = new NamespacedKey(plugin, EMPTY_MAGIC_BOTTLE_KEY);
         this.chargedMagicBottleKey  = new NamespacedKey(plugin, CHARGED_MAGIC_BOTTLE_KEY);
         this.questOverviewBookKey   = new NamespacedKey(plugin, QUEST_OVERVIEW_BOOK_KEY);
+        // Shared spell-book display keys — must match SpellBookManager's key strings exactly
+        this.spellTomeDisplayKey    = new NamespacedKey(plugin, SPELL_TOME_DISPLAY_KEY);
+        this.spellPageDisplayKey    = new NamespacedKey(plugin, SPELL_PAGE_DISPLAY_KEY);
         for (MeleeGearTier tier : MeleeGearTier.values()) {
             meleeGearTierKeys.put(tier, new NamespacedKey(plugin, tier.pdcKey));
         }
@@ -587,33 +604,60 @@ public class ItemFactory {
 
     // ── Arcane Tome & Spell Page display ──────────────────────────────────────
 
+    /**
+     * Builds the Arcane Tome item for the Item Registry (page 2).
+     * Tagged with the spell_tome PDC key so that right-clicking it opens the
+     * Combo Favorites GUI — identical behaviour to the craftable Arcane Tome.
+     */
     public ItemStack buildArcaneTomeDisplay() {
         ItemStack item = new ItemStack(Material.ENCHANTED_BOOK);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             meta.setDisplayName("§5✦ Arcane Tome");
+            meta.addEnchant(Enchantment.UNBREAKING, 1, true);
+            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS, ItemFlag.HIDE_ATTRIBUTES);
             meta.setLore(List.of(
-                "§7Your personal spell combo book.",
-                "§7Pages unlock via §dSpell Pages§7.",
-                "§7Use §6/spellbook §7to read it.",
+                "§8" + "─".repeat(24),
+                "§7Your personal spell combo grimoire.",
+                "§7All pages start as §8???§7.",
+                "§8" + "─".repeat(24),
+                "§8Right-click to open Combo Favorites.",
+                "§7Find §dSpell Pages §7(§84% mob drop§7) to unlock pages!",
+                "§8" + "─".repeat(24),
+                "§6Craft: §7Book + §5Amethyst Shard §7+ §5Purple Dye",
                 "§8[DifficultyEngine — Arcane Tome]"
             ));
+            // Same PDC key as SpellBookManager → SpellBookListener recognises it
+            meta.getPersistentDataContainer()
+                    .set(spellTomeDisplayKey, PersistentDataType.BYTE, (byte) 1);
             item.setItemMeta(meta);
         }
         return item;
     }
 
+    /**
+     * Builds a Spell Page item for the Item Registry (page 2).
+     * Tagged with the spell_page PDC key so that right-clicking it absorbs it
+     * and unlocks a random page — identical to the naturally-dropped Spell Page.
+     */
     public ItemStack buildSpellPageDisplay() {
-        ItemStack item = new ItemStack(Material.WRITABLE_BOOK);
+        ItemStack item = new ItemStack(Material.PAPER);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             meta.setDisplayName("§d✧ Spell Page");
             meta.setLore(List.of(
-                "§7Torn from an ancient spell tome.",
-                "§7Right-click to unlock a random combo.",
-                "§7Drop: §84% from any hostile mob",
+                "§8" + "─".repeat(24),
+                "§7A page torn from an ancient arcane grimoire.",
+                "§8" + "─".repeat(24),
+                "§8Right-click to absorb — unlocks",
+                "§8one random §dSpell Tome §8page.",
+                "§7Drop: §84% from any hostile mob kill",
+                "§8" + "─".repeat(24),
                 "§8[DifficultyEngine — Spell Page]"
             ));
+            // Same PDC key as SpellBookManager → SpellBookListener absorbs it
+            meta.getPersistentDataContainer()
+                    .set(spellPageDisplayKey, PersistentDataType.BYTE, (byte) 1);
             item.setItemMeta(meta);
         }
         return item;
@@ -651,6 +695,18 @@ public class ItemFactory {
 
     public boolean hasSpellComboBook(Player player) {
         for (ItemStack s : player.getInventory().getContents()) if (isSpellComboBook(s)) return true;
+        return false;
+    }
+
+    /**
+     * Bag-aware overload — returns true if the Spell Combo Book is in either
+     * the player's inventory OR in the provided Magic Bag contents array.
+     * Pass {@code null} for {@code bagContents} to skip the bag check.
+     */
+    public boolean hasSpellComboBook(Player player, ItemStack[] bagContents) {
+        if (hasSpellComboBook(player)) return true;
+        if (bagContents == null) return false;
+        for (ItemStack s : bagContents) if (isSpellComboBook(s)) return true;
         return false;
     }
 
@@ -983,7 +1039,7 @@ public class ItemFactory {
             meta.addItemFlags(ItemFlag.HIDE_ENCHANTS, ItemFlag.HIDE_UNBREAKABLE, ItemFlag.HIDE_ATTRIBUTES);
             meta.setLore(List.of(
                 "§8" + "─".repeat(26),
-                "§4⚔ §cGunZ Sword §8— §4Admin Spawn Only",
+                "§4⚔ §cGunZ Sword §8— §8The Blazefiend's Blade",
                 "§8Requires: §aMelee Level 99",
                 "§8" + "─".repeat(26),
                 "§c✦ §7GunZ Dashing:",
@@ -993,6 +1049,7 @@ public class ItemFactory {
                 "§7Double-tap §fSS §7→ Backward dash",
                 "§8" + "─".repeat(26),
                 "§8Dash cooldown: 0.8s",
+                "§6Drop: §c15% §6chance from the §4Infernal Blazefiend§6.",
                 "§8[DifficultyEngine — GunZ Sword]"
             ));
             meta.getPersistentDataContainer().set(gunZSwordKey, PersistentDataType.BYTE, (byte) 1);
@@ -1540,6 +1597,8 @@ public class ItemFactory {
             p.add(buildMeleeGearPiece(tier, legs,  "Leggings"));
             p.add(buildMeleeGearPiece(tier, boots, "Boots"));
         }
+        // GunZ Sword — also available in the admin registry for spawning.
+        // It additionally drops at 15% from the Infernal Blazefiend boss.
         p.add(buildGunZSword());
         return p;
     }
