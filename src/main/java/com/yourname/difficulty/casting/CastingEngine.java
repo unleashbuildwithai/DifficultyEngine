@@ -122,9 +122,9 @@ public class CastingEngine implements Listener {
 
     // ── Build SupportStaff item ───────────────────────────────────────────────
 
-    /** Builds the SupportStaff item (BLAZE_ROD with PDC + lore). */
+    /** Builds the SupportStaff item (BREEZE_ROD with PDC + lore). */
     public ItemStack buildSupportStaff() {
-        ItemStack staff = new ItemStack(Material.BLAZE_ROD);
+        ItemStack staff = new ItemStack(Material.BREEZE_ROD);
         var meta = staff.getItemMeta();
         if (meta != null) {
             meta.setDisplayName("§5✦ §dSupport Staff");

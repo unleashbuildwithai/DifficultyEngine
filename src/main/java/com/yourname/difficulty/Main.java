@@ -577,7 +577,7 @@ public class Main extends JavaPlugin {
                 castingEngine.buildSupportStaff());
         staffRecipe.addIngredient(Material.BOOK);
         staffRecipe.addIngredient(Material.NETHER_STAR);
-        staffRecipe.addIngredient(Material.BLAZE_ROD);
+        staffRecipe.addIngredient(Material.BREEZE_ROD);
         staffRecipe.addIngredient(Material.PRISMARINE_CRYSTALS);
         staffRecipe.addIngredient(Material.EMERALD);
         staffRecipe.addIngredient(Material.FEATHER);
