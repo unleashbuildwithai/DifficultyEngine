@@ -847,8 +847,6 @@ public class CastingEngine implements Listener {
                     return;
                 }
                 
-                MagicElement el = MagicElement.valueOf(elName);
-                
                 boolean charged = snowball.getPersistentDataContainer().has(
                     new NamespacedKey(plugin, "de_support_basic_charged"),
                     PersistentDataType.BYTE
@@ -860,35 +858,49 @@ public class CastingEngine implements Listener {
                 // Roll chances
                 ThreadLocalRandom rand = ThreadLocalRandom.current();
                 
-                // 1% chance to burn
-                if (rand.nextDouble() < 0.01) {
-                    target.setFireTicks(60); // 3 seconds
-                    target.getWorld().spawnParticle(Particle.FLAME, target.getLocation().add(0, 1, 0), 20, 0.3, 0.3, 0.3, 0.1);
-                    caster.sendMessage("§5✦ §7Support Staff basic hit: §c🔥 Burn §7applied (1% chance)!");
-                }
-                
-                // 1% chance (not charged) or 5% chance (charged) to summon lightning
-                double lightningChance = charged ? 0.05 : 0.01;
-                if (rand.nextDouble() < lightningChance) {
-                    target.getWorld().strikeLightning(target.getLocation());
-                    caster.sendMessage("§5✦ §7Support Staff basic hit: §b⚡ Lightning §7summoned (" + (charged ? "5%" : "1%") + " chance)!");
-                }
-                
-                // 1% chance to spawn a block at target's feet (even if no block/spell book)
-                if (rand.nextDouble() < 0.01) {
-                    org.bukkit.block.Block feet = target.getLocation().getBlock();
-                    if (feet.getType().isAir()) {
-                        feet.setType(Material.DIRT);
-                        target.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, target.getLocation().add(0, 1, 0), 20, 0.3, 0.3, 0.3, 0.1);
-                        caster.sendMessage("§5✦ §7Support Staff basic hit: §2🌿 Earth Trap block §7spawned (1% chance)!");
+                if (elName.startsWith("INFUSED:")) {
+                    String parts = elName.substring(8);
+                    
+                    // 1% chance to burn (Fire)
+                    if (parts.contains("FIRE") && rand.nextDouble() < 0.01) {
+                        target.setFireTicks(60); // 3 seconds
+                        target.getWorld().spawnParticle(Particle.FLAME, target.getLocation().add(0, 1, 0), 20, 0.3, 0.3, 0.3, 0.1);
+                        caster.sendMessage("§5✦ §7Support Staff basic hit: §c🔥 Burn §7applied (1% chance)!");
                     }
-                }
-                
-                // 1% chance to send a gust
-                if (rand.nextDouble() < 0.01) {
-                    target.setVelocity(caster.getLocation().getDirection().multiply(1.5).setY(0.4));
-                    target.getWorld().spawnParticle(Particle.CLOUD, target.getLocation().add(0, 1, 0), 20, 0.3, 0.3, 0.3, 0.1);
-                    caster.sendMessage("§5✦ §7Support Staff basic hit: §f☁ Wind Gust §7applied (1% chance)!");
+                    
+                    // 1% chance to apply Wet status (Water)
+                    if (parts.contains("WATER") && rand.nextDouble() < 0.01) {
+                        target.setMetadata("magic_wet", new org.bukkit.metadata.FixedMetadataValue(plugin, System.currentTimeMillis() + 5000L));
+                        target.getWorld().spawnParticle(Particle.SPLASH, target.getLocation().add(0, 1, 0), 20, 0.3, 0.3, 0.3, 0.1);
+                        caster.sendMessage("§5✦ §7Support Staff basic hit: §b💧 Wet §7applied (1% chance)!");
+                    }
+                    
+                    // 1% chance to spawn earth trap (Earth)
+                    if (parts.contains("EARTH") && rand.nextDouble() < 0.01) {
+                        org.bukkit.block.Block feet = target.getLocation().getBlock();
+                        if (feet.getType().isAir()) {
+                            feet.setType(Material.DIRT);
+                            target.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, target.getLocation().add(0, 1, 0), 20, 0.3, 0.3, 0.3, 0.1);
+                            caster.sendMessage("§5✦ §7Support Staff basic hit: §2🌿 Earth Trap block §7spawned (1% chance)!");
+                        }
+                    }
+                    
+                    // 1% chance to send a gust (Air) - lightning chance of 1% (not charged) or 5% (charged) for Air/Lightning
+                    if (parts.contains("AIR")) {
+                        // 1% chance of Wind Gust
+                        if (rand.nextDouble() < 0.01) {
+                            target.setVelocity(caster.getLocation().getDirection().multiply(1.5).setY(0.4));
+                            target.getWorld().spawnParticle(Particle.CLOUD, target.getLocation().add(0, 1, 0), 20, 0.3, 0.3, 0.3, 0.1);
+                            caster.sendMessage("§5✦ §7Support Staff basic hit: §f☁ Wind Gust §7applied (1% chance)!");
+                        }
+                        
+                        // 1% chance (not charged) or 5% chance (charged) to summon lightning
+                        double lightningChance = charged ? 0.05 : 0.01;
+                        if (rand.nextDouble() < lightningChance) {
+                            target.getWorld().strikeLightning(target.getLocation());
+                            caster.sendMessage("§5✦ §7Support Staff basic hit: §b⚡ Lightning §7summoned (" + (charged ? "5%" : "1%") + " chance)!");
+                        }
+                    }
                 }
             }
         }
@@ -1061,44 +1073,31 @@ public class CastingEngine implements Listener {
         }
 
         // We carry at least one core staff. Now check and consume runes for each!
-        boolean firedAny = false;
-        StringBuilder sb = new StringBuilder("§5✦ §7Support Flurry: ");
+        final boolean fireActive = hasFire && consumeRune(player, MagicElement.FIRE);
+        final boolean waterActive = hasWater && consumeRune(player, MagicElement.WATER);
+        final boolean earthActive = hasEarth && consumeRune(player, MagicElement.EARTH);
+        final boolean airActive = hasAir && consumeRune(player, MagicElement.AIR);
 
-        if (hasFire && consumeRune(player, MagicElement.FIRE)) {
-            launchBasicAttack(player, MagicElement.FIRE, isCharged);
-            sb.append("§cFire ");
-            firedAny = true;
-        }
-        if (hasWater && consumeRune(player, MagicElement.WATER)) {
-            launchBasicAttack(player, MagicElement.WATER, isCharged);
-            sb.append("§bWater ");
-            firedAny = true;
-        }
-        if (hasEarth && consumeRune(player, MagicElement.EARTH)) {
-            launchBasicAttack(player, MagicElement.EARTH, isCharged);
-            sb.append("§2Earth ");
-            firedAny = true;
-        }
-        if (hasAir && consumeRune(player, MagicElement.AIR)) {
-            launchBasicAttack(player, MagicElement.AIR, isCharged);
-            sb.append("§fAir ");
-            firedAny = true;
-        }
-
-        if (!firedAny) {
+        if (!fireActive && !waterActive && !earthActive && !airActive) {
             player.sendActionBar("§c✗ §7You have the staves, but §cno matching elemental runes§7 to fire!");
             return;
         }
 
+        // Construct the active elements string for persistent metadata
+        List<String> activeList = new ArrayList<>();
+        StringBuilder sb = new StringBuilder("§5✦ §7Support Flurry: ");
+        if (fireActive) { activeList.add("FIRE"); sb.append("§cFire "); }
+        if (waterActive) { activeList.add("WATER"); sb.append("§bWater "); }
+        if (earthActive) { activeList.add("EARTH"); sb.append("§2Earth "); }
+        if (airActive) { activeList.add("AIR"); sb.append("§fAir "); }
         sb.append("§8(25% damage basic)");
-        player.sendActionBar(sb.toString());
-    }
 
-    private void launchBasicAttack(Player player, MagicElement el, boolean isCharged) {
+        String val = "INFUSED:" + String.join(",", activeList);
+
         Snowball snowball = player.launchProjectile(Snowball.class);
         snowball.getPersistentDataContainer().set(
             new NamespacedKey(plugin, "de_support_basic"),
-            PersistentDataType.STRING, el.name()
+            PersistentDataType.STRING, val
         );
         if (isCharged) {
             snowball.getPersistentDataContainer().set(
@@ -1106,30 +1105,41 @@ public class CastingEngine implements Listener {
                 PersistentDataType.BYTE, (byte) 1
             );
         }
-        
-        // Spawn trailing particles based on element
+
+        // Spawn trailing particles based on active elements (lightweight & 3-tick face-protection)
         new org.bukkit.scheduler.BukkitRunnable() {
+            int ticksLived = 0;
             @Override
             public void run() {
                 if (!snowball.isValid() || snowball.isDead()) {
                     cancel();
                     return;
                 }
+                ticksLived++;
+                if (ticksLived < 3) return; // Prevent spawning particles in the face
+
                 Location loc = snowball.getLocation();
-                Particle p;
-                switch (el) {
-                    case FIRE -> p = Particle.FLAME;       // Red
-                    case WATER -> p = Particle.SPLASH;     // Blue
-                    case EARTH -> p = Particle.HAPPY_VILLAGER; // Green
-                    case AIR -> p = Particle.CLOUD;        // White
-                    default -> p = Particle.CLOUD;
+                // Base Support blue pixels (lightweight!)
+                loc.getWorld().spawnParticle(Particle.ELECTRIC_SPARK, loc, 1, 0.01, 0.01, 0.01, 0.0);
+
+                if (fireActive) {
+                    loc.getWorld().spawnParticle(Particle.FLAME, loc, 1, 0.01, 0.01, 0.01, 0.01);
                 }
-                loc.getWorld().spawnParticle(p, loc, 3, 0.05, 0.05, 0.05, 0.02);
+                if (waterActive) {
+                    loc.getWorld().spawnParticle(Particle.SPLASH, loc, 1, 0.01, 0.01, 0.01, 0.01);
+                }
+                if (earthActive) {
+                    loc.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, loc, 1, 0.01, 0.01, 0.01, 0.01);
+                }
+                if (airActive) {
+                    loc.getWorld().spawnParticle(Particle.CLOUD, loc, 1, 0.01, 0.01, 0.01, 0.01);
+                }
             }
         }.runTaskTimer(plugin, 1L, 1L);
-        
+
         // Sound
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_EGG_THROW, 0.5f, 1.5f);
+        player.sendActionBar(sb.toString());
     }
 
     /**
