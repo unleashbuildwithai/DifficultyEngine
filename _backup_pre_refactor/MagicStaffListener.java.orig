@@ -106,7 +106,6 @@ public class MagicStaffListener implements Listener {
     private final Map<UUID, BukkitTask>              airHoverTasks      = new HashMap<>();
     /** Projectile UUID → the EarthBlockTier thrown (null = old system / Lv1-9). */
     private final Map<UUID, EarthBlockTier>          earthBoltTiers     = new HashMap<>();
-
     /** Target UUID → the tier of the trap currently placed under them. */
     private final Map<UUID, EarthBlockTier>          activeTraps        = new HashMap<>();
     /** Players who received the Mage Gear Guide this session (first cast). */
@@ -115,14 +114,6 @@ public class MagicStaffListener implements Listener {
     private final Set<Location>                      magicLavaBlocks    = new HashSet<>();
     /** Dirt blocks placed by earth staff — tracked so fire can ignite them into lava. */
     private final Set<Location>                      magicDirtBlocks    = new HashSet<>();
-    /** Water blocks placed/created by the Water Staff — tracked so the Earth Staff's
-     *  Sandstorm right-click can identify "magic water" specifically (not any water). */
-    private final Set<Location>                      magicWaterBlocks   = new HashSet<>();
-    /** Per-player Lv99 permanent Air flight state: whether currently flying. */
-    private final Set<UUID>                          permaFlightActive  = new HashSet<>();
-    /** Per-player Lv99 permanent Air flight drain task. */
-    private final Map<UUID, BukkitTask>              permaFlightTasks   = new HashMap<>();
-
     private       SandstormManager                   sandstormManager   = null;
     /** Optional CastingEngine — notified on every successful spell cast for combo tracking. */
     private       CastingEngine                      castingEngine      = null;
@@ -283,6 +274,9 @@ public class MagicStaffListener implements Listener {
                 giveGuideIfNew(player);
                 boolean isIncantation = (magicLevel >= 10 && itemFactory.hasSpellComboBook(player, getBagContents(player)));
                 castFire(player, magicLevel, isIncantation);
+                if (castingEngine != null) {
+                    castingEngine.onElementCast(player, MagicElement.FIRE);
+                }
             }
             return;
         }
@@ -315,6 +309,9 @@ public class MagicStaffListener implements Listener {
                 }
                 awardMagicXp(player, MAGIC_XP_CAST);
                 castWater(player, magicLevel, action);
+                if (castingEngine != null) {
+                    castingEngine.onElementCast(player, MagicElement.WATER);
+                }
             }
             return;
         }
@@ -322,41 +319,8 @@ public class MagicStaffListener implements Listener {
         // ── Earth Staff ───────────────────────────────────────────────────────
         if (element == MagicElement.EARTH) {
             if (isRightClick) {
-                // ── Sandstorm Gate: right-click on MAGIC WATER (created by Water
-                // Staff) triggers the Sandstorm spell if the player is Magic Lv99
-                // AND carries the rare Sandstorm Book. Any other right-click target
-                // falls through to the normal block-throwing logic below. ────────
-                if (action == Action.RIGHT_CLICK_BLOCK && event.getClickedBlock() != null) {
-                    Block clicked = event.getClickedBlock();
-                    Location clickedLoc = clicked.getLocation().toBlockLocation();
-                    if (clicked.getType() == Material.WATER && magicWaterBlocks.contains(clickedLoc)) {
-                        boolean hasLevel = magicLevel >= 99;
-                        boolean hasBook  = itemFactory.hasSandstormBook(player, getBagContents(player));
-                        if (hasLevel && hasBook) {
-                            if (sandstormManager != null) {
-                                sandstormManager.triggerSandstorm(clicked.getLocation(), player);
-                                player.sendActionBar("§6☁ §e§lSANDSTORM! §7The magic water erupts into a storm!");
-                                player.getWorld().playSound(clicked.getLocation(), Sound.ITEM_TRIDENT_THUNDER, 1.2f, 0.8f);
-                            } else {
-                                player.sendActionBar("§c✗ §7Sandstorm system unavailable — contact an admin.");
-                            }
-                            return;
-                        }
-                        // Fizzle gracefully — tell them exactly what's missing.
-                        if (!hasLevel && !hasBook) {
-                            player.sendActionBar("§c✗ §7The water fizzles... §8(Need §aMagic Lv 99§8 + §6Sandstorm Book§8)");
-                        } else if (!hasLevel) {
-                            player.sendActionBar("§c✗ §7The water fizzles... §8(Need §aMagic Level 99§8!)");
-                        } else {
-                            player.sendActionBar("§c✗ §7The water fizzles... §8(Need the rare §6Sandstorm Book§8!)");
-                        }
-                        return;
-                    }
-                }
-
                 // Right-Click (Registry Pages 1–8): Heavy block-throwing action
                 EarthBlockTier tier = null;
-
                 if (magicLevel >= 10 && hasAnyEarthPage(player)) {
                     tier = findBestEarthTier(player, magicLevel);
                 }
@@ -374,6 +338,7 @@ public class MagicStaffListener implements Listener {
                     }
                     awardMagicXp(player, MAGIC_XP_CAST);
                     castEarthBasicBolt(player, magicLevel);
+                    if (castingEngine != null) castingEngine.onElementCast(player, MagicElement.EARTH);
                     return;
                 }
 
@@ -391,6 +356,7 @@ public class MagicStaffListener implements Listener {
                 }
                 awardMagicXp(player, MAGIC_XP_CAST);
                 castEarthHeavy(player, magicLevel, tier);
+                if (castingEngine != null) castingEngine.onElementCast(player, MagicElement.EARTH);
             } else {
                 // Left-Click: Basic fallback dirt bolt (no block or page required, no block consumed)
                 long cooldownMs = getCooldownMs(player, magicLevel);
@@ -405,6 +371,7 @@ public class MagicStaffListener implements Listener {
                 }
                 awardMagicXp(player, MAGIC_XP_CAST);
                 castEarthBasicBolt(player, magicLevel);
+                if (castingEngine != null) castingEngine.onElementCast(player, MagicElement.EARTH);
             }
             return;
         }
@@ -428,6 +395,7 @@ public class MagicStaffListener implements Listener {
                 }
                 awardMagicXp(player, MAGIC_XP_CAST);
                 castAir(player, magicLevel);
+                if (castingEngine != null) castingEngine.onElementCast(player, MagicElement.AIR);
             }
             return;
         }
@@ -458,25 +426,12 @@ public class MagicStaffListener implements Listener {
         else if (element == MagicElement.WATER) castWater(player, magicLevel, action);
         else if (element == MagicElement.EARTH) castEarth(player, magicLevel);
         else if (element == MagicElement.AIR)   castAir(player, magicLevel);
-    }
 
-    /**
-     * Public wrapper used by the Support Staff's left-click "Infused" flurry
-     * (CastingEngine.executeSupportBasicAttack) to fire each active elemental
-     * staff's REAL basic-tier spell instead of a simplified combined snowball.
-     * Dispatches to the same basic cast methods used by direct staff casts —
-     * no rune consumption here (the caller already consumed the element's rune).
-     */
-    public void castElementForSupport(Player player, MagicElement element, int magicLevel) {
-        switch (element) {
-            case FIRE  -> castFire(player, magicLevel,
-                    magicLevel >= 10 && itemFactory.hasSpellComboBook(player, getBagContents(player)));
-            case WATER -> castWater(player, magicLevel, Action.LEFT_CLICK_AIR);
-            case EARTH -> castEarthBasicBolt(player, magicLevel);
-            case AIR   -> castAir(player, magicLevel);
+        // Notify the CastingEngine so this element is added to the combo queue
+        if (castingEngine != null) {
+            castingEngine.onElementCast(player, element);
         }
     }
-
 
     // ══════════════════════════════════════════════════════════════════════════
     //  FIRE STAFF
@@ -938,21 +893,10 @@ public class MagicStaffListener implements Listener {
         Block start = hitBlock.getRelative(BlockFace.UP);
         for (int i = 0; i < 5; i++) {
             Block b = start.getRelative(dir, i);
-            if (b.getType().isAir() || b.getType() == Material.WATER) {
-                b.setType(Material.WATER);
-                // Tag as "magic water" — required for the Earth Staff's Sandstorm gate.
-                Location wLoc = b.getLocation().toBlockLocation();
-                magicWaterBlocks.add(wLoc);
-                // Auto-expire the magic-water tag after 60s so old puddles don't
-                // permanently count (the physical water block itself may persist
-                // via vanilla water physics, but it stops counting as "magic").
-                plugin.getServer().getScheduler().runTaskLater(plugin,
-                    () -> magicWaterBlocks.remove(wLoc), 1200L);
-            }
+            if (b.getType().isAir() || b.getType() == Material.WATER) b.setType(Material.WATER);
             else break;
         }
     }
-
 
     private BlockFace getHorizontalFacing(Player player) {
         float yaw = ((player.getLocation().getYaw() % 360) + 360) % 360;
@@ -1109,6 +1053,8 @@ public class MagicStaffListener implements Listener {
         player.getWorld().playSound(player.getLocation(), Sound.ITEM_BUCKET_FILL, 1.2f, 0.7f);
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_DOLPHIN_SPLASH, 0.8f, 1.5f);
         player.sendActionBar("§b§l[Water Wave] §7Power bolt! §8(2× dmg · 3 runes · ½ cd)");
+
+        if (castingEngine != null) castingEngine.onElementCast(player, MagicElement.WATER);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -2607,21 +2553,11 @@ public class MagicStaffListener implements Listener {
                 }
             }
 
-            // Rune cost scales with level: 1 rune per click, +1 rune per 8 levels
-            int runeCost = 1 + (magicLevel / 8);
-            int haveRunes = countRunes(player, MagicElement.AIR);
-            if (haveRunes < runeCost) {
-                player.sendActionBar("§c✗ §7Need §f" + runeCost + " §7Air Runes for Air Boost §8(have " + haveRunes + ")§7!");
+            // Consume 1 Air Rune as "activation fee"
+            if (!consumeRune(player, MagicElement.AIR)) {
+                player.sendActionBar("§c✗ §7No §fAir Runes§7 for Air Boost!");
                 return;
             }
-            for (int i = 0; i < runeCost; i++) {
-                if (!consumeRune(player, MagicElement.AIR)) {
-                    // Shouldn't happen since we pre-checked count, but bail safely if it does.
-                    player.sendActionBar("§c✗ §7Ran out of §fAir Runes§7 mid-cast!");
-                    return;
-                }
-            }
-
 
             // Boost duration in ticks: 60 ticks (3s) + magic level (e.g. at Lv50, 110 ticks ≈ 5.5s)
             int ticks = 60 + magicLevel;
@@ -2637,68 +2573,68 @@ public class MagicStaffListener implements Listener {
             return;
         }
 
-        // Level 99+: Continuous Levitation/Flight — flat 3 Air Runes per second
-        if (permaFlightActive.contains(uid)) {
-            cancelPermaFlight(uid);
+        // Level 99+: Continuous Levitation/Flight
+        if (airHoverTasks.containsKey(uid)) {
+            cancelHoverTask(uid);
             player.removePotionEffect(PotionEffectType.SLOW_FALLING);
             player.removePotionEffect(PotionEffectType.LEVITATION);
             player.sendActionBar("§7☁ §7Flight cancelled.");
             return;
         }
 
-        // Need at least 3 runes to start (1 second's worth)
-        if (countRunes(player, MagicElement.AIR) < 3) {
-            player.sendActionBar("§c✗ §7Need §f3 §7Air Runes to start flying §8(3/sec drain)§7!");
+        // Need at least 1 rune to start
+        if (!consumeRune(player, MagicElement.AIR)) {
+            player.sendActionBar("§c✗ §7No §fAir Runes§7 to fly!");
             return;
         }
-        for (int i = 0; i < 3; i++) consumeRune(player, MagicElement.AIR);
 
-        permaFlightActive.add(uid);
+        final boolean canLevitate = true; // Always fly at Level 99!
+
+        // Flight rune drain interval: base 9 seconds, Mage Gear adds up to 50%
+        int baseInterval = 180;
+        double gearBonus = Math.min(0.50, itemFactory.getMageGearCooldownBonus(player) / 4000.0);
+        final int runeInterval = Math.max(10, (int) (baseInterval * (1.0 + gearBonus)));
 
         // Apply initial effects
-        player.addPotionEffect(new PotionEffect(PotionEffectType.SLOW_FALLING, 30, 0, false, true, true));
-        player.addPotionEffect(new PotionEffect(PotionEffectType.LEVITATION, 30, 0, false, false, false));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.SLOW_FALLING, 60, 0, false, true, true));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.LEVITATION, 10, 0, false, false, false));
 
         player.getWorld().spawnParticle(Particle.CLOUD, player.getLocation().add(0, 0.5, 0), 8, 0.4, 0.1, 0.4, 0.02);
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_PHANTOM_FLAP, 0.6f, 2.0f);
 
-        player.sendActionBar("§7☁ §f⬆ FLYING §8— Drains §f3 §7Air Runes/sec. Right-click to stop.");
+        player.sendActionBar("§7☁ §f⬆ FLYING §8— Air Runes drain over time. Right-click to stop.");
 
-        // Sustain task: runs every 1 second (20 ticks), consumes 3 runes each tick
+        // Sustain task: runs every 5 ticks
+        final int[] tickCount = {0};
         BukkitTask task = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
-            if (!player.isOnline()) { cancelPermaFlight(uid); return; }
+            if (!player.isOnline()) { cancelHoverTask(uid); return; }
             if (player.isOnGround()) {
-                cancelPermaFlight(uid);
+                cancelHoverTask(uid);
                 player.sendActionBar("§7☁ §7Flight ended — landed.");
                 return;
             }
 
+            tickCount[0]++;
+
             // Re-apply effects each cycle
             player.addPotionEffect(new PotionEffect(PotionEffectType.SLOW_FALLING, 30, 0, false, true, true));
-            player.addPotionEffect(new PotionEffect(PotionEffectType.LEVITATION, 30, 0, false, false, false));
+            player.addPotionEffect(new PotionEffect(PotionEffectType.LEVITATION, 15, 0, false, false, false));
 
-            // Consume 3 Air Runes per second — abort immediately if unable to satisfy all 3
-            if (countRunes(player, MagicElement.AIR) < 3) {
-                cancelPermaFlight(uid);
-                player.removePotionEffect(PotionEffectType.LEVITATION);
-                player.sendActionBar("§c✗ §7Out of §fAir Runes§7! Flight cancelled!");
-                player.sendTitle("§c✗ No Air Runes", "§7Flight ended!", 5, 25, 8);
-                return;
+            // Consume rune at interval
+            if (tickCount[0] % runeInterval == 0) {
+                if (!consumeRune(player, MagicElement.AIR)) {
+                    cancelHoverTask(uid);
+                    player.removePotionEffect(PotionEffectType.LEVITATION);
+                    player.sendActionBar("§c✗ §7Out of §fAir Runes§7! Flight cancelled!");
+                    player.sendTitle("§c✗ No Air Runes", "§7Flight ended!", 5, 25, 8);
+                    return;
+                }
+                int remaining = countRunes(player, MagicElement.AIR);
+                player.sendActionBar("§7☁ §f⬆ Flying §8— §f" + remaining + " §7Air Rune" + (remaining == 1 ? "" : "s") + " left");
             }
-            for (int i = 0; i < 3; i++) consumeRune(player, MagicElement.AIR);
-            int remaining = countRunes(player, MagicElement.AIR);
-            player.sendActionBar("§7☁ §f⬆ Flying §8— §f" + remaining + " §7Air Rune" + (remaining == 1 ? "" : "s") + " left §8(-3/sec)");
-        }, 20L, 20L);
-        permaFlightTasks.put(uid, task);
+        }, 5L, 5L);
+        airHoverTasks.put(uid, task);
     }
-
-    /** Cancels the Lv99 permanent flight task and clears active-flight state for the given player. */
-    private void cancelPermaFlight(UUID uid) {
-        permaFlightActive.remove(uid);
-        BukkitTask t = permaFlightTasks.remove(uid);
-        if (t != null) t.cancel();
-    }
-
 
     /**
      * Gives the Mage Gear Guide to a player on their FIRST-EVER spell cast.

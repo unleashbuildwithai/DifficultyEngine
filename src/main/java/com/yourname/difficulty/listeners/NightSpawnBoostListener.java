@@ -205,6 +205,20 @@ public class NightSpawnBoostListener implements Listener {
 
         if (hasLargeParty) {
             applyNightmarePartyScaling(mob);
+
+            // ── 5% chance: any Zombie spawned near a Nightmare party of 2+ ────
+            // becomes a Speed Zombie (Speed II, permanent).
+            if (mob.getType() == EntityType.ZOMBIE && ThreadLocalRandom.current().nextDouble() < 0.05) {
+                mob.addPotionEffect(new org.bukkit.potion.PotionEffect(
+                        org.bukkit.potion.PotionEffectType.SPEED, Integer.MAX_VALUE, 1, false, true, true));
+                String existingName = mob.getCustomName();
+                if (existingName == null || existingName.isEmpty()) {
+                    mob.setCustomName("§b⚡ §fSpeed Zombie");
+                } else {
+                    mob.setCustomName("§b⚡ " + existingName);
+                }
+                mob.setCustomNameVisible(true);
+            }
         }
     }
 

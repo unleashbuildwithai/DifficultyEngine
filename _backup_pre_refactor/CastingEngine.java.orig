@@ -100,7 +100,37 @@ public class CastingEngine implements Listener {
         "Prayer Pierce (Veil of Silence)"
     };
 
+    /** The full combo recipe map: queue key string → BuffType */
+    private static final Map<String, BuffType> COMBO_MAP;
+
+    static {
+        COMBO_MAP = new LinkedHashMap<>();
+        // ── 2-element combos ──────────────────────────────────────────────
+        COMBO_MAP.put("FIRE,FIRE",    BuffType.INFERNO_BURST);
+        COMBO_MAP.put("WATER,FIRE",   BuffType.STEAM_BLAST);
+        COMBO_MAP.put("FIRE,WATER",   BuffType.STEAM_BLAST);
+        COMBO_MAP.put("FIRE,EARTH",   BuffType.MAGMA_TRAP);
+        COMBO_MAP.put("EARTH,FIRE",   BuffType.FORTIFY);
+        COMBO_MAP.put("AIR,FIRE",     BuffType.TORNADO_FLAME);
+        COMBO_MAP.put("FIRE,AIR",     BuffType.BLAZE_DASH);
+        COMBO_MAP.put("WATER,WATER",  BuffType.TIDAL_SURGE);
+        COMBO_MAP.put("EARTH,EARTH",  BuffType.STONE_SKIN);
+        COMBO_MAP.put("AIR,AIR",      BuffType.GALE_FORCE);
+        COMBO_MAP.put("EARTH,WATER",  BuffType.QUICKSAND);
+        COMBO_MAP.put("WATER,EARTH",  BuffType.MUD_WALL);
+        COMBO_MAP.put("AIR,WATER",    BuffType.MIST_VEIL);
+        COMBO_MAP.put("WATER,AIR",    BuffType.CLEANSE);
+        COMBO_MAP.put("EARTH,AIR",    BuffType.SANDSTORM);
+        COMBO_MAP.put("AIR,EARTH",    BuffType.SANDSTORM);
+        // ── 4-element grand combo ─────────────────────────────────────────
+        COMBO_MAP.put("FIRE,WATER,EARTH,AIR", BuffType.GRAND_HARMONY);
+        COMBO_MAP.put("WATER,FIRE,AIR,EARTH", BuffType.GRAND_HARMONY);
+        COMBO_MAP.put("EARTH,AIR,FIRE,WATER", BuffType.GRAND_HARMONY);
+        COMBO_MAP.put("AIR,EARTH,WATER,FIRE", BuffType.GRAND_HARMONY);
+    }
+
     private final JavaPlugin          plugin;
+    private final CastingQueueManager queueManager;
     private final BuffLogic            buffLogic;
     private final ItemFactory          itemFactory;
     private final NamespacedKey        staffKey;
@@ -109,20 +139,9 @@ public class CastingEngine implements Listener {
     private PartyManager partyManager = null;
     private LightningChargeManager lightningChargeManager = null;
     private MagicBagManager magicBagManager = null;
-    /** Optional MagicStaffListener — wired in so Support Staff left-click can fire real per-element spells. */
-    private com.yourname.difficulty.magic.MagicStaffListener magicStaffListener = null;
-    /** Optional SkillManager — wired in so real spell casts can scale with the player's actual Magic level. */
-    private com.yourname.difficulty.skills.SkillManager skillManager = null;
 
-
-    /**
-     * Per-player "armed" Support Blessing Potion effect — set by
-     * {@code SupportPotionListener} when a potion is successfully armed
-     * (Support Book + matching Support Page + Support Rune all present).
-     * Consumed/read by {@link #onSupportStaffUse} for the ranged splash cast.
-     */
-    private final Map<UUID, ArmedSupportEffect> armedEffects = new HashMap<>();
-
+    /** Tracks which combos each player has discovered (for Arcane Tome). */
+    private final Map<UUID, Set<BuffType>> discovered = new HashMap<>();
 
     // ── Support Staff combo gate ──────────────────────────────────────────────
     /**
@@ -134,9 +153,10 @@ public class CastingEngine implements Listener {
     private final Map<UUID, UUID> lastPartyHitTarget = new HashMap<>();
     private final Map<UUID, Long> lastPartyHitTime   = new HashMap<>();
 
-    public CastingEngine(JavaPlugin plugin,
+    public CastingEngine(JavaPlugin plugin, CastingQueueManager queueManager,
                          BuffLogic buffLogic, ItemFactory itemFactory) {
         this.plugin       = plugin;
+        this.queueManager = queueManager;
         this.buffLogic    = buffLogic;
         this.itemFactory  = itemFactory;
         this.staffKey     = new NamespacedKey(plugin, SUPPORT_STAFF_KEY);
@@ -146,72 +166,6 @@ public class CastingEngine implements Listener {
     public void setPartyManager(PartyManager pm) { this.partyManager = pm; }
     public void setLightningChargeManager(LightningChargeManager lcm) { this.lightningChargeManager = lcm; }
     public void setMagicBagManager(MagicBagManager mbm) { this.magicBagManager = mbm; }
-    /** Wires in the MagicStaffListener so Support Staff left-click can fire real per-element spells. */
-    public void setMagicStaffListener(com.yourname.difficulty.magic.MagicStaffListener msl) { this.magicStaffListener = msl; }
-    /** Wires in the SkillManager so real spell casts scale with the player's actual Magic level. */
-    public void setSkillManager(com.yourname.difficulty.skills.SkillManager sm) { this.skillManager = sm; }
-
-
-    // ── Armed Support Effect (Blessing Potion arming/discharge) ──────────────
-
-    /**
-     * Called by {@code SupportPotionListener} when a Support Blessing Potion is
-     * successfully armed (Support Book + matching Support Page + Support Rune
-     * all present). Non-stacking: if the player already has an unexpired armed
-     * effect, this call is a no-op (caller is responsible for checking first
-     * via {@link #getArmedEffect(UUID)} and wasting the new potion instead).
-     */
-    public void armEffect(Player player, List<PotionEffect> effects, String potionId) {
-        long expiry = System.currentTimeMillis() + 60_000L; // 60s arming window — tune as needed
-        armedEffects.put(player.getUniqueId(), new ArmedSupportEffect(effects, potionId, expiry));
-    }
-
-    /** Returns the player's currently armed Support effect, or {@code null} if none/expired. */
-    public ArmedSupportEffect getArmedEffect(UUID playerUuid) {
-        ArmedSupportEffect eff = armedEffects.get(playerUuid);
-        if (eff == null) return null;
-        if (eff.isExpired()) { armedEffects.remove(playerUuid); return null; }
-        return eff;
-    }
-
-    /** Clears a player's armed effect (e.g. after successful discharge). */
-    public void clearArmedEffect(UUID playerUuid) {
-        armedEffects.remove(playerUuid);
-    }
-
-    /**
-     * Discharges the player's armed Support effect as a ranged AoE splash cast
-     * at the given target location. Applies all armed potion effects to each
-     * LivingEntity within {@code radius} blocks, EXCEPT entities that already
-     * have that specific PotionEffectType active (non-stacking per-target —
-     * the rune/cast is still consumed regardless of skips).
-     */
-    private void dischargeArmedEffectAt(Player caster, Location loc, ArmedSupportEffect armed, double radius) {
-        loc.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, loc, 50, 2.5, 1.5, 2.5, 0.05);
-        loc.getWorld().spawnParticle(Particle.END_ROD, loc, 20, 2.0, 1.0, 2.0, 0.05);
-        loc.getWorld().playSound(loc, Sound.ENTITY_SPLASH_POTION_BREAK, 1.2f, 1.2f);
-
-        int hitCount = 0;
-        for (Entity e : loc.getWorld().getNearbyEntities(loc, radius, radius, radius)) {
-            if (!(e instanceof LivingEntity target)) continue;
-            boolean appliedAny = false;
-            for (PotionEffect effect : armed.effects()) {
-                if (target.hasPotionEffect(effect.getType())) continue; // non-stacking per target
-                target.addPotionEffect(effect);
-                appliedAny = true;
-            }
-            if (appliedAny) {
-                hitCount++;
-                target.getWorld().spawnParticle(Particle.HAPPY_VILLAGER,
-                        target.getLocation().add(0, 1, 0), 15, 0.4, 0.4, 0.4, 0.05);
-                if (target instanceof Player tp) {
-                    tp.sendMessage("§5✦ §7Blessed by §b" + caster.getName() + "§7's armed Support Blessing!");
-                }
-            }
-        }
-        caster.sendActionBar("§5✦ §7Armed Blessing discharged! §8(" + hitCount + " targets buffed)");
-    }
-
 
     // ── Build SupportStaff item ───────────────────────────────────────────────
 
@@ -245,6 +199,52 @@ public class CastingEngine implements Listener {
         if (item == null || item.getType().isAir() || !item.hasItemMeta()) return false;
         return item.getItemMeta().getPersistentDataContainer()
                 .has(staffKey, PersistentDataType.BYTE);
+    }
+
+    // ── Notify the engine that a player cast an element ──────────────────────
+
+    /**
+     * Called by MagicStaffListener whenever a player successfully casts a spell.
+     * Adds the element to the player's queue and shows HUD feedback after a 2-tick
+     * delay so the element's own action bar message displays first.
+     */
+    public void onElementCast(Player player, MagicElement element) {
+        final List<MagicElement> queue = new ArrayList<>(queueManager.addCast(player.getUniqueId(), element));
+
+        // ── Auto-resolve Combos ──────────────────────────────────────────────
+        // The books are what make combos now! Combos resolve instantly on element cast,
+        // completely bypassing the clunky Support Staff right-click.
+        String key = queueManager.queueKey(player.getUniqueId());
+        if (COMBO_MAP.containsKey(key)) {
+            BuffType combo = COMBO_MAP.get(key);
+            buffLogic.apply(player, combo);
+
+            // Record discovery
+            discovered.computeIfAbsent(player.getUniqueId(), k -> new HashSet<>()).add(combo);
+
+            // Clear queue
+            queueManager.clearQueue(player.getUniqueId());
+            player.sendActionBar("§5✦ §d§lCOMBO TRIGGERED! §d" + combo.name().replace('_', ' ') + " §5✦");
+            return;
+        }
+
+        // Only show the queue HUD if the player has a Support Staff in their inventory.
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            if (!player.isOnline()) return;
+            // Check if player has a support staff
+            boolean hasSupportStaff = false;
+            for (org.bukkit.inventory.ItemStack s : player.getInventory().getContents()) {
+                if (isSupportStaff(s)) { hasSupportStaff = true; break; }
+            }
+            if (!hasSupportStaff) return; // No support staff — show no queue HUD
+
+            StringBuilder hud = new StringBuilder("§7Queue: ");
+            for (MagicElement el : queue) {
+                hud.append(el.color).append(el.name().charAt(0));
+                hud.append("§8·");
+            }
+            player.sendActionBar(hud + " §7(Automatic combo on next staff cast!)");
+        }, 2L);
     }
 
     // ── Party member hit tracking (combo gate) ────────────────────────────────
@@ -345,30 +345,6 @@ public class CastingEngine implements Listener {
 
         lastSupportStaffUse.put(player.getUniqueId(), now);
         UUID casterId = player.getUniqueId();
-
-        // ── Armed Blessing Potion discharge (takes priority) ──────────────────
-        // If the player has an unexpired armed Support effect (from drinking a
-        // Blessing Potion while it was fully "armed" per SupportPotionListener),
-        // right-clicking the Support Staff fires a ranged AoE splash cast of
-        // that armed effect instead of the old combo/splash logic below.
-        ArmedSupportEffect armed = getArmedEffect(casterId);
-        if (armed != null) {
-            // Consume exactly 1 Support Rune per cast (regardless of hits/skips)
-            if (!consumeSupportRune(player)) {
-                player.sendActionBar("§c✗ §7No §dSupport Rune§7! §8Craft from §5Phantom Membrane×4§7.");
-                return;
-            }
-            org.bukkit.util.RayTraceResult ray = player.getWorld().rayTraceBlocks(
-                player.getEyeLocation(), player.getLocation().getDirection(), 20,
-                org.bukkit.FluidCollisionMode.NEVER, true);
-            Location castAt = (ray != null && ray.getHitBlock() != null)
-                ? ray.getHitBlock().getLocation().add(0.5, 1.0, 0.5)
-                : player.getEyeLocation().add(player.getLocation().getDirection().multiply(10));
-            dischargeArmedEffectAt(player, castAt, armed, 5.0);
-            clearArmedEffect(casterId);
-            return;
-        }
-
         UUID targetId = lastPartyHitTarget.get(casterId);
         Long hitTime = lastPartyHitTime.get(casterId);
         boolean hasComboTarget = (targetId != null && hitTime != null && (System.currentTimeMillis() - hitTime <= 5000L));
@@ -400,7 +376,6 @@ public class CastingEngine implements Listener {
             applySplashSupport(player);
         }
     }
-
 
     private boolean hasSupportPotion(Player player, String id) {
         NamespacedKey pKey = new NamespacedKey(plugin, "de_support_potion_" + id);
@@ -783,6 +758,18 @@ public class CastingEngine implements Listener {
             || itemFactory.hasSupportPage(player, ItemFactory.SUPPORT_PAGE_PRAYER_KEY);
     }
 
+    // ── Discovered combo tracking ─────────────────────────────────────────────
+
+    /** Returns all combos a player has discovered. */
+    public Set<BuffType> getDiscovered(UUID playerUuid) {
+        return discovered.getOrDefault(playerUuid, Set.of());
+    }
+
+    /** Returns the full combo map (used by the Combo Book builder). */
+    public static Map<String, BuffType> getComboMap() {
+        return Collections.unmodifiableMap(COMBO_MAP);
+    }
+
     private void launchSupportProjectile(Player caster) {
         Snowball snowball = caster.launchProjectile(Snowball.class);
         // Tag it so we know it's a Support Staff projectile
@@ -1096,71 +1083,72 @@ public class CastingEngine implements Listener {
             return;
         }
 
-        // ── Fire each active element's REAL basic-tier spell ──────────────────
-        // Per spec: instead of a simplified combined snowball, dispatch to
-        // MagicStaffListener.castElementForSupport() for each active element so
-        // the actual elemental spell (fireball, water bolt, earth bolt, air
-        // gust) is cast. Runes for each element were already consumed above.
+        // Construct the active elements string for persistent metadata
+        List<String> activeList = new ArrayList<>();
         StringBuilder sb = new StringBuilder("§5✦ §7Support Flurry: ");
-        if (magicStaffListener != null) {
-            int lvl = skillManager != null
-                    ? skillManager.getLevel(player.getUniqueId(), com.yourname.difficulty.skills.SkillType.MAGIC)
-                    : 1;
-            if (fireActive)  { sb.append("§cFire "); magicStaffListener.castElementForSupport(player, MagicElement.FIRE, lvl); }
-            if (waterActive) { sb.append("§bWater "); magicStaffListener.castElementForSupport(player, MagicElement.WATER, lvl); }
-            if (earthActive) { sb.append("§2Earth "); magicStaffListener.castElementForSupport(player, MagicElement.EARTH, lvl); }
-            if (airActive)   { sb.append("§fAir "); magicStaffListener.castElementForSupport(player, MagicElement.AIR, lvl); }
-            sb.append("§8(real spells fired!)");
-        } else {
+        if (fireActive) { activeList.add("FIRE"); sb.append("§cFire "); }
+        if (waterActive) { activeList.add("WATER"); sb.append("§bWater "); }
+        if (earthActive) { activeList.add("EARTH"); sb.append("§2Earth "); }
+        if (airActive) { activeList.add("AIR"); sb.append("§fAir "); }
+        sb.append("§8(25% damage basic)");
 
-            // Fallback (MagicStaffListener not wired) — old simplified combined snowball
-            List<String> activeList = new ArrayList<>();
-            if (fireActive) { activeList.add("FIRE"); sb.append("§cFire "); }
-            if (waterActive) { activeList.add("WATER"); sb.append("§bWater "); }
-            if (earthActive) { activeList.add("EARTH"); sb.append("§2Earth "); }
-            if (airActive) { activeList.add("AIR"); sb.append("§fAir "); }
-            sb.append("§8(25% damage basic)");
+        String val = "INFUSED:" + String.join(",", activeList);
 
-            String val = "INFUSED:" + String.join(",", activeList);
-
-            Snowball snowball = player.launchProjectile(Snowball.class);
+        Snowball snowball = player.launchProjectile(Snowball.class);
+        snowball.getPersistentDataContainer().set(
+            new NamespacedKey(plugin, "de_support_basic"),
+            PersistentDataType.STRING, val
+        );
+        if (isCharged) {
             snowball.getPersistentDataContainer().set(
-                new NamespacedKey(plugin, "de_support_basic"),
-                PersistentDataType.STRING, val
+                new NamespacedKey(plugin, "de_support_basic_charged"),
+                PersistentDataType.BYTE, (byte) 1
             );
-            if (isCharged) {
-                snowball.getPersistentDataContainer().set(
-                    new NamespacedKey(plugin, "de_support_basic_charged"),
-                    PersistentDataType.BYTE, (byte) 1
-                );
-            }
-
-            new org.bukkit.scheduler.BukkitRunnable() {
-                int ticksLived = 0;
-                @Override
-                public void run() {
-                    if (!snowball.isValid() || snowball.isDead()) {
-                        cancel();
-                        return;
-                    }
-                    ticksLived++;
-                    if (ticksLived < 3) return;
-
-                    Location loc = snowball.getLocation();
-                    loc.getWorld().spawnParticle(Particle.ELECTRIC_SPARK, loc, 1, 0.01, 0.01, 0.01, 0.0);
-                    if (fireActive)  loc.getWorld().spawnParticle(Particle.FLAME, loc, 1, 0.01, 0.01, 0.01, 0.01);
-                    if (waterActive) loc.getWorld().spawnParticle(Particle.SPLASH, loc, 1, 0.01, 0.01, 0.01, 0.01);
-                    if (earthActive) loc.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, loc, 1, 0.01, 0.01, 0.01, 0.01);
-                    if (airActive)   loc.getWorld().spawnParticle(Particle.CLOUD, loc, 1, 0.01, 0.01, 0.01, 0.01);
-                }
-            }.runTaskTimer(plugin, 1L, 1L);
         }
+
+        // Spawn trailing particles based on active elements (lightweight & 3-tick face-protection)
+        new org.bukkit.scheduler.BukkitRunnable() {
+            int ticksLived = 0;
+            @Override
+            public void run() {
+                if (!snowball.isValid() || snowball.isDead()) {
+                    cancel();
+                    return;
+                }
+                ticksLived++;
+                if (ticksLived < 3) return; // Prevent spawning particles in the face
+
+                Location loc = snowball.getLocation();
+                // Base Support blue pixels (lightweight!)
+                loc.getWorld().spawnParticle(Particle.ELECTRIC_SPARK, loc, 1, 0.01, 0.01, 0.01, 0.0);
+
+                if (fireActive) {
+                    loc.getWorld().spawnParticle(Particle.FLAME, loc, 1, 0.01, 0.01, 0.01, 0.01);
+                }
+                if (waterActive) {
+                    loc.getWorld().spawnParticle(Particle.SPLASH, loc, 1, 0.01, 0.01, 0.01, 0.01);
+                }
+                if (earthActive) {
+                    loc.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, loc, 1, 0.01, 0.01, 0.01, 0.01);
+                }
+                if (airActive) {
+                    loc.getWorld().spawnParticle(Particle.CLOUD, loc, 1, 0.01, 0.01, 0.01, 0.01);
+                }
+            }
+        }.runTaskTimer(plugin, 1L, 1L);
 
         // Sound
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_EGG_THROW, 0.5f, 1.5f);
         player.sendActionBar(sb.toString());
     }
 
+    /**
+     * Returns the number of unique combos in the registry.
+     * (De-duplicated — some keys map to the same BuffType)
+     */
+    public static int getUniqueCombos() {
+        return (int) COMBO_MAP.values().stream().distinct().count();
+    }
 
     /** Secret Death Reset Relic handler for xxfatalg0dz */
     @EventHandler(priority = EventPriority.HIGH)

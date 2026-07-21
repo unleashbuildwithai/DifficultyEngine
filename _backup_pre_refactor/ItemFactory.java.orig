@@ -68,7 +68,6 @@ public class ItemFactory {
     public static final String BLUE_LIGHTNING_POTION_KEY       = "blue_lightning_potion";
     public static final String TEMPEST_SPAWNER_KEY = "de_tempest_spawner";
     public static final String VOID_SPAWNER_KEY = "de_void_spawner";
-    public static final String GILDED_SPAWNER_KEY = "de_gilded_spawner";
 
     // ── Lightning Magic system ────────────────────────────────────────────────
     public static final String CATCHING_BLOCK_KEY       = "de_catching_block";
@@ -97,22 +96,6 @@ public class ItemFactory {
     public static final String SUPPORT_PAGE_CRIT_KEY     = "de_support_page_crit";
     public static final String SUPPORT_PAGE_PRAYER_KEY   = "de_support_page_prayer";
     public static final String SUPPORT_STAFF_KEY         = "de_support_staff";
-    // ── Additional Support Pages (pair 1:1 with the 9 Blessing Potions that
-    //    don't already share a page with the original 7) ──────────────────────
-    public static final String SUPPORT_PAGE_BULWARK_KEY       = "de_support_page_bulwark";
-    public static final String SUPPORT_PAGE_CHRONO_KEY        = "de_support_page_chrono";
-    public static final String SUPPORT_PAGE_GRAVITIC_KEY      = "de_support_page_gravitic";
-    public static final String SUPPORT_PAGE_FEATHERWEIGHT_KEY = "de_support_page_featherweight";
-    public static final String SUPPORT_PAGE_OCULAR_KEY        = "de_support_page_ocular";
-    public static final String SUPPORT_PAGE_PYRIC_KEY         = "de_support_page_pyric";
-    public static final String SUPPORT_PAGE_ABYSSAL_KEY       = "de_support_page_abyssal";
-    public static final String SUPPORT_PAGE_ENERVATION_KEY    = "de_support_page_enervation";
-    public static final String SUPPORT_PAGE_STASIS_KEY        = "de_support_page_stasis";
-    /** The master Support Book — carrying it boosts all Support magic +25% and +10s buff duration. */
-    public static final String SUPPORT_BOOK_KEY           = "de_support_book";
-    /** Rare Sandstorm Book — 0.2% drop from the Tempest Overlord only. */
-    public static final String SANDSTORM_BOOK_KEY         = "de_sandstorm_book";
-
 
     // ── NamespacedKeys ────────────────────────────────────────────────────────
     private final NamespacedKey soulfurPotionKey;
@@ -138,7 +121,6 @@ public class ItemFactory {
     private final NamespacedKey blueLightningPotionKey;
     private final NamespacedKey tempestSpawnerKey;
     private final NamespacedKey voidSpawnerKey;
-    private final NamespacedKey gildedSpawnerKey;
     // ── Lightning Magic NamespacedKeys ────────────────────────────────────────
     private final NamespacedKey catchingBlockKey;
     private final NamespacedKey emptyMagicBottleKey;
@@ -161,18 +143,6 @@ public class ItemFactory {
     private final NamespacedKey supportPageCritKey;
     private final NamespacedKey supportPagePrayerKey;
     private final NamespacedKey supportStaffKey;
-    private final NamespacedKey supportPageBulwarkKey;
-    private final NamespacedKey supportPageChronoKey;
-    private final NamespacedKey supportPageGraviticKey;
-    private final NamespacedKey supportPageFeatherweightKey;
-    private final NamespacedKey supportPageOcularKey;
-    private final NamespacedKey supportPagePyricKey;
-    private final NamespacedKey supportPageAbyssalKey;
-    private final NamespacedKey supportPageEnervationKey;
-    private final NamespacedKey supportPageStasisKey;
-    private final NamespacedKey supportBookKey;
-    private final NamespacedKey sandstormBookKey;
-
     /** Per-tier PDC keys (MAGE tier maps to mageGearKey). */
     private final Map<MageGearTier,  NamespacedKey> mageGearTierKeys  = new EnumMap<>(MageGearTier.class);
     private final Map<MeleeGearTier, NamespacedKey> meleeGearTierKeys = new EnumMap<>(MeleeGearTier.class);
@@ -232,7 +202,6 @@ public class ItemFactory {
         this.blueLightningPotionKey      = new NamespacedKey(plugin, BLUE_LIGHTNING_POTION_KEY);
         this.tempestSpawnerKey      = new NamespacedKey(plugin, TEMPEST_SPAWNER_KEY);
         this.voidSpawnerKey         = new NamespacedKey(plugin, VOID_SPAWNER_KEY);
-        this.gildedSpawnerKey       = new NamespacedKey(plugin, GILDED_SPAWNER_KEY);
         this.catchingBlockKey       = new NamespacedKey(plugin, CATCHING_BLOCK_KEY);
         this.emptyMagicBottleKey    = new NamespacedKey(plugin, EMPTY_MAGIC_BOTTLE_KEY);
         this.chargedMagicBottleKey  = new NamespacedKey(plugin, CHARGED_MAGIC_BOTTLE_KEY);
@@ -270,21 +239,9 @@ public class ItemFactory {
         this.supportPageCritKey      = new NamespacedKey(plugin, SUPPORT_PAGE_CRIT_KEY);
         this.supportPagePrayerKey    = new NamespacedKey(plugin, SUPPORT_PAGE_PRAYER_KEY);
         this.supportStaffKey         = new NamespacedKey(plugin, SUPPORT_STAFF_KEY);
-        this.supportPageBulwarkKey       = new NamespacedKey(plugin, SUPPORT_PAGE_BULWARK_KEY);
-        this.supportPageChronoKey        = new NamespacedKey(plugin, SUPPORT_PAGE_CHRONO_KEY);
-        this.supportPageGraviticKey      = new NamespacedKey(plugin, SUPPORT_PAGE_GRAVITIC_KEY);
-        this.supportPageFeatherweightKey = new NamespacedKey(plugin, SUPPORT_PAGE_FEATHERWEIGHT_KEY);
-        this.supportPageOcularKey        = new NamespacedKey(plugin, SUPPORT_PAGE_OCULAR_KEY);
-        this.supportPagePyricKey         = new NamespacedKey(plugin, SUPPORT_PAGE_PYRIC_KEY);
-        this.supportPageAbyssalKey       = new NamespacedKey(plugin, SUPPORT_PAGE_ABYSSAL_KEY);
-        this.supportPageEnervationKey    = new NamespacedKey(plugin, SUPPORT_PAGE_ENERVATION_KEY);
-        this.supportPageStasisKey        = new NamespacedKey(plugin, SUPPORT_PAGE_STASIS_KEY);
-        this.supportBookKey              = new NamespacedKey(plugin, SUPPORT_BOOK_KEY);
-        this.sandstormBookKey            = new NamespacedKey(plugin, SANDSTORM_BOOK_KEY);
 
         this.capeManager = capeManager;
         register();
-
     }
 
     // ── Registration ──────────────────────────────────────────────────────────
@@ -2017,39 +1974,6 @@ public class ItemFactory {
         return item.getItemMeta().getPersistentDataContainer().has(voidSpawnerKey, PersistentDataType.BYTE);
     }
 
-    /**
-     * Builds the Gilded Spawner Block — placed inside the Ancient Realm and
-     * struck/right-clicked to awaken §6The Gilded Enforcer§r (Pillager +
-     * immortal exploding Creeper rider) at the Gilded Sanctum.
-     */
-    public ItemStack buildGildedSpawner() {
-        ItemStack item = new ItemStack(Material.GOLD_BLOCK);
-        ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName("§6§lGilded Spawner Block");
-            meta.addEnchant(Enchantment.UNBREAKING, 1, true);
-            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
-            meta.setLore(List.of(
-                "§8" + "─".repeat(28),
-                "§7A block of pure gold, humming with",
-                "§7the wrath of a fallen pillager king.",
-                "§8" + "─".repeat(28),
-                "§6✦ §7Place and strike/click inside §5Ancient Realm",
-                "§7  to awaken §6The Gilded Enforcer§7.",
-                "§8" + "─".repeat(28),
-                "§8[DifficultyEngine — Spawner Block]"
-            ));
-            meta.getPersistentDataContainer().set(gildedSpawnerKey, PersistentDataType.BYTE, (byte) 1);
-            item.setItemMeta(meta);
-        }
-        return item;
-    }
-
-    public boolean isGildedSpawner(ItemStack item) {
-        if (item == null || !item.hasItemMeta()) return false;
-        return item.getItemMeta().getPersistentDataContainer().has(gildedSpawnerKey, PersistentDataType.BYTE);
-    }
-
     public ItemStack buildSupportStaff() {
         ItemStack staff = new ItemStack(Material.BREEZE_ROD);
         ItemMeta meta = staff.getItemMeta();
@@ -2116,162 +2040,9 @@ public class ItemFactory {
             case SUPPORT_PAGE_STRENGTH_KEY -> supportPageStrengthKey;
             case SUPPORT_PAGE_CRIT_KEY     -> supportPageCritKey;
             case SUPPORT_PAGE_PRAYER_KEY   -> supportPagePrayerKey;
-            case SUPPORT_PAGE_BULWARK_KEY       -> supportPageBulwarkKey;
-            case SUPPORT_PAGE_CHRONO_KEY        -> supportPageChronoKey;
-            case SUPPORT_PAGE_GRAVITIC_KEY      -> supportPageGraviticKey;
-            case SUPPORT_PAGE_FEATHERWEIGHT_KEY -> supportPageFeatherweightKey;
-            case SUPPORT_PAGE_OCULAR_KEY        -> supportPageOcularKey;
-            case SUPPORT_PAGE_PYRIC_KEY         -> supportPagePyricKey;
-            case SUPPORT_PAGE_ABYSSAL_KEY       -> supportPageAbyssalKey;
-            case SUPPORT_PAGE_ENERVATION_KEY    -> supportPageEnervationKey;
-            case SUPPORT_PAGE_STASIS_KEY        -> supportPageStasisKey;
             default                        -> null;
         };
     }
-
-    /**
-     * Maps a Support Blessing Potion's PDC id (the string passed to
-     * {@link #buildSupportPotion}) to the PDC key constant of the page that
-     * must be carried to arm that potion.  Returns {@code null} for potions
-     * that intentionally share the original 7 pages (none currently do —
-     * every potion added after the original 7 gets its own page).
-     */
-    public String resolveSupportPageKeyConstForPotion(String potionId) {
-        return switch (potionId) {
-            case "vitality_surge"      -> SUPPORT_PAGE_HEALING_KEY;
-            case "zephyr_momentum"     -> SUPPORT_PAGE_SPEED_KEY;
-            case "aegis_ward"          -> SUPPORT_PAGE_DEFENCE_KEY;
-            case "berserker_resonance" -> SUPPORT_PAGE_COMBAT_KEY;
-            case "aetheric_shielding"  -> SUPPORT_PAGE_STRENGTH_KEY;
-            case "fortune_aura"        -> SUPPORT_PAGE_CRIT_KEY;
-            case "veil_of_silence"     -> SUPPORT_PAGE_PRAYER_KEY;
-            case "spell_breaker_bulwark"    -> SUPPORT_PAGE_BULWARK_KEY;
-            case "chrono_mend"              -> SUPPORT_PAGE_CHRONO_KEY;
-            case "gravitic_leap"            -> SUPPORT_PAGE_GRAVITIC_KEY;
-            case "featherweight_descent"    -> SUPPORT_PAGE_FEATHERWEIGHT_KEY;
-            case "ocular_sight"             -> SUPPORT_PAGE_OCULAR_KEY;
-            case "pyric_mandate"            -> SUPPORT_PAGE_PYRIC_KEY;
-            case "abyssal_lung"             -> SUPPORT_PAGE_ABYSSAL_KEY;
-            case "enervation_curse"         -> SUPPORT_PAGE_ENERVATION_KEY;
-            case "stasis_anchor"            -> SUPPORT_PAGE_STASIS_KEY;
-            default -> null;
-        };
-    }
-
-    /**
-     * Returns true if the player carries the specific Support Page required
-     * to arm the given potion id (see {@link #resolveSupportPageKeyConstForPotion}).
-     */
-    public boolean hasSupportPageForPotion(Player player, String potionId) {
-        String keyConst = resolveSupportPageKeyConstForPotion(potionId);
-        if (keyConst == null) return false;
-        return hasSupportPage(player, keyConst);
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    //  MASTER SUPPORT BOOK — carrying it boosts ALL support magic
-    // ══════════════════════════════════════════════════════════════════════════
-
-    /**
-     * Builds the master Support Book — the "book the pages go in".
-     * Carrying this book (in addition to a per-potion Support Page) grants:
-     *   +25% to all support/magic damage & healing amounts
-     *   +10 seconds to all support buff durations
-     */
-    public ItemStack buildSupportBook() {
-        ItemStack item = new ItemStack(Material.WRITTEN_BOOK);
-        BookMeta meta = (BookMeta) item.getItemMeta();
-        if (meta != null) {
-            meta.setTitle("§5✦ The Support Book");
-            meta.setAuthor("§7Ancient Order");
-            meta.setGeneration(BookMeta.Generation.ORIGINAL);
-            meta.addPage(
-                "§5§l─ The Support Book ─\n\n" +
-                "§7The tome that binds every\n§5Support Page§7 together.\n\n" +
-                "§7Carry this alongside a\nSupport Page to arm its\nBlessing Potion.\n\n" +
-                "§d✦ Master Bonus:\n" +
-                "§a+25% §7all support magic\n§a+10s §7all buff durations"
-            );
-            meta.addPage(
-                "§5§l─ How Arming Works ─\n\n" +
-                "§7Drinking a Blessing Potion\nrequires:\n\n" +
-                "§8• §7This §5Support Book§7\n" +
-                "§8• §7The matching §5Support Page§7\n" +
-                "§8• §7A §dSupport Rune §7present\n\n" +
-                "§7Missing any of these →\n§cthe potion shatters§7!"
-            );
-            meta.getPersistentDataContainer().set(supportBookKey, PersistentDataType.BYTE, (byte) 1);
-            item.setItemMeta(meta);
-        }
-        return item;
-    }
-
-    public boolean isSupportBook(ItemStack item) {
-        if (item == null || !item.hasItemMeta()) return false;
-        return item.getItemMeta().getPersistentDataContainer().has(supportBookKey, PersistentDataType.BYTE);
-    }
-
-    public boolean hasSupportBook(Player player) {
-        for (ItemStack s : player.getInventory().getContents()) if (isSupportBook(s)) return true;
-        if (magicBagManager != null) {
-            ItemStack[] bag = magicBagManager.getBag(player.getUniqueId());
-            if (bag != null) for (ItemStack s : bag) if (isSupportBook(s)) return true;
-        }
-        return false;
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    //  SANDSTORM BOOK — rare 0.2% Tempest Overlord drop
-    // ══════════════════════════════════════════════════════════════════════════
-
-    /**
-     * Builds the rare Sandstorm Book. Drops ONLY from the Tempest Overlord
-     * at a 0.2% chance. Required (alongside Magic Level 99 and a "magic
-     * water" tile) to trigger the Sandstorm spell via Earth Staff right-click.
-     */
-    public ItemStack buildSandstormBook() {
-        ItemStack item = new ItemStack(Material.WRITTEN_BOOK);
-        BookMeta meta = (BookMeta) item.getItemMeta();
-        if (meta != null) {
-            meta.setTitle("§6✦ The Sandstorm Book");
-            meta.setAuthor("§5The Tempest Overlord");
-            meta.setGeneration(BookMeta.Generation.ORIGINAL);
-            meta.addPage(
-                "§6§l─ The Sandstorm Book ─\n\n" +
-                "§7Torn from the storm-wracked\nsoul of the §5Tempest Overlord§7.\n\n" +
-                "§8Rarity: §c0.2% §8drop chance\n§8(Tempest Overlord ONLY)\n\n" +
-                "§7Grants the power to summon\na §6Sandstorm §7with the\n§2Earth Staff§7."
-            );
-            meta.addPage(
-                "§6§l─ Requirements ─\n\n" +
-                "§7Right-click §2magic water\n§7(created by the §bWater Staff§7)\n§7with your §2Earth Staff§7 while:\n\n" +
-                "§8• §aMagic Level 99\n" +
-                "§8• §7Carrying this book\n\n" +
-                "§7Missing either → fizzles\nharmlessly (message shown)."
-            );
-            meta.getPersistentDataContainer().set(sandstormBookKey, PersistentDataType.BYTE, (byte) 1);
-            item.setItemMeta(meta);
-        }
-        return item;
-    }
-
-    public boolean isSandstormBook(ItemStack item) {
-        if (item == null || !item.hasItemMeta()) return false;
-        return item.getItemMeta().getPersistentDataContainer().has(sandstormBookKey, PersistentDataType.BYTE);
-    }
-
-    public boolean hasSandstormBook(Player player) {
-        for (ItemStack s : player.getInventory().getContents()) if (isSandstormBook(s)) return true;
-        return false;
-    }
-
-    public boolean hasSandstormBook(Player player, ItemStack[] bagContents) {
-        if (hasSandstormBook(player)) return true;
-        if (bagContents == null) return false;
-        for (ItemStack s : bagContents) if (isSandstormBook(s)) return true;
-        return false;
-    }
-
 
     /**
      * Returns true if the player carries the named support page in inventory.
@@ -2562,7 +2333,6 @@ public class ItemFactory {
         List<ItemStack> p = new ArrayList<>();
         p.add(buildSupportStaff());
         p.add(buildSupportRune());
-        p.add(buildSupportBook());
         p.add(buildSupportPage(SUPPORT_PAGE_HEALING_KEY,  "Healing",       "+3 heal on target",    "Restores health to", "the buffed party member."));
         p.add(buildSupportPage(SUPPORT_PAGE_SPEED_KEY,    "Faster Speed",  "Speed II (20s)",       "Grants swift movement", "to the party member."));
         p.add(buildSupportPage(SUPPORT_PAGE_DEFENCE_KEY,  "Defence",       "Resistance II (15s)",  "Reduces damage taken", "by the party member."));
@@ -2570,18 +2340,8 @@ public class ItemFactory {
         p.add(buildSupportPage(SUPPORT_PAGE_STRENGTH_KEY, "Strength",      "Strength II (10s)",    "Upgraded damage boost,", "requires Combat Boost too."));
         p.add(buildSupportPage(SUPPORT_PAGE_CRIT_KEY,     "Crit Attack",   "Luck II (20s)",        "Raises crit chance", "for the party member."));
         p.add(buildSupportPage(SUPPORT_PAGE_PRAYER_KEY,   "Prayer Pierce", "Haste I + clears Res", "Ignores prayer defence", "hit through protection."));
-        p.add(buildSupportPage(SUPPORT_PAGE_BULWARK_KEY,       "Spell-Breaker's Bulwark", "Fire Res + Slow Fall (30s)", "Shields the party member", "from spell backlash."));
-        p.add(buildSupportPage(SUPPORT_PAGE_CHRONO_KEY,        "Chrono-Mend",             "Regeneration II (15s)",      "Steadily restores health", "over time."));
-        p.add(buildSupportPage(SUPPORT_PAGE_GRAVITIC_KEY,      "Gravitic Leap",           "Jump Boost III (30s)",       "Grants powerful leaping", "ability."));
-        p.add(buildSupportPage(SUPPORT_PAGE_FEATHERWEIGHT_KEY, "Featherweight Descent",   "Slow Falling (30s)",         "Prevents fall damage", "for the party member."));
-        p.add(buildSupportPage(SUPPORT_PAGE_OCULAR_KEY,        "Ocular Sight",            "Night Vision (120s)",        "Grants clear vision", "in darkness."));
-        p.add(buildSupportPage(SUPPORT_PAGE_PYRIC_KEY,         "Pyric Mandate",           "Fire Resistance (60s)",      "Grants immunity to", "fire and lava."));
-        p.add(buildSupportPage(SUPPORT_PAGE_ABYSSAL_KEY,       "Abyssal Lung",            "Water Breathing (60s)",      "Grants underwater", "breathing."));
-        p.add(buildSupportPage(SUPPORT_PAGE_ENERVATION_KEY,    "Enervation Curse",        "Weakness (20s, hostile)",    "A curse to weaken", "enemy targets."));
-        p.add(buildSupportPage(SUPPORT_PAGE_STASIS_KEY,        "Stasis Anchor",           "Slowness (20s, hostile)",    "Roots enemy targets", "in place."));
         
         // Add the 16 Support Blessing Potions to Page 9
-
         p.add(buildSupportPotion("veil_of_silence", "§5✦ Veil of Silence §d(Blessing)", Color.BLACK, new PotionEffect(PotionEffectType.INVISIBILITY, 1200, 0)));
         p.add(buildSupportPotion("aegis_ward", "§9✦ Aegis Ward §d(Blessing)", Color.GRAY, new PotionEffect(PotionEffectType.RESISTANCE, 600, 1)));
         p.add(buildSupportPotion("spell_breaker_bulwark", "§d✦ Spell-Breaker's Bulwark §d(Blessing)", Color.NAVY, new PotionEffect(PotionEffectType.FIRE_RESISTANCE, 600, 0), new PotionEffect(PotionEffectType.SLOW_FALLING, 600, 0)));
@@ -2607,11 +2367,8 @@ public class ItemFactory {
         p.add(buildBlazefiendSpawner());
         p.add(buildTempestSpawner());
         p.add(buildVoidSpawner());
-        p.add(buildGildedSpawner());
-        p.add(buildSandstormBook());
         return p;
     }
-
 
     /** Builds the secret Death Reset Relic item for owner use. */
     public ItemStack buildDeathResetItem() {

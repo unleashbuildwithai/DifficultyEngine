@@ -44,9 +44,9 @@ public class DifficultyEngine implements Listener {
      * Nightmare player far across the map cannot accidentally scale mobs
      * that spawn next to peaceful players.
      */
-    private static final double SPAWN_CHECK_RADIUS = 40.0;
+    private static final double SPAWN_CHECK_RADIUS = 60.0;
     /** Radius to scan when redirecting mob aggro. */
-    private static final double AGGRO_CHECK_RADIUS = 32.0;
+    private static final double AGGRO_CHECK_RADIUS = 52.0;
     /**
      * % chance a mob re-targets the nearest Nightmare player instead of its
      * current target (only fires when the current target is NOT Nightmare).

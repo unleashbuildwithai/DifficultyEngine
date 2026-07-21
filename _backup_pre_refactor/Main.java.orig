@@ -10,12 +10,9 @@ import com.yourname.difficulty.boss.BossEffectTask;
 import com.yourname.difficulty.boss.BossSpawnerCommand;
 import com.yourname.difficulty.boss.CrimsonBossManager;
 import com.yourname.difficulty.boss.EffectRegistry;
-import com.yourname.difficulty.boss.crimson.CrimsonBossAttacks;
-import com.yourname.difficulty.boss.crimson.CrimsonBossSpawner;
-import com.yourname.difficulty.boss.tempest.TempestOverlordManager;
-import com.yourname.difficulty.boss.voidwither.VoidWitherManager;
 import com.yourname.difficulty.casting.BuffLogic;
 import com.yourname.difficulty.casting.CastingEngine;
+import com.yourname.difficulty.casting.CastingQueueManager;
 import com.yourname.difficulty.currency.GoldDropListener;
 import com.yourname.difficulty.currency.GoldInventoryGUI;
 import com.yourname.difficulty.currency.GoldInventoryListener;
@@ -143,6 +140,7 @@ public class Main extends JavaPlugin {
     private EffectRegistry      effectRegistry;
     private BossEffectListener  bossEffectListener;
     // ── Phase 2: Combo Casting ─────────────────────────────────────────────────
+    private CastingQueueManager castingQueueManager;
     private CastingEngine       castingEngine;
     // ── Phase 3: Gold Inventory ────────────────────────────────────────────────
     private GoldInventoryListener goldInventoryListener;
@@ -154,10 +152,6 @@ public class Main extends JavaPlugin {
     private CustomMonsterManager customMonsterManager;
     // ── Dungeon Bosses ────────────────────────────────────────────────────────
     private CrimsonBossManager   crimsonBossManager;
-    private CrimsonBossAttacks   crimsonBossAttacks;
-    private CrimsonBossSpawner   crimsonBossSpawner;
-    private TempestOverlordManager tempestOverlordManager;
-    private VoidWitherManager     voidWitherManager;
 
     /** All crafting recipe keys registered by this plugin — used for recipe-book discovery. */
     private final List<NamespacedKey> allRecipeKeys = new ArrayList<>();
@@ -196,9 +190,11 @@ public class Main extends JavaPlugin {
                 .runTaskTimer(this, 1L, 1L);
 
         // ── Phase 2: Combo Casting System ──────────────────────────────────────
+        this.castingQueueManager = new CastingQueueManager();
         BuffLogic buffLogic      = new BuffLogic(this);
-        this.castingEngine       = new CastingEngine(this, buffLogic, itemFactory);
+        this.castingEngine       = new CastingEngine(this, castingQueueManager, buffLogic, itemFactory);
         getServer().getPluginManager().registerEvents(castingEngine, this);
+        getServer().getScheduler().runTaskTimer(this, castingQueueManager::cleanupAll, 100L, 100L);
 
         // ── Register listeners ────────────────────────────────────────────────
         getServer().getPluginManager().registerEvents(
@@ -229,10 +225,7 @@ public class Main extends JavaPlugin {
 
         this.magicStaffListener = new MagicStaffListener(itemFactory, skillManager, this);
         this.magicStaffListener.setCastingEngine(castingEngine);
-        castingEngine.setMagicStaffListener(magicStaffListener);
-        castingEngine.setSkillManager(skillManager);
         getServer().getPluginManager().registerEvents(magicStaffListener, this);
-
 
         // ── Lightning Admin + Catching Block system ────────────────────────────
         this.lightningAdminCommand = new LightningAdminCommand();
@@ -290,9 +283,8 @@ public class Main extends JavaPlugin {
 
         getServer().getPluginManager().registerEvents(
                 new RuneDropListener(itemFactory), this);
-        SupportPotionListener supportPotionListener = new SupportPotionListener(itemFactory);
-        supportPotionListener.setCastingEngine(castingEngine);
-        getServer().getPluginManager().registerEvents(supportPotionListener, this);
+        getServer().getPluginManager().registerEvents(
+                new SupportPotionListener(itemFactory), this);
 
         this.gunZSwordListener = new GunZSwordListener(itemFactory, skillManager, this);
         getServer().getPluginManager().registerEvents(gunZSwordListener, this);
@@ -386,24 +378,9 @@ public class Main extends JavaPlugin {
 
         // ── Dungeon Bosses ─────────────────────────────────────────────────────
         // CrimsonBossManager: The Infernal Blazefiend at Crimson Pit (-108,-26,-14)
-        // BossSpawnerCommand: /spawnboss tempest | crimson | void
-        this.crimsonBossManager    = new CrimsonBossManager(this, itemFactory, bossEffectListener);
+        // BossSpawnerCommand: /spawnboss tempest | crimson
+        this.crimsonBossManager = new CrimsonBossManager(this, itemFactory, bossEffectListener);
         getServer().getPluginManager().registerEvents(crimsonBossManager, this);
-
-        this.crimsonBossAttacks    = new CrimsonBossAttacks(this, itemFactory, crimsonBossManager);
-        getServer().getPluginManager().registerEvents(crimsonBossAttacks, this);
-        crimsonBossManager.setBossAttacks(crimsonBossAttacks);
-
-        this.tempestOverlordManager = new TempestOverlordManager(this, bossEffectListener, crimsonBossManager);
-        tempestOverlordManager.setItemFactory(itemFactory);
-        getServer().getPluginManager().registerEvents(tempestOverlordManager, this);
-        this.voidWitherManager      = new VoidWitherManager(this, bossEffectListener, crimsonBossManager);
-
-        getServer().getPluginManager().registerEvents(voidWitherManager, this);
-
-        this.crimsonBossSpawner = new CrimsonBossSpawner(
-                this, itemFactory, crimsonBossManager, tempestOverlordManager, voidWitherManager);
-        getServer().getPluginManager().registerEvents(crimsonBossSpawner, this);
 
         // ── Register commands ─────────────────────────────────────────────────
         registerCmd("difficulty", new DifficultyCommand(difficultyManager));
@@ -602,8 +579,7 @@ public class Main extends JavaPlugin {
 
         // ── /spawnboss — Dungeon boss spawner ─────────────────────────────────
         BossSpawnerCommand bossSpawnerCmd =
-                new BossSpawnerCommand(this, crimsonBossManager, bossEffectListener,
-                        tempestOverlordManager, voidWitherManager);
+                new BossSpawnerCommand(this, crimsonBossManager, bossEffectListener);
         org.bukkit.command.PluginCommand spawnBossPluginCmd = getCommand("spawnboss");
         if (spawnBossPluginCmd != null) {
             spawnBossPluginCmd.setExecutor(bossSpawnerCmd);

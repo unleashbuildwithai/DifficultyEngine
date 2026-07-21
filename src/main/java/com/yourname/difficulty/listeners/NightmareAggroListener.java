@@ -40,7 +40,7 @@ import java.util.Random;
 public class NightmareAggroListener implements Listener {
 
     /** Block radius used to collect party members around the NIGHTMARE player. */
-    private static final double PARTY_RADIUS    = 15.0;
+    private static final double PARTY_RADIUS    = 35.0;
     private static final double PARTY_RADIUS_SQ = PARTY_RADIUS * PARTY_RADIUS;
 
     private final PlayerDifficultyManager manager;
