@@ -29,6 +29,10 @@ public class SkillManager {
     /** uuid → (SkillType → totalXp) */
     private final Map<UUID, Map<SkillType, Long>> skillData = new HashMap<>();
 
+    /** uuid → (SkillType → leftover fractional XP not yet whole) — not persisted across restarts. */
+    private final Map<UUID, Map<SkillType, Double>> fractionalRemainder = new HashMap<>();
+
+
     public JavaPlugin getPlugin() {
         return plugin;
     }
@@ -72,7 +76,33 @@ public class SkillManager {
         return newLevel;
     }
 
+    /**
+     * Adds fractional XP to the given skill (e.g. 12.5).
+     * Internally accumulates a fractional remainder per player/skill; whenever
+     * the remainder reaches a whole number, it is folded into the stored
+     * (long) XP total. This allows things like "+12.5 XP" bone-burial bonuses
+     * to average out correctly over repeated actions without ever losing
+     * fractional progress. The remainder is NOT persisted across restarts.
+     * Returns the new level after the addition (for level-up detection).
+     */
+    public int addXpFractional(UUID uuid, SkillType skill, double amount) {
+        Map<SkillType, Double> remMap = fractionalRemainder.computeIfAbsent(uuid, k -> new EnumMap<>(SkillType.class));
+        double newRemainder = remMap.getOrDefault(skill, 0.0) + amount;
+
+        long wholePart = (long) Math.floor(newRemainder);
+        double leftover = newRemainder - wholePart;
+
+        remMap.put(skill, leftover);
+
+        if (wholePart > 0) {
+            return addXp(uuid, skill, wholePart);
+        }
+        // No whole XP to add yet — just return current level.
+        return getLevel(uuid, skill);
+    }
+
     /** Returns the sum of all skill levels (like RS Total Level). */
+
     public int getTotalLevel(UUID uuid) {
         int total = 0;
         for (SkillType skill : SkillType.values()) {
