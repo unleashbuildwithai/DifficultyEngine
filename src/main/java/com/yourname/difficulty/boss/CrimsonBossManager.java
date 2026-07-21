@@ -91,10 +91,21 @@ public class CrimsonBossManager implements Listener {
             Material.BLACK_CONCRETE
     );
 
+    // ── Crimson Cube mini-fiend population tunables ───────────────────────────
+    /** Radius (blocks) around each Crimson Cube that counts toward its fiend population. */
+    private static final double CUBE_FIEND_RADIUS = 100.0;
+    /** Minimum number of mini Blazefiends kept alive within CUBE_FIEND_RADIUS of each cube. */
+    private static final int    CUBE_MIN_FIENDS   = 30;
+    /** Max fiends spawned per balance-check pass (rate limit to avoid lag spikes). */
+    private static final int    CUBE_SPAWN_BATCH  = 6;
+
     private final JavaPlugin         plugin;
     private final ItemFactory        itemFactory;
     private final BossEffectListener bossEffectListener;
     private final Random             random = new Random();
+
+    /** All known Crimson Cube (Blazefiend spawner) locations, tracked for population upkeep. */
+    private final Set<Location> crimsonCubes = Collections.synchronizedSet(new HashSet<>());
 
     /** UUIDs of all active boss entities (supports split/multiple). */
     private final Set<UUID> activeBossUuids = new HashSet<>();
@@ -154,6 +165,7 @@ public class CrimsonBossManager implements Listener {
                         for (int z = pz - radius; z <= pz + radius; z += 4) {
                             Block b = world.getBlockAt(x, y, z);
                             if (b.getType() == Material.GILDED_BLACKSTONE) {
+                                registerCrimsonCube(b.getLocation());
                                 spawnGuardNear(b.getLocation());
                             }
                         }
@@ -180,6 +192,77 @@ public class CrimsonBossManager implements Listener {
                 }
             }
         }, 120L, 80L); // wander every 4 seconds
+
+        // ── Crimson Cube population upkeep ────────────────────────────────────
+        // Ensures at least CUBE_MIN_FIENDS mini Blazefiends are always alive
+        // within CUBE_FIEND_RADIUS blocks of every known Crimson Cube. If a
+        // fiend wanders outside that radius (or dies), it no longer counts
+        // toward the cube's population, and a fresh one spawns near the cube.
+        plugin.getServer().getScheduler().runTaskTimer(plugin, this::maintainCrimsonCubePopulations, 60L, 100L); // every 5s
+    }
+
+    /** Registers a Crimson Cube location so its mini-fiend population is maintained. */
+    public void registerCrimsonCube(Location loc) {
+        if (loc == null) return;
+        crimsonCubes.add(loc.getBlock().getLocation());
+    }
+
+    /** Unregisters a Crimson Cube (e.g. if the spawner block is removed). */
+    public void unregisterCrimsonCube(Location loc) {
+        if (loc == null) return;
+        crimsonCubes.remove(loc.getBlock().getLocation());
+    }
+
+    /**
+     * For every known Crimson Cube, counts mini Blazefiends within
+     * CUBE_FIEND_RADIUS and tops up to CUBE_MIN_FIENDS if short.
+     * Fiends that wander outside the radius no longer count, causing a
+     * fresh one to spawn near the cube — net effect: 1 new fiend spawns
+     * near the cube every time one wanders outside its radius.
+     */
+    private void maintainCrimsonCubePopulations() {
+        for (Location cube : new ArrayList<>(crimsonCubes)) {
+            World world = cube.getWorld();
+            if (world == null) continue;
+
+            int count = 0;
+            for (Entity e : world.getNearbyEntities(cube, CUBE_FIEND_RADIUS, CUBE_FIEND_RADIUS, CUBE_FIEND_RADIUS)) {
+                if (e instanceof Blaze blaze && "§c🔥 Blazefiend".equals(blaze.getCustomName()) && !blaze.isDead()) {
+                    count++;
+                }
+            }
+
+            int deficit = CUBE_MIN_FIENDS - count;
+            if (deficit <= 0) continue;
+
+            int toSpawn = Math.min(deficit, CUBE_SPAWN_BATCH);
+            for (int i = 0; i < toSpawn; i++) {
+                spawnMiniFiendNearCube(cube);
+            }
+        }
+    }
+
+    /** Spawns a single mini Blazefiend at a random safe point near the given Crimson Cube. */
+    private void spawnMiniFiendNearCube(Location cube) {
+        World world = cube.getWorld();
+        if (world == null) return;
+
+        for (int attempt = 0; attempt < 5; attempt++) {
+            double angle = random.nextDouble() * Math.PI * 2;
+            double dist  = 5 + random.nextDouble() * 20; // spawn reasonably close to the cube
+            double rx = cube.getX() + Math.cos(angle) * dist;
+            double rz = cube.getZ() + Math.sin(angle) * dist;
+            double ry = cube.getY() + (random.nextDouble() - 0.3) * 8;
+            Location spawnLoc = new Location(world, rx, ry, rz);
+
+            if (!spawnLoc.getBlock().getType().isAir()) continue;
+
+            Blaze fiend = (Blaze) world.spawnEntity(spawnLoc, EntityType.BLAZE);
+            fiend.setCustomName("§c🔥 Blazefiend");
+            fiend.setCustomNameVisible(true);
+            fiend.setRemoveWhenFarAway(true);
+            return;
+        }
     }
 
     private void spawnGuardNear(Location loc) {

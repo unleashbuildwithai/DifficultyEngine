@@ -386,6 +386,7 @@ public class Main extends JavaPlugin {
 
         // ── Custom Monster Registry ────────────────────────────────────────────
         this.customMonsterManager = new CustomMonsterManager(this);
+        getServer().getPluginManager().registerEvents(customMonsterManager, this);
         getServer().getPluginManager().registerEvents(
                 new CustomMonsterDropListener(this, customMonsterManager), this);
 
@@ -763,6 +764,7 @@ public class Main extends JavaPlugin {
         if (npcQuestManager    != null) npcQuestManager.saveAll();
         if (hardcoreListener   != null) hardcoreListener.save();
         if (crimsonBossManager != null) crimsonBossManager.cleanup();
+        if (customMonsterManager != null) customMonsterManager.cleanup();
         for (Player p : getServer().getOnlinePlayers()) {
             SkillBonusManager.removeDefenceHpBonus(p);
         }

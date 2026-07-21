@@ -1,4 +1,4 @@
- titpackage com.yourname.difficulty.boss;
+package com.yourname.difficulty.boss;
 
 import com.yourname.difficulty.items.ItemFactory;
 import com.yourname.difficulty.magic.MagicElement;

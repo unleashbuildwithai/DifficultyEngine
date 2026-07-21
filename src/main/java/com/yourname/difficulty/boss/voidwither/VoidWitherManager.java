@@ -7,29 +7,84 @@ import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.ExplosionPrimeEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.metadata.FixedMetadataValue;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.util.Transformation;
 import org.bukkit.util.Vector;
+import org.joml.AxisAngle4f;
+import org.joml.Vector3f;
 
 import java.util.*;
 
 /**
- * VoidWitherManager — manages the terrifying §0§lVoid Zurion§r (Void Wither) boss and its explosions.
+ * VoidWitherManager — manages the terrifying §0§lVoid Zurion§r boss.
+ *
+ * ── Clean custom-entity architecture ────────────────────────────────────────
+ * Instead of stacking two vanilla Withers on top of each other (the old
+ * "double Wither" hack), the Zurion is now built as:
+ *
+ *  1. §7Physics carrier§r — a single completely §finvisible, silent§r
+ *     {@link Wither} used ONLY for its native flight AI, hitbox, damage,
+ *     and death handling. Its vanilla three-skulled model is never shown.
+ *
+ *  2. §7Visual display§r — an {@link ItemDisplay} entity themed around the
+ *     void/abyss (a large billboarded dark orb with orbiting skull props),
+ *     independent of any vanilla Wither silhouette.
  */
 public class VoidWitherManager implements Listener {
+
+    /** Visual scale of the Zurion's void-orb display. */
+    private static final float ZURION_DISPLAY_SCALE = 5.5f;
 
     private final JavaPlugin plugin;
     private final BossEffectListener bossEffectListener;
     private final CrimsonBossManager crimsonBossManager;
     private final Random random = new Random();
 
+    /** Carrier UUID → paired visual display UUID (position-synced every tick). */
+    private final Map<UUID, UUID> carrierToDisplay = new HashMap<>();
+    private final NamespacedKey displayTagKey;
+
     public VoidWitherManager(JavaPlugin plugin, BossEffectListener bossEffectListener, CrimsonBossManager crimsonBossManager) {
         this.plugin = plugin;
         this.bossEffectListener = bossEffectListener;
         this.crimsonBossManager = crimsonBossManager;
+        this.displayTagKey = new NamespacedKey(plugin, "de_zurion_display");
+
+        // Position-sync task: streams each carrier's live location to its display
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (carrierToDisplay.isEmpty()) return;
+                Iterator<Map.Entry<UUID, UUID>> it = carrierToDisplay.entrySet().iterator();
+                while (it.hasNext()) {
+                    Map.Entry<UUID, UUID> entry = it.next();
+                    Entity carrier = plugin.getServer().getEntity(entry.getKey());
+                    Entity display = plugin.getServer().getEntity(entry.getValue());
+
+                    if (!(carrier instanceof Wither w) || w.isDead() || !w.isValid()) {
+                        if (display != null && !display.isDead()) display.remove();
+                        it.remove();
+                        continue;
+                    }
+                    if (display == null || display.isDead() || !display.isValid()) {
+                        it.remove();
+                        continue;
+                    }
+                    Location target = carrier.getLocation().clone().add(0, 1.0, 0);
+                    if (!display.getLocation().getWorld().equals(target.getWorld())
+                            || display.getLocation().distanceSquared(target) > 0.0004) {
+                        display.teleport(target);
+                    }
+                }
+            }
+        }.runTaskTimer(plugin, 1L, 1L);
     }
 
     @EventHandler
@@ -81,41 +136,30 @@ public class VoidWitherManager implements Listener {
         // Rebuild Void Realm before spawning
         crimsonBossManager.rebuildArena(null, loc);
 
-        // Spawn Main Wither
+        // ── 1. Single invisible physics carrier (no stacked vanilla Withers) ────
         Wither wither = (Wither) loc.getWorld().spawnEntity(loc, EntityType.WITHER);
-        wither.setCustomName("§0§lThe Void Zurion");
-        wither.setCustomNameVisible(true);
+        wither.setCustomNameVisible(false); // name lives on the display instead
         wither.setRemoveWhenFarAway(false);
+        wither.setInvisible(true);
+        wither.setSilent(true);
 
         var hp = wither.getAttribute(Attribute.GENERIC_MAX_HEALTH);
         if (hp != null) {
-            hp.setBaseValue(1000.0);
-            wither.setHealth(Math.min(1000.0, hp.getValue()));
+            hp.setBaseValue(2000.0); // combined HP of the old double-wither stack
+            wither.setHealth(Math.min(2000.0, hp.getValue()));
         } else {
-            wither.setHealth(1000.0);
+            wither.setHealth(2000.0);
         }
-
-        // Spawn Inverted Passenger Wither (Dinnerbone)
-        Wither inverted = (Wither) loc.getWorld().spawnEntity(loc, EntityType.WITHER);
-        inverted.setCustomName("Dinnerbone");
-        inverted.setCustomNameVisible(false);
-        inverted.setRemoveWhenFarAway(false);
-        var ihp = inverted.getAttribute(Attribute.GENERIC_MAX_HEALTH);
-        if (ihp != null) {
-            ihp.setBaseValue(1000.0);
-            inverted.setHealth(Math.min(1000.0, ihp.getValue()));
-        } else {
-            inverted.setHealth(1000.0);
-        }
-
-        wither.addPassenger(inverted);
 
         // Register with effect system (Shriek, Leached, etc.)
         bossEffectListener.registerBoss(wither);
-        bossEffectListener.registerBoss(inverted);
         bossEffectListener.spawnShriek(wither);
 
-        // Spawn 3 floating orbiting skull ArmorStands
+        // ── 2. Custom void/abyss visual display (billboarded, no vanilla model) ──
+        ItemDisplay display = spawnZurionDisplay(wither);
+        carrierToDisplay.put(wither.getUniqueId(), display.getUniqueId());
+
+        // Spawn 3 floating orbiting skull ArmorStands (purely cosmetic props)
         List<ArmorStand> heads = new ArrayList<>();
         for (int i = 0; i < 3; i++) {
             ArmorStand head = loc.getWorld().spawn(loc, ArmorStand.class, s -> {
@@ -124,6 +168,7 @@ public class VoidWitherManager implements Listener {
                 s.setGravity(false);
                 s.setSmall(true);
                 s.getEquipment().setHelmet(new ItemStack(Material.WITHER_SKELETON_SKULL));
+                s.setPersistent(false);
             });
             heads.add(head);
         }
@@ -135,8 +180,12 @@ public class VoidWitherManager implements Listener {
             @Override
             public void run() {
                 if (wither.isDead() || !wither.isValid()) {
-                    if (inverted.isValid()) inverted.remove();
                     for (ArmorStand h : heads) if (h.isValid()) h.remove();
+                    UUID displayUuid = carrierToDisplay.remove(wither.getUniqueId());
+                    if (displayUuid != null) {
+                        Entity d = plugin.getServer().getEntity(displayUuid);
+                        if (d != null && !d.isDead()) d.remove();
+                    }
                     cancel();
                     return;
                 }
@@ -182,6 +231,12 @@ public class VoidWitherManager implements Listener {
                         wither.setVelocity(chargeDir.multiply(1.5));
                     }
                 }
+
+                // ── Ambient void particles around the display ────────────────
+                if (aiTick % 4 == 0) {
+                    wither.getWorld().spawnParticle(Particle.SOUL, wither.getLocation().add(0, 1.5, 0), 8, 1.0, 1.0, 1.0, 0.02);
+                    wither.getWorld().spawnParticle(Particle.PORTAL, wither.getLocation().add(0, 1.5, 0), 10, 1.2, 1.2, 1.2, 0.05);
+                }
             }
         }.runTaskTimer(plugin, 1L, 1L);
 
@@ -193,10 +248,48 @@ public class VoidWitherManager implements Listener {
             p.sendMessage("§7The Void Realm §8trembles§7 as inverted dark forces accumulate!");
             p.sendMessage("§5⚠ §dDestroy its §5Shriek §5⚡ §dwith an §bAir Staff §dto expose its weakness!");
             p.sendMessage("");
-            p.sendTitle("§0§lZURION AWAKENS!", "§7§oThe double Wither roars...", 10, 70, 20);
+            p.sendTitle("§0§lZURION AWAKENS!", "§7§oThe abyss stirs...", 10, 70, 20);
             p.playSound(p.getLocation(), Sound.ENTITY_WITHER_SPAWN, 1.0f, 1.0f);
         }
 
         return wither;
     }
+
+    /**
+     * Builds the Void Zurion's custom void/abyss visual — a large
+     * billboarded ItemDisplay, entirely independent from the invisible
+     * Wither carrier underneath (no stacked/inverted vanilla Wither models).
+     */
+    private ItemDisplay spawnZurionDisplay(Wither carrier) {
+        ItemStack visual = new ItemStack(Material.NETHER_STAR);
+        ItemMeta meta = visual.getItemMeta();
+        if (meta != null) {
+            meta.setCustomModelData(2002); // reserved model id for Void Zurion — resource pack can reskin freely
+            visual.setItemMeta(meta);
+        }
+
+        ItemDisplay display = carrier.getWorld().spawn(carrier.getLocation().add(0, 1.0, 0), ItemDisplay.class, d -> {
+            d.setItemStack(visual);
+            d.setBillboard(Display.Billboard.CENTER);
+            d.setPersistent(false);
+            d.setCustomName("§0§lThe Void Zurion");
+            d.setCustomNameVisible(true);
+            d.setBrightness(new Display.Brightness(15, 15));
+
+            Transformation t = new Transformation(
+                    new Vector3f(0f, 0f, 0f),
+                    new AxisAngle4f(0f, 0f, 0f, 1f),
+                    new Vector3f(ZURION_DISPLAY_SCALE, ZURION_DISPLAY_SCALE, ZURION_DISPLAY_SCALE),
+                    new AxisAngle4f(0f, 0f, 0f, 1f)
+            );
+            d.setTransformation(t);
+
+            d.getPersistentDataContainer().set(displayTagKey, PersistentDataType.BYTE, (byte) 1);
+        });
+
+        return display;
+    }
+
+    // ── Void Boss (Wither) & Warden peaceful team non-hostility alliance ──────
+    // (kept in BossEffectListener for shared logic across boss types)
 }

@@ -75,6 +75,7 @@ public class CrimsonBossSpawner implements Listener {
 
         if (itemFactory.isBlazefiendSpawner(item)) {
             block.setMetadata("de_blazefiend_spawner", new FixedMetadataValue(plugin, true));
+            crimsonBossManager.registerCrimsonCube(block.getLocation());
             event.getPlayer().sendMessage("§a✓ §7Placed Blazefiend Spawner block!");
         } else if (itemFactory.isTempestSpawner(item)) {
             block.setMetadata("de_tempest_spawner", new FixedMetadataValue(plugin, true));

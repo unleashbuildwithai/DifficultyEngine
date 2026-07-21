@@ -6,36 +6,63 @@ import com.yourname.difficulty.items.ItemFactory;
 import org.bukkit.*;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.block.Block;
+import org.bukkit.entity.Display;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Fireball;
+import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.Phantom;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.util.Transformation;
 import org.bukkit.util.Vector;
+import org.joml.AxisAngle4f;
+import org.joml.Vector3f;
 
 import java.util.*;
 
 /**
  * TempestOverlordManager — manages the colossal §5⚡ Tempest Overlord§r boss.
+ *
+ * ── Clean custom-entity architecture ────────────────────────────────────────
+ * Instead of a giant scaled vanilla Phantom acting as a reskinned "big bat",
+ * the Overlord is now composed of TWO paired entities:
+ *
+ *  1. §7Flight carrier§r — a completely §finvisible, silent§r {@link Phantom}
+ *     used ONLY for its native flight AI/pathing, hitbox, and damage/death
+ *     handling. Its vanilla bat-like model is never rendered to the client.
+ *
+ *  2. §7Visual display§r — an {@link ItemDisplay} entity themed around wind
+ *     and storms (a large billboarded arcane orb), which is what players
+ *     actually see. It streams its position from the carrier every tick.
  */
 public class TempestOverlordManager implements Listener {
 
     /** 0.2% chance to drop the rare Sandstorm Book on death. */
     private static final double SANDSTORM_BOOK_DROP_CHANCE = 0.002;
 
+    /** Visual scale of the Overlord's storm-orb display. */
+    private static final float  OVERLORD_DISPLAY_SCALE = 6.0f;
+
     private final JavaPlugin plugin;
     private final BossEffectListener bossEffectListener;
     private final CrimsonBossManager crimsonBossManager;
     private final Random random = new Random();
-    /** UUIDs of currently-alive Tempest Overlord phantoms — used to gate the death drop. */
+    /** UUIDs of currently-alive Tempest Overlord carriers — used to gate the death drop. */
     private final Set<UUID> activeTempestUuids = new HashSet<>();
+    /** Carrier UUID → paired visual display UUID (position-synced every tick). */
+    private final Map<UUID, UUID> carrierToDisplay = new HashMap<>();
     /** Optional ItemFactory — wired in via setter to avoid constructor churn elsewhere. */
     private ItemFactory itemFactory = null;
+
+    private final NamespacedKey displayTagKey;
 
     public void setItemFactory(ItemFactory itemFactory) {
         this.itemFactory = itemFactory;
@@ -60,6 +87,36 @@ public class TempestOverlordManager implements Listener {
         this.plugin = plugin;
         this.bossEffectListener = bossEffectListener;
         this.crimsonBossManager = crimsonBossManager;
+        this.displayTagKey = new NamespacedKey(plugin, "de_tempest_display");
+
+        // Position-sync task: streams each carrier's live location to its display
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (carrierToDisplay.isEmpty()) return;
+                Iterator<Map.Entry<UUID, UUID>> it = carrierToDisplay.entrySet().iterator();
+                while (it.hasNext()) {
+                    Map.Entry<UUID, UUID> entry = it.next();
+                    org.bukkit.entity.Entity carrier = plugin.getServer().getEntity(entry.getKey());
+                    org.bukkit.entity.Entity display = plugin.getServer().getEntity(entry.getValue());
+
+                    if (!(carrier instanceof Phantom p) || p.isDead() || !p.isValid()) {
+                        if (display != null && !display.isDead()) display.remove();
+                        it.remove();
+                        continue;
+                    }
+                    if (display == null || display.isDead() || !display.isValid()) {
+                        it.remove();
+                        continue;
+                    }
+                    Location target = carrier.getLocation().clone();
+                    if (!display.getLocation().getWorld().equals(target.getWorld())
+                            || display.getLocation().distanceSquared(target) > 0.0004) {
+                        display.teleport(target);
+                    }
+                }
+            }
+        }.runTaskTimer(plugin, 1L, 1L);
     }
 
     public Phantom spawnTempestOverlord(Location loc) {
@@ -74,12 +131,13 @@ public class TempestOverlordManager implements Listener {
         // Rebuild Tempest Sanctum before spawning to repair any block breaks
         crimsonBossManager.rebuildArena(null, loc);
 
-        // Spawn a colossal Phantom as the Tempest Overlord (looks amazing and wind/sky themed!)
+        // ── 1. Invisible flight carrier (physics/AI/hitbox only) ─────────────
         Phantom phantom = (Phantom) loc.getWorld().spawnEntity(loc, EntityType.PHANTOM);
-        phantom.setCustomName("§5⚡ §l§dThe Tempest Overlord");
-        phantom.setCustomNameVisible(true);
-        phantom.setSize(18); // Giant sky dragon size
+        phantom.setCustomNameVisible(false); // name lives on the display instead
+        phantom.setSize(4); // small hitbox — visual size comes entirely from the display
         phantom.setRemoveWhenFarAway(false);
+        phantom.setInvisible(true);
+        phantom.setSilent(true);
 
         var hp = phantom.getAttribute(Attribute.GENERIC_MAX_HEALTH);
         if (hp != null) {
@@ -89,13 +147,16 @@ public class TempestOverlordManager implements Listener {
             phantom.setHealth(400.0);
         }
 
-        // Track this phantom for the death-drop gate
+        // Track this carrier for the death-drop gate
         activeTempestUuids.add(phantom.getUniqueId());
 
         // Register with effect system (Shriek, Leached, etc.)
         bossEffectListener.registerBoss(phantom);
         bossEffectListener.spawnShriek(phantom);
 
+        // ── 2. Custom storm-themed visual display (billboarded, no vanilla model) ──
+        ItemDisplay display = spawnOverlordDisplay(phantom);
+        carrierToDisplay.put(phantom.getUniqueId(), display.getUniqueId());
 
         // Start Custom Tempest Overlord AI task
         new BukkitRunnable() {
@@ -104,6 +165,11 @@ public class TempestOverlordManager implements Listener {
             @Override
             public void run() {
                 if (phantom.isDead() || !phantom.isValid()) {
+                    UUID displayUuid = carrierToDisplay.remove(phantom.getUniqueId());
+                    if (displayUuid != null) {
+                        org.bukkit.entity.Entity d = plugin.getServer().getEntity(displayUuid);
+                        if (d != null && !d.isDead()) d.remove();
+                    }
                     cancel();
                     return;
                 }
@@ -178,7 +244,7 @@ public class TempestOverlordManager implements Listener {
                     Location center = phantom.getLocation();
                     World world = phantom.getWorld();
                     if (world != null) {
-                        int radius = 7; // Size 18 colossal phantom has a 7 block reach!
+                        int radius = 7; // Storm titan has a 7 block reach!
                         int bx = center.getBlockX();
                         int by = center.getBlockY();
                         int bz = center.getBlockZ();
@@ -257,11 +323,54 @@ public class TempestOverlordManager implements Listener {
         return phantom;
     }
 
+    /**
+     * Builds the Tempest Overlord's custom storm-orb visual — a large
+     * billboarded ItemDisplay themed around wind/lightning, entirely
+     * independent from the invisible Phantom carrier underneath.
+     */
+    private ItemDisplay spawnOverlordDisplay(Phantom carrier) {
+        ItemStack visual = new ItemStack(Material.BREEZE_ROD);
+        ItemMeta meta = visual.getItemMeta();
+        if (meta != null) {
+            meta.setCustomModelData(2001); // reserved model id for Tempest Overlord — resource pack can reskin freely
+            visual.setItemMeta(meta);
+        }
+
+        ItemDisplay display = carrier.getWorld().spawn(carrier.getLocation(), ItemDisplay.class, d -> {
+            d.setItemStack(visual);
+            d.setBillboard(Display.Billboard.CENTER);
+            d.setPersistent(false);
+            d.setCustomName("§5⚡ §l§dThe Tempest Overlord");
+            d.setCustomNameVisible(true);
+            d.setBrightness(new Display.Brightness(15, 15));
+
+            Transformation t = new Transformation(
+                    new Vector3f(0f, 0f, 0f),
+                    new AxisAngle4f(0f, 0f, 0f, 1f),
+                    new Vector3f(OVERLORD_DISPLAY_SCALE, OVERLORD_DISPLAY_SCALE, OVERLORD_DISPLAY_SCALE),
+                    new AxisAngle4f(0f, 0f, 0f, 1f)
+            );
+            d.setTransformation(t);
+
+            d.getPersistentDataContainer().set(displayTagKey, PersistentDataType.BYTE, (byte) 1);
+        });
+
+        return display;
+    }
+
     // ── Death drop: 0.2% Sandstorm Book (Tempest Overlord ONLY) ────────────────
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onTempestDeath(EntityDeathEvent event) {
         UUID uuid = event.getEntity().getUniqueId();
         if (!activeTempestUuids.remove(uuid)) return;
+
+        // Immediately clean up the paired visual display
+        UUID displayUuid = carrierToDisplay.remove(uuid);
+        if (displayUuid != null) {
+            org.bukkit.entity.Entity d = plugin.getServer().getEntity(displayUuid);
+            if (d != null && !d.isDead()) d.remove();
+        }
+
         if (itemFactory == null) return;
 
         if (random.nextDouble() < SANDSTORM_BOOK_DROP_CHANCE) {
