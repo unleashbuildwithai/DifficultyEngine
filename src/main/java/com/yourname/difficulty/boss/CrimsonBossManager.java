@@ -381,38 +381,17 @@ public class CrimsonBossManager implements Listener {
 
     private boolean isSpawnerBlock(Block block) {
         if (block == null) return false;
-        if (block.getType() != Material.GILDED_BLACKSTONE) return false;
-        if (block.hasMetadata("de_blazefiend_spawner")) return true;
-        if (block.getWorld().getName().equals("ancient_realm")) {
-            if (block.getX() == -108 && block.getY() == -26 && block.getZ() == -14) {
-                return true;
-            }
-        }
-        return false;
+        return block.getType() == Material.GILDED_BLACKSTONE;
     }
 
     private boolean isTempestSpawnerBlock(Block block) {
         if (block == null) return false;
-        if (block.getType() != Material.CRYING_OBSIDIAN) return false;
-        if (block.hasMetadata("de_tempest_spawner")) return true;
-        if (block.getWorld().getName().equals("ancient_realm")) {
-            if (block.getX() == 115 && block.getY() == -38 && block.getZ() == -47) {
-                return true;
-            }
-        }
-        return false;
+        return block.getType() == Material.CRYING_OBSIDIAN;
     }
 
     private boolean isVoidSpawnerBlock(Block block) {
         if (block == null) return false;
-        if (block.getType() != Material.BLACK_CONCRETE) return false;
-        if (block.hasMetadata("de_void_spawner")) return true;
-        if (block.getWorld().getName().equals("void_realm") || block.getWorld().getName().equals("ancient_realm")) {
-            if (block.getX() == 0 && block.getY() == 64 && block.getZ() == 0) {
-                return true;
-            }
-        }
-        return false;
+        return block.getType() == Material.BLACK_CONCRETE;
     }
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
@@ -675,7 +654,11 @@ public class CrimsonBossManager implements Listener {
         if (scaleAttr != null) scale = scaleAttr.getBaseValue();
 
         if (scale > 1.0) {
-            int radius = (int) Math.max(1, scale / 4.0);
+            // Super aggressive block breaking with increased radius:
+            // 10x scale normal boss -> 4 blocks radius.
+            // 35x scale special boss -> 14 blocks radius.
+            // 50x scale legendary boss -> 20 blocks radius.
+            int radius = (int) Math.max(2, scale / 2.5);
             World world = loc.getWorld();
             if (world == null) return;
             int bx = loc.getBlockX();
@@ -695,16 +678,10 @@ public class CrimsonBossManager implements Listener {
                         if (INDESTRUCTIBLE.contains(b.getType())) continue;
                         if (!isCaveMaterial(b.getType())) continue;
 
-                        double chance = scale >= 50.0 ? 0.8 : (scale >= 35.0 ? 0.5 : 0.3);
-                        if (random.nextDouble() < chance) {
-                            if (random.nextDouble() < 0.05) {
-                                b.breakNaturally();
-                            } else {
-                                b.setType(Material.AIR);
-                            }
-                            if (random.nextDouble() < 0.1) {
-                                world.spawnParticle(Particle.FLAME, b.getLocation().add(0.5, 0.5, 0.5), 3, 0.2, 0.2, 0.2, 0.02);
-                            }
+                        // 100% instant block destruction for any blocks touched!
+                        b.setType(Material.AIR);
+                        if (random.nextDouble() < 0.1) {
+                            world.spawnParticle(Particle.FLAME, b.getLocation().add(0.5, 0.5, 0.5), 3, 0.2, 0.2, 0.2, 0.02);
                         }
                     }
                 }
@@ -1191,14 +1168,21 @@ public class CrimsonBossManager implements Listener {
             // Save location
             Location prevLoc = player.getLocation().clone();
             
-            // Teleport exactly to block center so paste -o aligns perfectly
-            Location pasteLoc = spawnerLoc.clone().add(0.5, 1.0, 0.5);
+            // Teleport exactly to the NW-bottom corner offset so the pasted room centers perfectly around the spawner block!
+            // Boss rooms are 30x13x30 blocks, so offset is (-15.0, -1.0, -15.0) relative to spawner block center.
+            Location pasteLoc = spawnerLoc.clone().add(-15.0, -1.0, -15.0);
             player.teleport(pasteLoc);
             
             // Execute WorldEdit commands with a delay, and restore position
             plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-                finalPlayer.performCommand("schematic load " + finalSchem);
-                finalPlayer.performCommand("/paste");
+                boolean wasOp = finalPlayer.isOp();
+                try {
+                    if (!wasOp) finalPlayer.setOp(true);
+                    finalPlayer.performCommand("schematic load " + finalSchem);
+                    finalPlayer.performCommand("/paste");
+                } finally {
+                    if (!wasOp) finalPlayer.setOp(false);
+                }
                 
                 plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
                     finalPlayer.teleport(prevLoc);
@@ -1249,6 +1233,127 @@ public class CrimsonBossManager implements Listener {
         bossEffectListener.registerBoss(phantom);
         bossEffectListener.spawnShriek(phantom);
 
+        // Start Custom Tempest Overlord AI task
+        new BukkitRunnable() {
+            int aiTick = 0;
+
+            @Override
+            public void run() {
+                if (phantom.isDead() || !phantom.isValid()) {
+                    cancel();
+                    return;
+                }
+
+                aiTick++;
+
+                // ── 1. Target Tracking & Aggressive Dive AI ──────────────────
+                Player target = null;
+                double closestDist = 80.0;
+                for (Player p : phantom.getWorld().getPlayers()) {
+                    if (p.isDead()) continue;
+                    double dist = p.getLocation().distance(phantom.getLocation());
+                    if (dist < closestDist) {
+                        closestDist = dist;
+                        target = p;
+                    }
+                }
+
+                if (target != null) {
+                    phantom.setTarget(target);
+
+                    // Swoop down and pull its velocity directly towards the player
+                    Location pLoc = target.getLocation().add(0, 1.0, 0);
+                    Location tLoc = phantom.getLocation();
+                    Vector dir = pLoc.toVector().subtract(tLoc.toVector());
+                    double dist = dir.length();
+                    
+                    if (dist > 3.0) {
+                        dir.normalize();
+                        // Pull speed: faster if further away
+                        double pullSpeed = Math.min(0.7, 0.2 + (dist * 0.01));
+                        Vector velocity = phantom.getVelocity();
+                        Vector blended = velocity.add(dir.multiply(pullSpeed).subtract(velocity).multiply(0.2));
+                        phantom.setVelocity(blended);
+                    }
+
+                    // ── 2. Attack 1: Fire-Spitting (every 50 ticks / 2.5 seconds) ──
+                    if (aiTick % 50 == 0) {
+                        Location origin = phantom.getLocation().add(0, 1.0, 0);
+                        Vector spitDir = pLoc.toVector().subtract(origin.toVector()).normalize();
+                        
+                        // Spawn custom flaming fireballs targeting the player's chest
+                        Fireball fb = (Fireball) phantom.getWorld().spawnEntity(
+                            origin.clone().add(spitDir.clone().multiply(3.0)), EntityType.FIREBALL);
+                        fb.setShooter(phantom);
+                        fb.setDirection(spitDir.multiply(1.5));
+                        fb.setYield(1.5f);
+                        fb.setIsIncendiary(true);
+                        
+                        phantom.getWorld().playSound(phantom.getLocation(), Sound.ENTITY_PHANTOM_BITE, 2.0f, 0.5f);
+                        phantom.getWorld().playSound(phantom.getLocation(), Sound.ENTITY_BLAZE_SHOOT, 1.5f, 0.8f);
+                        target.sendActionBar("§5⚡ §cThe Tempest Overlord spits Hellfire! Dodge!");
+                    }
+
+                    // ── 3. Attack 2: Thunderstorm Strikes (every 80 ticks / 4 seconds) ──
+                    if (aiTick % 80 == 0) {
+                        Location targetLoc = target.getLocation();
+                        phantom.getWorld().strikeLightningEffect(targetLoc);
+                        
+                        // Deal custom lightning damage (bypass armor slightly to feel like a storm!)
+                        target.damage(5.0, phantom);
+                        target.setFireTicks(60);
+                        
+                        phantom.getWorld().spawnParticle(Particle.EXPLOSION_EMITTER, targetLoc, 2, 0.5, 0.5, 0.5, 0);
+                        target.sendMessage("§5⚡ §dLightning strikes from the Tempest! §cUse Earth magic or dodge!");
+                        target.playSound(targetLoc, Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 1.5f, 0.8f);
+                    }
+                }
+
+                // ── 4. Colossal Block-Breaking & Tunnel Carving (every 5 ticks) ──
+                if (aiTick % 5 == 0) {
+                    Location center = phantom.getLocation();
+                    World world = phantom.getWorld();
+                    if (world != null) {
+                        int radius = 7; // Size 18 colossal phantom has a 7 block reach!
+                        int bx = center.getBlockX();
+                        int by = center.getBlockY();
+                        int bz = center.getBlockZ();
+
+                        for (int x = bx - radius; x <= bx + radius; x++) {
+                            for (int y = by - radius; y <= by + radius; y++) {
+                                for (int z = bz - radius; z <= bz + radius; z++) {
+                                    double distSq = (x - bx)*(x - bx) + (y - by)*(y - by) + (z - bz)*(z - bz);
+                                    if (distSq > radius * radius) continue;
+
+                                    Block b = world.getBlockAt(x, y, z);
+                                    if (b.getType().isAir()) continue;
+                                    if (!b.getType().isSolid()) continue;
+                                    if (INDESTRUCTIBLE.contains(b.getType())) continue;
+                                    if (!isCaveMaterial(b.getType())) continue;
+
+                                    // Shatter instantly!
+                                    b.setType(Material.AIR);
+                                    if (random.nextDouble() < 0.1) {
+                                        world.spawnParticle(Particle.DUST, b.getLocation().add(0.5, 0.5, 0.5), 10, 0.3, 0.3, 0.3, 0, new Particle.DustOptions(Color.GRAY, 1.0f));
+                                        world.spawnParticle(Particle.CLOUD, b.getLocation().add(0.5, 0.5, 0.5), 3, 0.2, 0.2, 0.2, 0.01);
+                                    }
+                                }
+                            }
+                        }
+                        if (aiTick % 10 == 0) {
+                            world.playSound(center, Sound.ENTITY_WITHER_BREAK_BLOCK, 1.5f, 0.7f);
+                        }
+                    }
+                }
+
+                // ── 5. Ambient Gale Storm particles ──────────────────────────
+                if (aiTick % 3 == 0) {
+                    phantom.getWorld().spawnParticle(Particle.CLOUD, phantom.getLocation().add(0, 1.0, 0), 20, 3.0, 1.5, 3.0, 0.1);
+                    phantom.getWorld().spawnParticle(Particle.GUST, phantom.getLocation().add(0, 1.0, 0), 10, 2.5, 1.0, 2.5, 0.15);
+                }
+            }
+        }.runTaskTimer(plugin, 20L, 1L);
+
         // Announce to all players in range
         for (Player p : loc.getWorld().getPlayers()) {
             if (p.getLocation().distance(loc) > 120) continue;
@@ -1293,14 +1398,29 @@ public class CrimsonBossManager implements Listener {
         Entity ent = event.getEntity();
         if (ent instanceof WitherSkull || ent instanceof Wither) {
             if (ent.getWorld().getName().equals("void_realm") || ent.getWorld().getName().equals("ancient_realm")) {
-                if (random.nextDouble() < 0.01) {
+                // Balanced Warden spawn rate: halved to 0.5% for normal boss, tripled to 1.5% for rare bosses
+                double chance = 0.005;
+                for (Entity nearby : ent.getNearbyEntities(80, 80, 80)) {
+                    if (nearby.hasMetadata("de_is_dual_amalgam") || nearby.hasMetadata("de_is_vortex") || nearby.hasMetadata("de_is_inferno")) {
+                        chance = 0.015; // triple spawn chance on rare bosses!
+                        break;
+                    }
+                }
+
+                if (random.nextDouble() < chance) {
                     Warden warden = (Warden) ent.getWorld().spawnEntity(ent.getLocation(), EntityType.WARDEN);
-                    warden.setCustomName("§0§lVoid Warden");
+                    warden.setCustomName("§5§lVoid Warden");
                     warden.setCustomNameVisible(true);
+                    
+                    // Assign random attack-type damage negation immunity
+                    String[] immunities = { "MELEE", "RANGED", "FIRE" };
+                    String chosen = immunities[random.nextInt(immunities.length)];
+                    warden.setMetadata("de_damage_negation", new FixedMetadataValue(plugin, chosen));
+
                     ent.getWorld().playSound(ent.getLocation(), Sound.ENTITY_WARDEN_EMERGE, 2.0f, 1.0f);
                     for (Player p : ent.getWorld().getPlayers()) {
-                        p.sendMessage("§0☠ §lA Void Warden has erupted from the Zurion explosion!");
-                        p.sendTitle("§0§lWARDEN EMERGES!", "§7Freeze spells are crucial now!", 10, 70, 20);
+                        p.sendMessage("§d☠ §lA Void Warden has erupted from the Zurion explosion!");
+                        p.sendTitle("§d§lWARDEN EMERGES!", "§7Freeze spells are crucial now!", 10, 70, 20);
                     }
                 }
             }

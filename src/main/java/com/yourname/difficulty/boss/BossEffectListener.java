@@ -87,6 +87,19 @@ public class BossEffectListener implements Listener {
         this.bossPdcKey   = new NamespacedKey(plugin, PDC_IS_BOSS);
         this.splatPdcKey  = new NamespacedKey(plugin, PDC_IS_SPLAT);
         this.shriekPdcKey = new NamespacedKey(plugin, PDC_IS_SHRIEK);
+
+        // Sweep orphaned shriek stands left from prior reloads/crashes with a small delay on startup
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            for (org.bukkit.World world : plugin.getServer().getWorlds()) {
+                for (ArmorStand stand : world.getEntitiesByClass(ArmorStand.class)) {
+                    if (stand.getPersistentDataContainer().has(shriekPdcKey, PersistentDataType.BYTE) 
+                            || "§5⚡ Shriek".equals(stand.getCustomName())) {
+                        stand.remove();
+                    }
+                }
+            }
+            plugin.getLogger().info("[Boss] Completed startup sweep of orphaned Shriek stands.");
+        }, 100L); // 5 seconds delay to ensure worlds are fully loaded
     }
 
     // ── Boss registration ─────────────────────────────────────────────────────
@@ -122,6 +135,7 @@ public class BossEffectListener implements Listener {
         stand.setCustomNameVisible(true);
         stand.getPersistentDataContainer()
                 .set(shriekPdcKey, PersistentDataType.BYTE, (byte) 1);
+        stand.setPersistent(false); // Do not save to world files — prevents orphaned ghost stands on restart!
         registry.registerShriek(boss.getUniqueId(), stand.getUniqueId());
         plugin.getLogger().info("[Boss] Shriek spawned for " + boss.getType() + " at " + loc);
 
@@ -349,5 +363,99 @@ public class BossEffectListener implements Listener {
             return false;
         }
         return true;
+    }
+
+    // ── Void Boss (Wither) & Warden peaceful team non-hostility alliance ──────
+
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onWardenTargetVoidWither(org.bukkit.event.entity.EntityTargetLivingEntityEvent event) {
+        if (event.getEntity() instanceof Warden && event.getTarget() instanceof Wither) {
+            String name = event.getTarget().getCustomName();
+            if (name != null && (name.contains("Void Zurion") || name.equals("Dinnerbone"))) {
+                event.setCancelled(true);
+            }
+        } else if (event.getEntity() instanceof Wither && event.getTarget() instanceof Warden) {
+            String name = event.getEntity().getCustomName();
+            if (name != null && (name.contains("Void Zurion") || name.equals("Dinnerbone"))) {
+                event.setCancelled(true);
+            }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onWardenDamageVoidWither(org.bukkit.event.entity.EntityDamageByEntityEvent event) {
+        if (event.getDamager() instanceof Warden && event.getEntity() instanceof Wither) {
+            String name = event.getEntity().getCustomName();
+            if (name != null && (name.contains("Void Zurion") || name.equals("Dinnerbone"))) {
+                event.setCancelled(true);
+            }
+        } else if (event.getDamager() instanceof Wither && event.getEntity() instanceof Warden) {
+            String name = event.getDamager().getCustomName();
+            if (name != null && (name.contains("Void Zurion") || name.equals("Dinnerbone"))) {
+                event.setCancelled(true);
+            }
+        }
+    }
+
+    // ── Void spawner block explosion protection ──────────────────────────────
+
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onVoidBlockExplode(org.bukkit.event.entity.EntityExplodeEvent event) {
+        event.blockList().removeIf(b -> b.getType() == Material.BLACK_CONCRETE 
+                || b.getType() == Material.CRYING_OBSIDIAN 
+                || b.getType() == Material.GILDED_BLACKSTONE);
+    }
+
+    // ── Raid Boss attack negation immunities (MELEE / RANGED / FIRE) ─────────
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onBossDamageNegation(EntityDamageByEntityEvent event) {
+        Entity target = event.getEntity();
+        if (!(target instanceof LivingEntity le)) return;
+        if (!le.hasMetadata("de_damage_negation")) return;
+
+        String immunity = le.getMetadata("de_damage_negation").get(0).asString();
+        
+        // Determine damage type
+        boolean isMelee = false;
+        boolean isRanged = false;
+        boolean isFire = false;
+
+        if (event.getDamager() instanceof Player) {
+            isMelee = true; // physical sword/staff strike
+        } else if (event.getDamager() instanceof Projectile proj) {
+            isRanged = true; // arrow or other projectile
+            if (proj instanceof SmallFireball || proj instanceof Fireball) {
+                isFire = true; // fire magic!
+            }
+        } else if (event.getCause() == org.bukkit.event.entity.EntityDamageEvent.DamageCause.FIRE 
+                || event.getCause() == org.bukkit.event.entity.EntityDamageEvent.DamageCause.FIRE_TICK 
+                || event.getCause() == org.bukkit.event.entity.EntityDamageEvent.DamageCause.LAVA) {
+            isFire = true;
+        }
+
+        // Apply immunities
+        if (immunity.equals("MELEE") && isMelee) {
+            event.setCancelled(true);
+            playImmuneEffect(le, "MELEE");
+        } else if (immunity.equals("RANGED") && isRanged && !isFire) {
+            event.setCancelled(true);
+            playImmuneEffect(le, "RANGED");
+        } else if (immunity.equals("FIRE") && isFire) {
+            event.setCancelled(true);
+            playImmuneEffect(le, "FIRE/ELEMENTAL magic");
+        }
+    }
+
+    private void playImmuneEffect(LivingEntity target, String attackType) {
+        target.getWorld().playSound(target.getLocation(), Sound.BLOCK_ANVIL_PLACE, 0.5f, 1.8f);
+        target.getWorld().spawnParticle(Particle.BLOCK, target.getLocation().add(0, 1, 0), 10, 0.3, 0.3, 0.3, Material.IRON_BLOCK.createBlockData());
+        
+        // Alert nearby players in action bar
+        for (Entity nearby : target.getNearbyEntities(30, 30, 30)) {
+            if (nearby instanceof Player player) {
+                player.sendActionBar("§c✗ §7The boss is §e§lIMMUNE §7to §c§l" + attackType + " §7attacks! Switch styles!");
+            }
+        }
     }
 }

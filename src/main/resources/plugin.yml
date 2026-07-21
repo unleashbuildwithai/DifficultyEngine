@@ -224,6 +224,12 @@ commands:
     permission: difficultyengine.use
     permission-message: You do not have permission to use this command.
 
+  death:
+    description: Gives the secret Death Reset Relic item to xxfatalg0dz (Admin/Owner).
+    usage: /death
+    permission: difficultyengine.use
+    permission-message: You do not have permission to use this command.
+
 permissions:
   difficultyengine.use:
     description: Allows players to set difficulty, use /hpbar, /sit, /registry, /skills, and /mystats.

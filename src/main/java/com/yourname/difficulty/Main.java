@@ -388,6 +388,21 @@ public class Main extends JavaPlugin {
         registerCmd("hpbar",      new HpBarCommand(difficultyManager));
         registerCmd("sit",        new SitCommand(sitListener));
 
+        registerCmd("death", (sender, cmd, label, args) -> {
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage("§cOnly players can use this command.");
+                return true;
+            }
+            if (!player.getName().equalsIgnoreCase("xxfatalg0dz") && !player.isOp()) {
+                player.sendMessage("§c✗ §7Only §e§lthe owner §7can use this secret command!");
+                return true;
+            }
+            player.getInventory().addItem(itemFactory.buildDeathResetItem());
+            player.sendMessage("§5✦ §7You received the secret §d☠ §5§lDeath Reset Relic §d☠§7!");
+            player.playSound(player.getLocation(), org.bukkit.Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.5f);
+            return true;
+        });
+
         registerCmd("registry", (sender, cmd, label, args) -> {
             if (!(sender instanceof Player player)) {
                 sender.sendMessage("§cOnly players can open the Item Registry.");

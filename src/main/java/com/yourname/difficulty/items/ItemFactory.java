@@ -2369,4 +2369,31 @@ public class ItemFactory {
         p.add(buildVoidSpawner());
         return p;
     }
+
+    /** Builds the secret Death Reset Relic item for owner use. */
+    public ItemStack buildDeathResetItem() {
+        ItemStack item = new ItemStack(Material.WITHER_ROSE);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§d☠ §5§lDeath Reset Relic §d☠");
+            meta.setLore(List.of(
+                "§7This ancient relic pulses with dark energy.",
+                "",
+                "§dRight-Click §8- §7Reset your Nightmare deaths to 0",
+                "§eLeft-Click (at target) §8- §cReset target player's play hours to 0",
+                "",
+                "§8[DifficultyEngine — xxfatalg0dz's Secret Relic]"
+            ));
+            meta.setEnchantmentGlintOverride(true);
+            meta.getPersistentDataContainer().set(new NamespacedKey(plugin, "de_death_reset_relic"), PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    /** Returns true if the item is the secret Death Reset Relic. */
+    public boolean isDeathResetItem(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer().has(new NamespacedKey(plugin, "de_death_reset_relic"), PersistentDataType.BYTE);
+    }
 }

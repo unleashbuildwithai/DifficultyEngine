@@ -2402,6 +2402,24 @@ public class MagicStaffListener implements Listener {
                 return true;
             }
         }
+        
+        // No runes found! Send non-spammy action bar warning
+        String key = "magic_reminded_" + element.name().toLowerCase();
+        if (!player.hasMetadata(key)) {
+            // First time: full detailed recipe tip in chat & action bar
+            String tip = switch (element) {
+                case FIRE -> "No 🔥 Fire Rune — craft from 4x NETHER_BRICK.";
+                case WATER -> "No Water Rune — craft from 4x ICE.";
+                case EARTH -> "No Earth Rune — craft from 4x CLAY_BALL.";
+                case AIR -> "No Air Rune — craft from 4x FEATHER.";
+            };
+            player.sendMessage("§c✗ §7" + tip);
+            player.sendActionBar("§c✗ §7" + tip);
+            player.setMetadata(key, new org.bukkit.metadata.FixedMetadataValue(plugin, true));
+        } else {
+            // Subsequent times: lightweight reminder in Action Bar only
+            player.sendActionBar("§c✗ §7No " + element.color + element.name() + " Runes§7!");
+        }
         return false;
     }
 

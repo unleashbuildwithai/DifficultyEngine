@@ -91,7 +91,6 @@ public class GunZSwordListener implements Listener {
     private static class KeyState {
         long lastPressTime = 0L;
         long lastReleaseTime = 0L;
-        boolean wasQuickTap = false;
     }
 
     // ── Per-player keystroke state tracker ───────────────────────────────────
@@ -188,27 +187,27 @@ public class GunZSwordListener implements Listener {
                 if (isPressedNow && !wasPressedBefore) {
                     // Rising edge (Press)
                     KeyState state = states.computeIfAbsent(d, k -> new KeyState());
-                    state.lastPressTime = now;
+                    
+                    long inactiveDuration = now - state.lastReleaseTime;
+                    long totalGap = now - state.lastPressTime;
 
-                    long gapSinceRelease = now - state.lastReleaseTime;
-                    if (state.wasQuickTap && gapSinceRelease <= MAX_TAP_RELEASE_GAP_MS) {
-                        // Double-tap detected — consume the tap and trigger dash
-                        state.wasQuickTap = false;
+                    // 2-Tick Inactive Rule:
+                    // inactiveDuration must be >= 80ms (at least 2 server ticks) to prove a real human release,
+                    // which perfectly filters out 50ms (1-tick) landing-lag/obstacle jitters.
+                    // totalGap must be <= 380ms to ensure a fast, valid double-tap sequence.
+                    if (state.lastPressTime > 0 && state.lastReleaseTime > state.lastPressTime 
+                            && inactiveDuration >= 80L && totalGap <= 380L) {
+                        // Double-tap detected — consume immediately and trigger dash
+                        state.lastPressTime = 0L;
+                        state.lastReleaseTime = 0L;
                         triggerDash(player, d, current, now);
+                    } else {
+                        state.lastPressTime = now;
                     }
                 } else if (!isPressedNow && wasPressedBefore) {
                     // Falling edge (Release)
                     KeyState state = states.computeIfAbsent(d, k -> new KeyState());
                     state.lastReleaseTime = now;
-
-                    long holdDuration = state.lastReleaseTime - state.lastPressTime;
-                    // If they pressed and released within the MAX_TAP_HOLD_MS, it is a valid tap
-                    if (state.lastPressTime > 0 && holdDuration <= MAX_TAP_HOLD_MS) {
-                        state.wasQuickTap = true;
-                    } else {
-                        // Held too long (e.g. normal walking) -> invalidates double-tap
-                        state.wasQuickTap = false;
-                    }
                 }
             }
 

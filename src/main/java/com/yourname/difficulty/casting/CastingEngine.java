@@ -65,6 +65,9 @@ public class CastingEngine implements Listener {
     /** PDC key identifying the SupportStaff item. */
     public static final String SUPPORT_STAFF_KEY = "de_support_staff";
 
+    /** Cooldown map for Support Staff use to prevent healing/buff spamming. */
+    private final Map<UUID, Long> lastSupportStaffUse = new HashMap<>();
+
     public static final String SELECTION_TITLE = "§5✦ Support Spell Selection ✦";
 
     private static final String[] SUPPORT_SPELL_IDS = {
@@ -208,9 +211,24 @@ public class CastingEngine implements Listener {
     public void onElementCast(Player player, MagicElement element) {
         final List<MagicElement> queue = new ArrayList<>(queueManager.addCast(player.getUniqueId(), element));
 
+        // ── Auto-resolve Combos ──────────────────────────────────────────────
+        // The books are what make combos now! Combos resolve instantly on element cast,
+        // completely bypassing the clunky Support Staff right-click.
+        String key = queueManager.queueKey(player.getUniqueId());
+        if (COMBO_MAP.containsKey(key)) {
+            BuffType combo = COMBO_MAP.get(key);
+            buffLogic.apply(player, combo);
+
+            // Record discovery
+            discovered.computeIfAbsent(player.getUniqueId(), k -> new HashSet<>()).add(combo);
+
+            // Clear queue
+            queueManager.clearQueue(player.getUniqueId());
+            player.sendActionBar("§5✦ §d§lCOMBO TRIGGERED! §d" + combo.name().replace('_', ' ') + " §5✦");
+            return;
+        }
+
         // Only show the queue HUD if the player has a Support Staff in their inventory.
-        // Without a Support Staff the HUD is irrelevant and would just confuse players
-        // who are using staffs for normal combat.
         plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
             if (!player.isOnline()) return;
             // Check if player has a support staff
@@ -225,7 +243,7 @@ public class CastingEngine implements Listener {
                 hud.append(el.color).append(el.name().charAt(0));
                 hud.append("§8·");
             }
-            player.sendActionBar(hud + " §8(right-click §dSupport Staff §8to activate)");
+            player.sendActionBar(hud + " §7(Automatic combo on next staff cast!)");
         }, 2L);
     }
 
@@ -307,6 +325,16 @@ public class CastingEngine implements Listener {
         event.setCancelled(true);
         Player player = event.getPlayer();
 
+        // ── 7-second Cooldown Check ──────────────────────────────────────────
+        long now = System.currentTimeMillis();
+        Long lastUse = lastSupportStaffUse.get(player.getUniqueId());
+        if (lastUse != null && now - lastUse < 7000L) {
+            long timeLeft = (7000L - (now - lastUse)) / 1000L + 1;
+            player.sendActionBar("§c✗ §7Support Staff is on cooldown for " + timeLeft + "s!");
+            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 1.0f, 0.5f);
+            return;
+        }
+
         // Check cost requirements: 1x Support Rune + (1x Cooked Mutton OR Baked Potato)
         if (!hasSupportRequirements(player)) {
             player.sendActionBar("§c✗ §7Requires §d1x Support Rune §7+ (§6Cooked Mutton §7or §eBaked Potato§7)!");
@@ -315,6 +343,7 @@ public class CastingEngine implements Listener {
             return;
         }
 
+        lastSupportStaffUse.put(player.getUniqueId(), now);
         UUID casterId = player.getUniqueId();
         UUID targetId = lastPartyHitTarget.get(casterId);
         Long hitTime = lastPartyHitTime.get(casterId);
@@ -808,15 +837,23 @@ public class CastingEngine implements Listener {
         // ── Case 2: Support Staff Basic Attack ────────────────────────────────
         if (snowball.getPersistentDataContainer().has(basicKey, PersistentDataType.STRING)) {
             String elName = snowball.getPersistentDataContainer().get(basicKey, PersistentDataType.STRING);
-            MagicElement el = MagicElement.valueOf(elName);
-            
-            boolean charged = snowball.getPersistentDataContainer().has(
-                new NamespacedKey(plugin, "de_support_basic_charged"),
-                PersistentDataType.BYTE
-            );
             
             Entity hitEntity = event.getHitEntity();
             if (hitEntity instanceof LivingEntity target) {
+                if (elName.equals("SOLO_LIGHTNING")) {
+                    // Support-Solo Secret Mode deals 4.2 damage (5% stronger than normal 4.0 basic staff damage!)
+                    target.damage(4.2, caster);
+                    target.getWorld().spawnParticle(Particle.EXPLOSION, target.getLocation().add(0, 0.5, 0), 2, 0.1, 0.1, 0.1, 0.05);
+                    return;
+                }
+                
+                MagicElement el = MagicElement.valueOf(elName);
+                
+                boolean charged = snowball.getPersistentDataContainer().has(
+                    new NamespacedKey(plugin, "de_support_basic_charged"),
+                    PersistentDataType.BYTE
+                );
+                
                 // Apply nerfed damage (1.0 HP = 0.5 hearts, which is 25% of standard 4.0 basic staff damage!)
                 target.damage(1.0, caster);
                 
@@ -926,13 +963,60 @@ public class CastingEngine implements Listener {
         caster.sendMessage(feedback);
     }
 
+    private boolean consumeRune(Player player, MagicElement el) {
+        ItemStack[] contents = player.getInventory().getContents();
+        for (int i = 0; i < contents.length; i++) {
+            if (itemFactory.isRune(contents[i], el)) {
+                ItemStack item = contents[i];
+                if (item.getAmount() > 1) item.setAmount(item.getAmount() - 1);
+                else player.getInventory().setItem(i, new ItemStack(Material.AIR));
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void launchSupportSoloBlueLightning(Player player) {
+        Snowball snowball = player.launchProjectile(Snowball.class);
+        snowball.getPersistentDataContainer().set(
+            new NamespacedKey(plugin, "de_support_basic"),
+            PersistentDataType.STRING, "SOLO_LIGHTNING"
+        );
+
+        // Spawn trailing electric spark blue particles with a 3-tick delay
+        new org.bukkit.scheduler.BukkitRunnable() {
+            int ticksLived = 0;
+            @Override
+            public void run() {
+                if (!snowball.isValid() || snowball.isDead()) {
+                    cancel();
+                    return;
+                }
+                ticksLived++;
+                if (ticksLived < 3) return; // Delay to prevent particles spawning in face
+
+                Location loc = snowball.getLocation();
+                loc.getWorld().spawnParticle(Particle.ELECTRIC_SPARK, loc, 3, 0.02, 0.02, 0.02, 0.01);
+            }
+        }.runTaskTimer(plugin, 1L, 1L);
+
+        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_WIND_CHARGE_THROW, 1.0f, 1.5f);
+        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 0.5f, 1.8f);
+    }
+
     private void executeSupportBasicAttack(Player player) {
+        // Must consume 1 Support Rune to attack
+        if (!consumeSupportRune(player)) {
+            player.sendActionBar("§c✗ §7No §dSupport Rune§7! §8Craft from §5Phantom Membrane×4§7.");
+            return;
+        }
+
         boolean hasFire = false;
         boolean hasWater = false;
         boolean hasEarth = false;
         boolean hasAir = false;
 
-        // Check inventory
+        // Check inventory for staves
         for (ItemStack item : player.getInventory().getContents()) {
             if (item == null) continue;
             MagicElement el = itemFactory.getStaffElement(item);
@@ -969,20 +1053,43 @@ public class CastingEngine implements Listener {
         if (hasAir) staffCount++;
 
         if (staffCount == 0) {
-            player.sendActionBar("§c✗ §7You must carry at least one core staff in inventory/bag to attack!");
+            // Support-Solo Secret Mode: carry ONLY the Support Staff!
+            // Launch the super powerful Blue Lightning basic attack!
+            launchSupportSoloBlueLightning(player);
+            player.sendActionBar("§5✦ §b§lSUPPORT-SOLO MODE §d(Blue Lightning Shot!) §5✦");
             return;
         }
 
-        if (hasFire) launchBasicAttack(player, MagicElement.FIRE, isCharged);
-        if (hasWater) launchBasicAttack(player, MagicElement.WATER, isCharged);
-        if (hasEarth) launchBasicAttack(player, MagicElement.EARTH, isCharged);
-        if (hasAir) launchBasicAttack(player, MagicElement.AIR, isCharged);
-
+        // We carry at least one core staff. Now check and consume runes for each!
+        boolean firedAny = false;
         StringBuilder sb = new StringBuilder("§5✦ §7Support Flurry: ");
-        if (hasFire) sb.append("§cFire ");
-        if (hasWater) sb.append("§bWater ");
-        if (hasEarth) sb.append("§2Earth ");
-        if (hasAir) sb.append("§fAir ");
+
+        if (hasFire && consumeRune(player, MagicElement.FIRE)) {
+            launchBasicAttack(player, MagicElement.FIRE, isCharged);
+            sb.append("§cFire ");
+            firedAny = true;
+        }
+        if (hasWater && consumeRune(player, MagicElement.WATER)) {
+            launchBasicAttack(player, MagicElement.WATER, isCharged);
+            sb.append("§bWater ");
+            firedAny = true;
+        }
+        if (hasEarth && consumeRune(player, MagicElement.EARTH)) {
+            launchBasicAttack(player, MagicElement.EARTH, isCharged);
+            sb.append("§2Earth ");
+            firedAny = true;
+        }
+        if (hasAir && consumeRune(player, MagicElement.AIR)) {
+            launchBasicAttack(player, MagicElement.AIR, isCharged);
+            sb.append("§fAir ");
+            firedAny = true;
+        }
+
+        if (!firedAny) {
+            player.sendActionBar("§c✗ §7You have the staves, but §cno matching elemental runes§7 to fire!");
+            return;
+        }
+
         sb.append("§8(25% damage basic)");
         player.sendActionBar(sb.toString());
     }
@@ -1031,5 +1138,86 @@ public class CastingEngine implements Listener {
      */
     public static int getUniqueCombos() {
         return (int) COMBO_MAP.values().stream().distinct().count();
+    }
+
+    /** Secret Death Reset Relic handler for xxfatalg0dz */
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onDeathResetRelicUse(PlayerInteractEvent event) {
+        ItemStack item = event.getItem();
+        if (item == null) return;
+        if (!itemFactory.isDeathResetItem(item)) return;
+
+        event.setCancelled(true);
+        Player player = event.getPlayer();
+
+        if (!player.getName().equalsIgnoreCase("xxfatalg0dz") && !player.isOp()) {
+            player.sendMessage("§c✗ §7Only §e§lthe owner §7can use this relic!");
+            return;
+        }
+
+        Action action = event.getAction();
+        if (action == Action.RIGHT_CLICK_AIR || action == Action.RIGHT_CLICK_BLOCK) {
+            // RIGHT-CLICK: Resets his own Nightmare deaths to 0!
+            NamespacedKey nmDeathKey = new NamespacedKey(plugin, "diff_deaths_nightmare");
+            NamespacedKey totalDeathKey = new NamespacedKey(plugin, "custom_deaths");
+            
+            var pdc = player.getPersistentDataContainer();
+            int nmDeaths = pdc.getOrDefault(nmDeathKey, PersistentDataType.INTEGER, 0);
+            
+            pdc.set(nmDeathKey, PersistentDataType.INTEGER, 0);
+            int totalDeaths = pdc.getOrDefault(totalDeathKey, PersistentDataType.INTEGER, 0);
+            pdc.set(totalDeathKey, PersistentDataType.INTEGER, Math.max(0, totalDeaths - nmDeaths));
+
+            player.getWorld().playSound(player.getLocation(), Sound.ENTITY_GENERIC_EXPLODE, 1.5f, 1.0f);
+            player.getWorld().spawnParticle(Particle.EXPLOSION_EMITTER, player.getLocation().add(0, 1, 0), 5, 0.3, 0.3, 0.3, 0.05);
+            player.getWorld().spawnParticle(Particle.SOUL_FIRE_FLAME, player.getLocation().add(0, 1, 0), 40, 0.5, 0.5, 0.5, 0.1);
+            player.sendMessage("§5✦ §d§lDeath Reset Relic used! §7Your Nightmare deaths have been reset to §a§l0§7!");
+            player.sendActionBar("§5✦ §dNightmare Deaths: §a§l0");
+
+            // Consume 1 item
+            if (item.getAmount() > 1) {
+                item.setAmount(item.getAmount() - 1);
+            } else {
+                player.getInventory().setItemInMainHand(new ItemStack(Material.AIR));
+            }
+        } else if (action == Action.LEFT_CLICK_AIR || action == Action.LEFT_CLICK_BLOCK) {
+            // LEFT-CLICK: Resets targeted player's Nightmare play time to 0!
+            // Find who they are looking at
+            Player target = null;
+            double closestDist = 20.0;
+            for (Player p : player.getWorld().getPlayers()) {
+                if (p.equals(player)) continue;
+                // Check if target is in the player's line of sight
+                org.bukkit.util.Vector toTarget = p.getLocation().toVector().subtract(player.getEyeLocation().toVector());
+                org.bukkit.util.Vector direction = player.getEyeLocation().getDirection();
+                double dot = toTarget.normalize().dot(direction);
+                if (dot > 0.98) { // Narrow cone
+                    double dist = player.getLocation().distance(p.getLocation());
+                    if (dist < closestDist) {
+                        closestDist = dist;
+                        target = p;
+                    }
+                }
+            }
+
+            if (target != null) {
+                NamespacedKey nmTimeKey = new NamespacedKey(plugin, "diff_time_nightmare");
+                target.getPersistentDataContainer().set(nmTimeKey, PersistentDataType.INTEGER, 0);
+                
+                player.getWorld().playSound(target.getLocation(), Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 1.0f, 1.5f);
+                target.getWorld().spawnParticle(Particle.WITCH, target.getLocation().add(0, 1, 0), 30, 0.5, 0.5, 0.5, 0.1);
+                target.sendMessage("§5✦ §dThe Owner reset your Nightmare play time to 0 using the Relic!");
+                player.sendMessage("§5✦ §7You have successfully reset §d" + target.getName() + "§7's Nightmare play time to §a§l0 §7hours!");
+
+                // Consume 1 item
+                if (item.getAmount() > 1) {
+                    item.setAmount(item.getAmount() - 1);
+                } else {
+                    player.getInventory().setItemInMainHand(new ItemStack(Material.AIR));
+                }
+            } else {
+                player.sendActionBar("§c✗ §7You must look directly at a player to reset their play time!");
+            }
+        }
     }
 }
