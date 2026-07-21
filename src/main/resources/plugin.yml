@@ -139,16 +139,23 @@ commands:
     permission-message: You do not have permission to use this command.
 
   spawnboss:
-    description: Spawn a dungeon boss at its arena (tempest or crimson).
-    usage: /spawnboss <tempest|crimson>
+    description: Spawn a dungeon boss at its arena (tempest, crimson, or void).
+    usage: /spawnboss <tempest|crimson|void|rebuildvoid>
     aliases: [bossspawn]
     permission: difficultyengine.cape.admin
     permission-message: §cThis command is for admins only.
 
   tpboss:
-    description: Teleport to a dungeon boss arena in the Ancient Realm (tempest or crimson).
-    usage: /tpboss <tempest|crimson>
+    description: Teleport to a dungeon boss arena (tempest, crimson, or void).
+    usage: /tpboss <tempest|crimson|void>
     aliases: [bosstp]
+    permission: difficultyengine.cape.admin
+    permission-message: §cThis command is for admins only.
+
+  rebuildvoid:
+    description: Reload the void schematic and spawn the Void Wither Boss.
+    usage: /rebuildvoid
+    aliases: [voidrebuild]
     permission: difficultyengine.cape.admin
     permission-message: §cThis command is for admins only.
 

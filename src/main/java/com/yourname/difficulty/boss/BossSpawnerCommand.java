@@ -79,6 +79,18 @@ public class BossSpawnerCommand implements CommandExecutor, TabCompleter {
                     player.teleport(loc);
                     player.sendMessage("§a✓ §7Teleported to §cCrimson Pit§7 in the Ancient Realm!");
                 }
+                case "void" -> {
+                    World voidWorld = plugin.getServer().getWorld("void_realm");
+                    if (voidWorld == null) {
+                        voidWorld = plugin.getServer().getWorld("ancient_realm");
+                    }
+                    if (voidWorld == null) {
+                        voidWorld = plugin.getServer().getWorlds().get(0);
+                    }
+                    Location loc = new Location(voidWorld, 0.0, 64.0, 0.0);
+                    player.teleport(loc);
+                    player.sendMessage("§a✓ §7Teleported to §0Void Realm§7!");
+                }
                 default -> {
                     sender.sendMessage("§c✗ §7Unknown arena: §e" + args[0]);
                 }
@@ -86,10 +98,31 @@ public class BossSpawnerCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
+        if (label.equalsIgnoreCase("rebuildvoid") || label.equalsIgnoreCase("voidrebuild")) {
+            Player player = null;
+            if (sender instanceof Player p) {
+                player = p;
+            }
+            World voidWorld = plugin.getServer().getWorld("void_realm");
+            if (voidWorld == null) {
+                voidWorld = plugin.getServer().getWorld("ancient_realm");
+            }
+            if (voidWorld == null) {
+                voidWorld = plugin.getServer().getWorlds().get(0);
+            }
+            Location loc = new Location(voidWorld, 0.0, 64.0, 0.0);
+            crimsonBoss.rebuildArena(player, loc);
+            crimsonBoss.spawnVoidWither(loc);
+            sender.sendMessage("§a✓ §7Void Realm schematic loaded and Void Wither respawned!");
+            return true;
+        }
+
         if (args.length == 0) {
-            sender.sendMessage("§7Usage: §e/spawnboss <tempest|crimson>");
-            sender.sendMessage("§8  §etempest §7— Tempest Overlord at Tempest Sanctum (114, -38, -47)");
-            sender.sendMessage("§8  §ecrimson §7— Infernal Blazefiend at Crimson Pit (-108, -26, -14)");
+            sender.sendMessage("§7Usage: §e/spawnboss <tempest|crimson|void|rebuildvoid>");
+            sender.sendMessage("§8  §etempest      §7— Tempest Overlord at Tempest Sanctum (114, -38, -47)");
+            sender.sendMessage("§8  §ecrimson      §7— Infernal Blazefiend at Crimson Pit (-108, -26, -14)");
+            sender.sendMessage("§8  §evoid         §7— Void Wither at Void Realm (0, 64, 0)");
+            sender.sendMessage("§8  §erebuildvoid  §7— Reload Void schematic & spawn Wither");
             return true;
         }
 
@@ -158,9 +191,41 @@ public class BossSpawnerCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage("§a✓ §7The Infernal Blazefiend spawned at Crimson Pit §8(-108, -26, -14)§7.");
             }
 
+            // ── Void Realm ─────────────────────────────────────────────────────
+            case "void" -> {
+                World voidWorld = plugin.getServer().getWorld("void_realm");
+                if (voidWorld == null) {
+                    voidWorld = plugin.getServer().getWorld("ancient_realm");
+                }
+                if (voidWorld == null) {
+                    voidWorld = plugin.getServer().getWorlds().get(0);
+                }
+                Location loc = new Location(voidWorld, 0.0, 64.0, 0.0);
+                crimsonBoss.spawnVoidWither(loc);
+                sender.sendMessage("§a✓ §7The Void Wither spawned at Void Realm §8(0, 64, 0)§7.");
+            }
+
+            case "rebuildvoid" -> {
+                Player player = null;
+                if (sender instanceof Player p) {
+                    player = p;
+                }
+                World voidWorld = plugin.getServer().getWorld("void_realm");
+                if (voidWorld == null) {
+                    voidWorld = plugin.getServer().getWorld("ancient_realm");
+                }
+                if (voidWorld == null) {
+                    voidWorld = plugin.getServer().getWorlds().get(0);
+                }
+                Location loc = new Location(voidWorld, 0.0, 64.0, 0.0);
+                crimsonBoss.rebuildArena(player, loc);
+                crimsonBoss.spawnVoidWither(loc);
+                sender.sendMessage("§a✓ §7Void Realm schematic loaded and Void Wither respawned!");
+            }
+
             default -> {
                 sender.sendMessage("§c✗ §7Unknown arena: §e" + args[0]);
-                sender.sendMessage("§7Valid arenas: §etempest§7, §ecrimson");
+                sender.sendMessage("§7Valid arenas: §etempest§7, §ecrimson§7, §evoid§7, §erebuildvoid");
             }
         }
 
@@ -169,7 +234,7 @@ public class BossSpawnerCommand implements CommandExecutor, TabCompleter {
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command cmd, String label, String[] args) {
-        if (args.length == 1) return Arrays.asList("tempest", "crimson");
+        if (args.length == 1) return Arrays.asList("tempest", "crimson", "void", "rebuildvoid");
         return List.of();
     }
 }

@@ -3,6 +3,7 @@ package com.yourname.difficulty.listeners;
 import com.yourname.difficulty.items.ItemFactory;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
+import org.bukkit.Sound;
 import org.bukkit.Tag;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
@@ -150,6 +151,36 @@ public class MinecartListener implements Listener {
     // ── Track Scanner & Velocity Booster ──────────────────────────────────
     boolean slopeDetected = false;
     Vector dir = lastDirection.get(uid);
+
+    // ── Anti-Stall Auto-Unstick Booster ───────────────────────────────────
+    if (onRail && dir != null && horizSpeedSq < 0.005 && !cart.getPassengers().isEmpty()) {
+        Location center = current.getLocation().add(0.5, 0.0625, 0.5);
+        if (current.getBlockData() instanceof org.bukkit.block.data.Rail railData) {
+            org.bukkit.block.data.Rail.Shape shape = railData.getShape();
+            if (shape == org.bukkit.block.data.Rail.Shape.ASCENDING_NORTH ||
+                shape == org.bukkit.block.data.Rail.Shape.ASCENDING_SOUTH ||
+                shape == org.bukkit.block.data.Rail.Shape.ASCENDING_EAST ||
+                shape == org.bukkit.block.data.Rail.Shape.ASCENDING_WEST) {
+                center.add(0, 0.4, 0); // Lift on slopes to bypass block edge clip
+            }
+        }
+        center.setYaw(cart.getLocation().getYaw());
+        center.setPitch(cart.getLocation().getPitch());
+        cart.teleport(center);
+        
+        // Instantly apply full velocity jump!
+        Vector boost = dir.clone().multiply(TURBO_MAX_SPEED * 1.5);
+        cart.setVelocity(boost);
+        
+        // Play a rocket-boost sound and trial spawner particles!
+        cart.getWorld().playSound(cart.getLocation(), Sound.ENTITY_FIREWORK_ROCKET_LAUNCH, 1.0f, 1.2f);
+        cart.getWorld().spawnParticle(org.bukkit.Particle.TRIAL_SPAWNER_DETECTION, cart.getLocation(), 15, 0.2, 0.2, 0.2, 0.05);
+        
+        // Update horizSpeedSq & vel so momentum injection below uses boosted data
+        horizSpeedSq = boost.getX() * boost.getX() + boost.getZ() * boost.getZ();
+        vel = boost;
+    }
+
     if (dir != null && onRail) {
         slopeDetected = hasSlopeAhead(current, dir);
     }

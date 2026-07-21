@@ -278,6 +278,23 @@ public class SkillGUI {
 
     // ── Playtime item ─────────────────────────────────────────────────────────
 
+    private String formatTime(int totalSeconds) {
+        long days = totalSeconds / 86400;
+        long hours = (totalSeconds % 86400) / 3600;
+        long minutes = (totalSeconds % 3600) / 60;
+        long seconds = totalSeconds % 60;
+        
+        if (days > 0) {
+            return days + "d " + hours + "hr";
+        } else if (hours > 0) {
+            return hours + "hr " + minutes + "m";
+        } else if (minutes > 0) {
+            return minutes + "m";
+        } else {
+            return seconds + "s";
+        }
+    }
+
     private ItemStack playtimeItem(Player player) {
         ItemStack item = new ItemStack(Material.CLOCK, 1);
         ItemMeta  meta = item.getItemMeta();
@@ -296,10 +313,55 @@ public class SkillGUI {
         long hours   = seconds / 3600;
         long minutes = (seconds % 3600) / 60;
 
+        int totalDeaths = 0;
+        try {
+            org.bukkit.NamespacedKey deathKey = new org.bukkit.NamespacedKey(skillManager.getPlugin(), "custom_deaths");
+            totalDeaths = player.getPersistentDataContainer().getOrDefault(deathKey, org.bukkit.persistence.PersistentDataType.INTEGER, 0);
+        } catch (Exception ignored) {}
+
+        org.bukkit.persistence.PersistentDataContainer pdc = player.getPersistentDataContainer();
+        org.bukkit.plugin.Plugin plugin = skillManager.getPlugin();
+        
+        int peacefulSec = pdc.getOrDefault(new org.bukkit.NamespacedKey(plugin, "diff_time_peaceful"), org.bukkit.persistence.PersistentDataType.INTEGER, 0);
+        int easySec     = pdc.getOrDefault(new org.bukkit.NamespacedKey(plugin, "diff_time_easy"), org.bukkit.persistence.PersistentDataType.INTEGER, 0);
+        int mediumSec   = pdc.getOrDefault(new org.bukkit.NamespacedKey(plugin, "diff_time_medium"), org.bukkit.persistence.PersistentDataType.INTEGER, 0);
+        int hardSec     = pdc.getOrDefault(new org.bukkit.NamespacedKey(plugin, "diff_time_hard"), org.bukkit.persistence.PersistentDataType.INTEGER, 0);
+        int nightmareSec= pdc.getOrDefault(new org.bukkit.NamespacedKey(plugin, "diff_time_nightmare"), org.bukkit.persistence.PersistentDataType.INTEGER, 0);
+
+        int peacefulDeaths = pdc.getOrDefault(new org.bukkit.NamespacedKey(plugin, "diff_deaths_peaceful"), org.bukkit.persistence.PersistentDataType.INTEGER, 0);
+        int easyDeaths     = pdc.getOrDefault(new org.bukkit.NamespacedKey(plugin, "diff_deaths_easy"), org.bukkit.persistence.PersistentDataType.INTEGER, 0);
+        int mediumDeaths   = pdc.getOrDefault(new org.bukkit.NamespacedKey(plugin, "diff_deaths_medium"), org.bukkit.persistence.PersistentDataType.INTEGER, 0);
+        int hardDeaths     = pdc.getOrDefault(new org.bukkit.NamespacedKey(plugin, "diff_deaths_hard"), org.bukkit.persistence.PersistentDataType.INTEGER, 0);
+        int nightmareDeaths= pdc.getOrDefault(new org.bukkit.NamespacedKey(plugin, "diff_deaths_nightmare"), org.bukkit.persistence.PersistentDataType.INTEGER, 0);
+
         List<String> lore = new ArrayList<>();
-        lore.add("§7Time on server:");
+        lore.add("§7Total Server Playtime:");
         lore.add("§e" + hours + " hours  " + minutes + " min");
-        lore.add("§8" + "─".repeat(26));
+        lore.add("§7Total Server Deaths: §c" + totalDeaths);
+        lore.add("§8" + "─".repeat(28));
+        lore.add("§7Time Played                Deaths");
+        lore.add("§a☮ Peaceful §8(" + formatTime(peacefulSec) + ") §r §7(" + peacefulDeaths + " dth)");
+        lore.add("§2✦ Easy §8(" + formatTime(easySec) + ") §r     §7(" + easyDeaths + " dth)");
+        lore.add("§e⚡ Normal §8(" + formatTime(mediumSec) + ") §r   §7(" + mediumDeaths + " dth)");
+        lore.add("§c⚔ MedHard §8(" + formatTime(hardSec) + ") §r  §7(" + hardDeaths + " dth)");
+        
+        // Build the special Nightmare line
+        String nmLine;
+        if (nightmareDeaths == 0 && nightmareSec >= 360000) { // 0 deaths and >= 100 hours (360k seconds)
+            if (nightmareSec >= 3600000) { // 1000 hours
+                nmLine = "☠ §4§l★ ☄ Nightmare (" + formatTime(nightmareSec) + ")      (0 dth) ☄ ★ ☠";
+            } else if (nightmareSec >= 1800000) { // 500 hours
+                nmLine = "❄ §b✦ ☄ Nightmare (" + formatTime(nightmareSec) + ")      (0 dth) ☄ ✦ ❄";
+            } else if (nightmareSec >= 900000) { // 250 hours
+                nmLine = "⚡ §e★ Nightmare (" + formatTime(nightmareSec) + ")      (0 dth) ★ ⚡";
+            } else { // 100 hours
+                nmLine = "✨ §d✧ Nightmare (" + formatTime(nightmareSec) + ")      (0 dth) ✧ ✨";
+            }
+        } else {
+            nmLine = "§4☠ Nightmare §8(" + formatTime(nightmareSec) + ") §r§7(" + nightmareDeaths + " dth)";
+        }
+        lore.add(nmLine);
+        lore.add("§8" + "─".repeat(28));
         lore.add("§7Keep grinding for those Lv 99 capes!");
 
         meta.setLore(lore);

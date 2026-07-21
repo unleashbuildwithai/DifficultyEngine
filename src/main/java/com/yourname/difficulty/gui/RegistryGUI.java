@@ -37,7 +37,7 @@ import java.util.List;
  */
 public class RegistryGUI {
 
-    public static final int    PAGE_COUNT     = 10;
+    public static final int    PAGE_COUNT     = 11;
     public static final int    ITEMS_PER_PAGE = 45;
     private static final int   SIZE           = 54;
     private static final int   SLOT_PREV      = 45;
@@ -57,7 +57,8 @@ public class RegistryGUI {
         "§6Magic Books",         // 7
         "§dCapes & Cosmetics",   // 8
         "§5Support Staff",       // 9
-        "§b⚡ Lightning Magic"   // 10
+        "§b⚡ Lightning Magic",  // 10
+        "§4Boss Spawners"        // 11
     };
 
     private final ItemFactory itemFactory;
@@ -74,11 +75,17 @@ public class RegistryGUI {
 
     public static int pageFromTitle(String title) {
         if (title == null) return -1;
-        if (TITLE_BASE.equals(title)) return 1;
-        String prefix = TITLE_BASE + " §8[";
-        if (title.startsWith(prefix) && title.endsWith("]")) {
+
+        // Strip colors to make it 100% robust on all Paper/Purpur/Spigot versions
+        String cleanTitle = title.replaceAll("(?i)§[0-9A-FK-ORX]", "").trim();
+        String cleanBase = TITLE_BASE.replaceAll("(?i)§[0-9A-FK-ORX]", "").trim();
+
+        if (cleanBase.equals(cleanTitle)) return 1;
+
+        String cleanPrefix = cleanBase + " [";
+        if (cleanTitle.startsWith(cleanPrefix) && cleanTitle.endsWith("]")) {
             try {
-                return Integer.parseInt(title.substring(prefix.length(), title.length() - 1));
+                return Integer.parseInt(cleanTitle.substring(cleanPrefix.length(), cleanTitle.length() - 1));
             } catch (NumberFormatException ignored) {}
         }
         return -1;

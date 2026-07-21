@@ -4,6 +4,8 @@ import com.yourname.difficulty.DifficultyLevel;
 import com.yourname.difficulty.PlayerDifficultyManager;
 import com.yourname.difficulty.party.PartyManager;
 import org.bukkit.Particle;
+import org.bukkit.Sound;
+import org.bukkit.Location;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.*;
@@ -16,6 +18,7 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * NightSpawnBoostListener — Two responsibilities:
@@ -72,6 +75,76 @@ public class NightSpawnBoostListener implements Listener {
         this.difficultyManager = difficultyManager;
         this.partyManager      = partyManager;
         this.nmPartyKey        = new org.bukkit.NamespacedKey(plugin, NM_PARTY_MOB_KEY);
+
+        // Relentlessly spawn extra aggressive mobs around Nightmare players at night!
+        plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
+            for (Player p : plugin.getServer().getOnlinePlayers()) {
+                if (p.isDead()) continue;
+                if (difficultyManager.getDifficulty(p.getUniqueId()) != DifficultyLevel.NIGHTMARE) continue;
+                org.bukkit.World world = p.getWorld();
+                long time = world.getTime();
+                boolean isNight = time >= NIGHT_START && time <= NIGHT_END;
+                boolean isRaining = world.hasStorm();
+                if (!isNight || !isRaining) continue;
+
+                // Scale the total spawned mobs with total nightmare players in a party
+                int partyNightmareCount = 1;
+                if (partyManager != null && partyManager.isInParty(p.getUniqueId())) {
+                    Set<UUID> members = partyManager.getPartyMembers(p.getUniqueId());
+                    if (members != null) {
+                        int nmInParty = 0;
+                        for (UUID memberUid : members) {
+                            if (difficultyManager.getDifficulty(memberUid) == DifficultyLevel.NIGHTMARE) {
+                                nmInParty++;
+                            }
+                        }
+                        if (nmInParty > 1) {
+                            partyNightmareCount = nmInParty;
+                        }
+                    }
+                }
+
+                // Spawn 3 to 5 aggressive mobs around them, scaled by total nightmare players in the party
+                ThreadLocalRandom rand = ThreadLocalRandom.current();
+                int count = (3 + rand.nextInt(3)) * partyNightmareCount;
+                EntityType[] pool = { EntityType.ZOMBIE, EntityType.SKELETON, EntityType.SPIDER, EntityType.CREEPER, EntityType.PHANTOM };
+                
+                for (int i = 0; i < count; i++) {
+                    double angle = rand.nextDouble() * Math.PI * 2.0;
+                    double distance = 16 + rand.nextInt(12); // safe spawning distance (16 to 28 blocks away)
+                    double dx = Math.cos(angle) * distance;
+                    double dz = Math.sin(angle) * distance;
+                    org.bukkit.Location spawnLoc = p.getLocation().clone().add(dx, 0, dz);
+                    spawnLoc.setY(world.getHighestBlockYAt(spawnLoc) + 1.0);
+
+                    // Strike visual lightning (plays thunder sound, flashes sky)
+                    world.strikeLightningEffect(spawnLoc);
+
+                    // Vertical electric-blue particle beam for a thematic look
+                    for (double py = 0; py < 10; py += 0.5) {
+                        org.bukkit.Location pLoc = spawnLoc.clone().add(0, py, 0);
+                        world.spawnParticle(Particle.DUST, pLoc, 4, 0.1, 0.1, 0.1, 0.0,
+                            new Particle.DustOptions(org.bukkit.Color.fromRGB(0, 150, 255), 1.5f)); // electric blue
+                        world.spawnParticle(Particle.SOUL_FIRE_FLAME, pLoc, 2, 0.05, 0.05, 0.05, 0.01);
+                    }
+
+                    Entity spawned = world.spawnEntity(spawnLoc, pool[rand.nextInt(pool.length)]);
+                    if (spawned instanceof Monster mob) {
+                        mob.setTarget(p);
+                        // Boost follow range to 100 blocks so they instantly track the player!
+                        var range = mob.getAttribute(Attribute.GENERIC_FOLLOW_RANGE);
+                        if (range != null) {
+                            range.setBaseValue(100.0);
+                        }
+                        // Spawn some dark smoke particles to show they are spawned by the nightmare storm
+                        world.spawnParticle(Particle.LARGE_SMOKE, spawnLoc.add(0, 1, 0), 10, 0.5, 0.5, 0.5, 0.02);
+                        world.spawnParticle(Particle.TRIAL_SPAWNER_DETECTION, spawnLoc, 5, 0.3, 0.3, 0.3, 0.0);
+                    }
+                }
+                p.sendActionBar("§4☠ §cThe Nightmare Storm intensifies... Mobs are swarming! §4☠");
+                p.playSound(p.getLocation(), Sound.ENTITY_WARDEN_HEARTBEAT, 1.0f, 0.5f);
+            }
+        }, 200L, 200L); // Every 10 seconds (200 ticks)
     }
 
     // ── CreatureSpawnEvent ────────────────────────────────────────────────────
@@ -79,6 +152,7 @@ public class NightSpawnBoostListener implements Listener {
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onCreatureSpawn(CreatureSpawnEvent event) {
         if (!(event.getEntity() instanceof Monster mob)) return;
+        if (isNightmarePartyMob(mob)) return;
 
         org.bukkit.World world = event.getLocation().getWorld();
         if (world == null) return;
@@ -108,28 +182,28 @@ public class NightSpawnBoostListener implements Listener {
 
         // ── Nightmare party scaling ───────────────────────────────────────
         // Find nearby Nightmare players — check if 2+ are in the same party
-        Player partyLeader = null;
-        int nmPartyCount = 0;
+        Map<UUID, Integer> partyCounts = new HashMap<>();
 
         for (Entity e : mob.getNearbyEntities(64, 64, 64)) {
             if (!(e instanceof Player p)) continue;
             if (difficultyManager.getDifficulty(p.getUniqueId()) != DifficultyLevel.NIGHTMARE) continue;
             if (!partyManager.isInParty(p.getUniqueId())) continue;
 
-            if (partyLeader == null) {
-                partyLeader = p;
-                nmPartyCount = 1;
-            } else {
-                // Check if same party as first found NM player
-                UUID l1 = partyManager.getLeader(partyLeader.getUniqueId());
-                UUID l2 = partyManager.getLeader(p.getUniqueId());
-                if (l1 != null && l1.equals(l2)) {
-                    nmPartyCount++;
-                }
+            UUID leader = partyManager.getLeader(p.getUniqueId());
+            if (leader != null) {
+                partyCounts.put(leader, partyCounts.getOrDefault(leader, 0) + 1);
             }
         }
 
-        if (nmPartyCount >= 2) {
+        boolean hasLargeParty = false;
+        for (int count : partyCounts.values()) {
+            if (count >= 2) {
+                hasLargeParty = true;
+                break;
+            }
+        }
+
+        if (hasLargeParty) {
             applyNightmarePartyScaling(mob);
         }
     }

@@ -129,6 +129,8 @@ public class MagicStaffListener implements Listener {
     private       LightningChargeManager             lightningChargeManager = null;
     /** Tracks Water Wave bolt UUIDs so handleWaterHit can apply 2× damage. */
     private final Set<UUID>                          waveProjectiles       = new HashSet<>();
+    /** Tracks players currently channeling the water downpour spell. */
+    private final Set<UUID>                          channelingWater       = new HashSet<>();
     /** Optional PartyManager reference — used for Water splash auto-heal. */
     private       com.yourname.difficulty.party.PartyManager partyManagerRef = null;
     /**
@@ -227,13 +229,14 @@ public class MagicStaffListener implements Listener {
 
         int magicLevel = skillManager.getLevel(player.getUniqueId(), SkillType.MAGIC);
 
-        // ── Fire Staff Lv99: dual-click mode ──────────────────────────────────
-        // Left-click  → normal fireball
-        // Right-click → lightning strike (admin = no cooldown, no bottle charge cost)
-        // Right-click on ANCIENT_DEBRIS → portal ritual
-        if (element == MagicElement.FIRE && magicLevel >= 99) {
+        // ── Fire Staff ────────────────────────────────────────────────────────
+        if (element == MagicElement.FIRE) {
             if (isRightClick) {
-                // ── Lightning Strike ──────────────────────────────────────────
+                // Right-Click (Lv99 Capstone): Lightning Strike
+                if (magicLevel < 99) {
+                    player.sendActionBar("§c✗ §7Lightning Strike is a Capstone spell requiring §eMagic Level 99§7!");
+                    return;
+                }
                 boolean isAdmin = player.hasPermission("difficultyengine.cape.admin") 
                     && lightningAdminCommand != null && lightningAdminCommand.hasFastCast(player.getUniqueId());
                 
@@ -248,16 +251,14 @@ public class MagicStaffListener implements Listener {
                     
                     if (lightningChargeManager != null && !lightningChargeManager.consumeCharge(player)) {
                         player.sendActionBar("§c✗ §7You need §bLightning Charges§7! §8(Drink a Charged Magic Bottle)");
-                        // Reset cooldown if failed
                         cooldowns.get(player.getUniqueId()).remove(MagicElement.FIRE);
                         return;
                     }
                 }
                 awardMagicXp(player, MAGIC_XP_CAST);
                 castLightning(player, magicLevel);
-                return;
             } else {
-                // ── Normal Fireball (left-click) ──────────────────────────────
+                // Left-Click: Fire Blast
                 long cooldownMs = getCooldownMs(player, magicLevel);
                 if (!checkAndSetCooldown(player.getUniqueId(), MagicElement.FIRE, cooldownMs)) {
                     long msLeft = msUntilReady(player.getUniqueId(), MagicElement.FIRE, cooldownMs);
@@ -271,102 +272,133 @@ public class MagicStaffListener implements Listener {
                 }
                 awardMagicXp(player, MAGIC_XP_CAST);
                 giveGuideIfNew(player);
-                castFire(player, magicLevel);
-                return;
+                boolean isIncantation = (magicLevel >= 10 && itemFactory.hasSpellComboBook(player, getBagContents(player)));
+                castFire(player, magicLevel, isIncantation);
+                if (castingEngine != null) {
+                    castingEngine.onElementCast(player, MagicElement.FIRE);
+                }
             }
+            return;
         }
 
-        // ── Water Staff Lv99: dual-click power mode ───────────────────────────
-        // Left-click  → normal water bolt (with AoE splash)
-        // Right-click + full Master Mage Gear (≥2000ms bonus) → Water Wave
-        //   (2× damage · 3× rune cost · ½ cooldown)
-        if (element == MagicElement.WATER && magicLevel >= 99) {
-            long baseCooldown = getCooldownMs(player, magicLevel);
-            boolean canWave   = isRightClick && itemFactory.getMageGearCooldownBonus(player) >= 2000L;
-            long effectiveCd  = canWave ? Math.max(1L, baseCooldown / 2) : baseCooldown;
-
-            if (!checkAndSetCooldown(player.getUniqueId(), MagicElement.WATER, effectiveCd)) {
-                long msLeft = msUntilReady(player.getUniqueId(), MagicElement.WATER, effectiveCd);
-                player.sendActionBar("§b[Water" + (canWave ? " Wave" : "") + "] §8cooldown: §e"
-                    + String.format("%.1f", msLeft / 1000.0) + "s");
-                return;
-            }
-
-            if (canWave) {
-                int avail = countRunes(player, MagicElement.WATER);
-                if (avail < 3) {
-                    player.sendActionBar("§c✗ §7Water Wave needs §b3× Water Runes §8(you have " + avail + ")");
+        // ── Water Staff ───────────────────────────────────────────────────────
+        if (element == MagicElement.WATER) {
+            if (isRightClick) {
+                // Right-Click (Lv10+ Downpour Spell): Channeling Downpour
+                if (magicLevel < 10 || !itemFactory.hasWaterBook(player, getBagContents(player))) {
+                    player.sendActionBar("§c✗ §7Downpour Spell requires §aMagic Level 10§7 and carrying §bThe Water Book§7!");
                     return;
                 }
-                consumeRune(player, MagicElement.WATER);
-                consumeRune(player, MagicElement.WATER);
-                consumeRune(player, MagicElement.WATER);
+                if (channelingWater.contains(player.getUniqueId())) {
+                    player.sendActionBar("§c✗ §7You are already channeling!");
+                    return;
+                }
+                startWaterDownpourChannel(player, magicLevel);
             } else {
+                // Left-Click: Water Bolt (standard water blast)
+                long baseCooldown = getCooldownMs(player, magicLevel);
+                if (!checkAndSetCooldown(player.getUniqueId(), MagicElement.WATER, baseCooldown)) {
+                    long msLeft = msUntilReady(player.getUniqueId(), MagicElement.WATER, baseCooldown);
+                    player.sendActionBar("§b[Water] §8cooldown: §e"
+                        + String.format("%.1f", msLeft / 1000.0) + "s");
+                    return;
+                }
                 if (!consumeRune(player, MagicElement.WATER)) {
                     player.sendActionBar("§c✗ §7No §bWater Rune§7 — craft from §e4x ICE§7.");
                     return;
                 }
-            }
-
-            awardMagicXp(player, MAGIC_XP_CAST);
-            if (canWave) {
-                castWaterWave(player, magicLevel, action);
-            } else {
+                awardMagicXp(player, MAGIC_XP_CAST);
                 castWater(player, magicLevel, action);
+                if (castingEngine != null) {
+                    castingEngine.onElementCast(player, MagicElement.WATER);
+                }
             }
             return;
         }
 
-        // ── Air Staff Lv99: dual-click mode ───────────────────────────────────
-        // Left-click  → Gust Blast (forward air bolt, same rune + cooldown)
-        // Right-click → Air Hover  (slow fall; levitate up if Lv99 + Mage Gear)
-        if (element == MagicElement.AIR && magicLevel >= 99 && isLeftClick) {
-            long cooldownMs = getCooldownMs(player, magicLevel);
-            if (!checkAndSetCooldown(player.getUniqueId(), MagicElement.AIR, cooldownMs)) {
-                long msLeft = msUntilReady(player.getUniqueId(), MagicElement.AIR, cooldownMs);
-                player.sendActionBar("§f[Air Lv99] §8cooldown: §e"
-                    + String.format("%.1f", msLeft / 1000.0) + "s");
-                return;
+        // ── Earth Staff ───────────────────────────────────────────────────────
+        if (element == MagicElement.EARTH) {
+            if (isRightClick) {
+                // Right-Click (Registry Pages 1–8): Heavy block-throwing action
+                EarthBlockTier tier = null;
+                if (magicLevel >= 10 && hasAnyEarthPage(player)) {
+                    tier = findBestEarthTier(player, magicLevel);
+                }
+                if (tier == null) {
+                    // Fallback to basic dirt bolt (Left-Click) seamlessly
+                    long cooldownMs = getCooldownMs(player, magicLevel);
+                    if (!checkAndSetCooldown(player.getUniqueId(), MagicElement.EARTH, cooldownMs)) {
+                        long msLeft = msUntilReady(player.getUniqueId(), MagicElement.EARTH, cooldownMs);
+                        player.sendActionBar("§2[Earth] §8cooldown: §e" + String.format("%.1f", msLeft / 1000.0) + "s");
+                        return;
+                    }
+                    if (!consumeRune(player, MagicElement.EARTH)) {
+                        player.sendActionBar("§c✗ §7No §2Earth Rune§7.");
+                        return;
+                    }
+                    awardMagicXp(player, MAGIC_XP_CAST);
+                    castEarthBasicBolt(player, magicLevel);
+                    if (castingEngine != null) castingEngine.onElementCast(player, MagicElement.EARTH);
+                    return;
+                }
+
+                // We have a tier! Throw block
+                long cooldownMs = getCooldownMs(player, magicLevel);
+                if (!checkAndSetCooldown(player.getUniqueId(), MagicElement.EARTH, cooldownMs)) {
+                    long msLeft = msUntilReady(player.getUniqueId(), MagicElement.EARTH, cooldownMs);
+                    player.sendActionBar("§2[Earth] §8cooldown: §e" + String.format("%.1f", msLeft / 1000.0) + "s");
+                    return;
+                }
+                removeOneFromInventory(player, tier.material);
+                if (!consumeRune(player, MagicElement.EARTH)) {
+                    player.sendActionBar("§c✗ §7No §2Earth Rune§7.");
+                    return;
+                }
+                awardMagicXp(player, MAGIC_XP_CAST);
+                castEarthHeavy(player, magicLevel, tier);
+                if (castingEngine != null) castingEngine.onElementCast(player, MagicElement.EARTH);
+            } else {
+                // Left-Click: Basic fallback dirt bolt (no block or page required, no block consumed)
+                long cooldownMs = getCooldownMs(player, magicLevel);
+                if (!checkAndSetCooldown(player.getUniqueId(), MagicElement.EARTH, cooldownMs)) {
+                    long msLeft = msUntilReady(player.getUniqueId(), MagicElement.EARTH, cooldownMs);
+                    player.sendActionBar("§2[Earth] §8cooldown: §e" + String.format("%.1f", msLeft / 1000.0) + "s");
+                    return;
+                }
+                if (!consumeRune(player, MagicElement.EARTH)) {
+                    player.sendActionBar("§c✗ §7No §2Earth Rune§7.");
+                    return;
+                }
+                awardMagicXp(player, MAGIC_XP_CAST);
+                castEarthBasicBolt(player, magicLevel);
+                if (castingEngine != null) castingEngine.onElementCast(player, MagicElement.EARTH);
             }
-            if (!consumeRune(player, MagicElement.AIR)) {
-                player.sendActionBar("§c✗ §7No §fAir Rune§7 for Gust Blast!");
-                return;
+            return;
+        }
+
+        // ── Air Staff ─────────────────────────────────────────────────────────
+        if (element == MagicElement.AIR) {
+            if (isRightClick) {
+                // Right-Click: Hover mechanics (slow fall / levitate)
+                activateAirHover(player, magicLevel);
+            } else {
+                // Left-Click: Quick wind gust for knockback
+                long cooldownMs = getCooldownMs(player, magicLevel);
+                if (!checkAndSetCooldown(player.getUniqueId(), MagicElement.AIR, cooldownMs)) {
+                    long msLeft = msUntilReady(player.getUniqueId(), MagicElement.AIR, cooldownMs);
+                    player.sendActionBar("§f[Air] §8cooldown: §e" + String.format("%.1f", msLeft / 1000.0) + "s");
+                    return;
+                }
+                if (!consumeRune(player, MagicElement.AIR)) {
+                    player.sendActionBar("§c✗ §7No §fAir Rune§7.");
+                    return;
+                }
+                awardMagicXp(player, MAGIC_XP_CAST);
+                castAir(player, magicLevel);
+                if (castingEngine != null) castingEngine.onElementCast(player, MagicElement.AIR);
             }
-            awardMagicXp(player, MAGIC_XP_CAST);
-            castAir(player, magicLevel);
-            if (castingEngine != null) castingEngine.onElementCast(player, MagicElement.AIR);
             return;
         }
-
-        // ── All other elements: right-click only ──────────────────────────────
-        if (!isRightClick) return;
-
-        // Air hover — at Lv99 works from ground; below Lv99 requires being airborne.
-        // LEVITATION (going up) is locked to Lv99 + Mage Gear; otherwise slow fall only.
-        // Hover drains Air Runes — higher level & more gear = slower drain rate.
-        if (element == MagicElement.AIR && (magicLevel >= 99 || !player.isOnGround())) {
-            activateAirHover(player, magicLevel);
-            return;
-        }
-
-        long cooldownMs = getCooldownMs(player, magicLevel);
-
-        if (!checkAndSetCooldown(player.getUniqueId(), element, cooldownMs)) {
-            long msLeft = msUntilReady(player.getUniqueId(), element, cooldownMs);
-            player.sendActionBar(element.color + element.staffName
-                    + " §8cooldown: §e" + String.format("%.1f", msLeft / 1000.0) + "s");
-            return;
-        }
-
-        if (!consumeRune(player, element)) {
-            player.sendActionBar("§c✗ §7No " + element.runeName
-                    + " §7— craft from §e4x " + element.runeCraftIngredient.name() + "§7.");
-            return;
-        }
-
-        awardMagicXp(player, MAGIC_XP_CAST);
-        giveGuideIfNew(player);
-        castSpell(player, element, magicLevel, action, event.getClickedBlock());
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -390,7 +422,7 @@ public class MagicStaffListener implements Listener {
 
     private void castSpell(Player player, MagicElement element, int magicLevel,
                            Action action, Block clickedBlock) {
-        if      (element == MagicElement.FIRE)  castFire(player, magicLevel);
+        if      (element == MagicElement.FIRE)  castFire(player, magicLevel, (magicLevel >= 10 && itemFactory.hasSpellComboBook(player, getBagContents(player))));
         else if (element == MagicElement.WATER) castWater(player, magicLevel, action);
         else if (element == MagicElement.EARTH) castEarth(player, magicLevel);
         else if (element == MagicElement.AIR)   castAir(player, magicLevel);
@@ -405,7 +437,7 @@ public class MagicStaffListener implements Listener {
     //  FIRE STAFF
     // ══════════════════════════════════════════════════════════════════════════
 
-    private void castFire(Player player, int magicLevel) {
+    private void castFire(Player player, int magicLevel, boolean isIncantation) {
         SmallFireball fb = player.getWorld().spawn(
             player.getEyeLocation().add(player.getLocation().getDirection().multiply(1.5)),
             SmallFireball.class);
@@ -417,6 +449,9 @@ public class MagicStaffListener implements Listener {
         trackedProjectiles.put(fb.getUniqueId(), MagicElement.FIRE);
         projectileShooters.put(fb.getUniqueId(), player.getUniqueId());
         projectileLevels.put(fb.getUniqueId(), magicLevel);
+        if (isIncantation) {
+            fb.setMetadata("fire_incantation", new FixedMetadataValue(plugin, true));
+        }
 
         plugin.getServer().getScheduler().runTaskTimer(plugin, task -> {
             if (!fb.isValid()) { task.cancel(); return; }
@@ -473,7 +508,7 @@ public class MagicStaffListener implements Listener {
 
         // ── Real Lightning Strike ─────────────────────────────────────────────
         player.getWorld().strikeLightningEffect(strikeAt);
-        spawnLightningVisual(strikeAt);
+        spawnLightningVisual(player, strikeAt);
 
         // ── 10% chance to ignite a dirt/grass block near the strike ──────────
         if (RAND.nextInt(10) == 0) {
@@ -618,9 +653,190 @@ public class MagicStaffListener implements Listener {
         }, 1L);
     }
 
+    @EventHandler(priority = EventPriority.NORMAL)
+    public void onPotionConsume(PlayerItemConsumeEvent event) {
+        ItemStack item = event.getItem();
+        if (item == null || !item.hasItemMeta()) return;
+        
+        Player player = event.getPlayer();
+        
+        String newStyle = null;
+        String styleDisplayName = null;
+        
+        if (itemFactory.isClassicLightningPotion(item)) {
+            newStyle = "CLASSIC";
+            styleDisplayName = "§eClassic/Default";
+        } else if (itemFactory.isFireSparkLightningPotion(item)) {
+            newStyle = "FIRE_SPARK";
+            styleDisplayName = "§cFire & Sparks";
+        } else if (itemFactory.isBlueLightningPotion(item)) {
+            newStyle = "BLUE";
+            styleDisplayName = "§bBlue Lightning";
+        }
+        
+        if (newStyle != null) {
+            org.bukkit.NamespacedKey styleKey = new org.bukkit.NamespacedKey(plugin, "lightning_style");
+            player.getPersistentDataContainer().set(styleKey, org.bukkit.persistence.PersistentDataType.STRING, newStyle);
+            
+            player.sendMessage("§6⚡ §7Your lightning appearance has been permanently altered to " + styleDisplayName + "§7!");
+            player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.2f);
+            player.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, player.getLocation().add(0, 1, 0), 25, 0.5, 0.5, 0.5, 0.1);
+        }
+    }
+
+    @EventHandler
+    public void onPlayerDeath(org.bukkit.event.entity.PlayerDeathEvent event) {
+        Player player = event.getEntity();
+        if (isFallen(player)) {
+            getUpFromFallen(player, false);
+        }
+        if (player.hasMetadata(META_LIGHTNING_BURNING)) {
+            clearLightningBurn(player);
+        }
+        if (player.hasMetadata("magic_water_support")) {
+            player.removeMetadata("magic_water_support", plugin);
+        }
+        channelingWater.remove(player.getUniqueId());
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
-    //  WATER STAFF
+    //  WATER STAFF DOWNPOUR & HELPERS
     // ══════════════════════════════════════════════════════════════════════════
+
+    private void startWaterDownpourChannel(Player player, int magicLevel) {
+        UUID uuid = player.getUniqueId();
+        channelingWater.add(uuid);
+        Location startLoc = player.getLocation().clone();
+
+        new org.bukkit.scheduler.BukkitRunnable() {
+            int seconds = 0;
+            @Override
+            public void run() {
+                if (!player.isOnline()) {
+                    cancel();
+                    channelingWater.remove(uuid);
+                    return;
+                }
+                if (player.getLocation().distanceSquared(startLoc) > 4.0) {
+                    player.sendActionBar("§c✗ §7Downpour Spell cancelled — you moved too much!");
+                    cancel();
+                    channelingWater.remove(uuid);
+                    return;
+                }
+                ItemStack hand = player.getInventory().getItemInMainHand();
+                if (itemFactory.getStaffElement(hand) != MagicElement.WATER) {
+                    player.sendActionBar("§c✗ §7Downpour Spell cancelled — item switched!");
+                    cancel();
+                    channelingWater.remove(uuid);
+                    return;
+                }
+
+                seconds++;
+                if (seconds >= 10) {
+                    cancel();
+                    channelingWater.remove(uuid);
+                    if (!consumeRune(player, MagicElement.WATER)) {
+                        player.sendActionBar("§c✗ §7No §bWater Rune§7 to complete cast.");
+                        return;
+                    }
+                    awardMagicXp(player, MAGIC_XP_CAST);
+                    executeDownpour(player, magicLevel);
+                    return;
+                }
+
+                player.getWorld().playSound(player.getLocation(), Sound.WEATHER_RAIN, 0.4f, 1.2f);
+                player.getWorld().spawnParticle(Particle.DRIPPING_WATER, player.getLocation().add(0, 2, 0), 15, 0.5, 0.5, 0.5, 0.0);
+                player.getWorld().spawnParticle(Particle.SPLASH, player.getLocation().add(0, 1, 0), 8, 0.5, 0.5, 0.5, 0.02);
+
+                player.sendActionBar("§b💧 §7Channelling Downpour... §e" + (10 - seconds) + "s §b💧");
+            }
+        }.runTaskTimer(plugin, 0L, 20L);
+    }
+
+    private void executeDownpour(Player player, int magicLevel) {
+        Snowball bolt = player.launchProjectile(Snowball.class);
+        bolt.setItem(new ItemStack(Material.HEART_OF_THE_SEA)); // beautiful blue water orb look!
+        bolt.setVelocity(player.getLocation().getDirection().multiply(1.8)); // lob velocity
+
+        trackedProjectiles.put(bolt.getUniqueId(), MagicElement.WATER);
+        projectileShooters.put(bolt.getUniqueId(), player.getUniqueId());
+        projectileLevels.put(bolt.getUniqueId(), magicLevel);
+        bolt.setMetadata("magic_downpour_projectile", new FixedMetadataValue(plugin, true));
+
+        // Beautiful blue custom trail
+        plugin.getServer().getScheduler().runTaskTimer(plugin, task -> {
+            if (!bolt.isValid()) { task.cancel(); return; }
+            bolt.getWorld().spawnParticle(Particle.DRIPPING_WATER, bolt.getLocation(), 15, 0.1, 0.1, 0.1, 0.0);
+            bolt.getWorld().spawnParticle(Particle.SPLASH,         bolt.getLocation(), 10, 0.1, 0.1, 0.1, 0.05);
+            bolt.getWorld().spawnParticle(Particle.BUBBLE_POP,     bolt.getLocation(),  5, 0.05, 0.05, 0.05, 0.02);
+        }, 0L, 1L);
+
+        player.getWorld().playSound(player.getLocation(), Sound.ITEM_BUCKET_FILL, 1.2f, 0.7f);
+        player.sendActionBar("§b💧 §lDownpour Orb §7launched! §8(Aimed projectile shot)");
+    }
+
+    private void spawnPuddleAt(Location puddleLoc, int magicLevel) {
+        puddleLoc.getWorld().playSound(puddleLoc, Sound.ENTITY_PLAYER_SPLASH_HIGH_SPEED, 1.5f, 0.8f);
+        puddleLoc.getWorld().playSound(puddleLoc, Sound.WEATHER_RAIN, 1.5f, 0.8f);
+
+        new org.bukkit.scheduler.BukkitRunnable() {
+            int ticks = 0;
+            @Override
+            public void run() {
+                ticks += 5;
+                if (ticks > 100) {
+                    cancel();
+                    return;
+                }
+
+                puddleLoc.getWorld().spawnParticle(Particle.SPLASH, puddleLoc, 20, 1.5, 0.1, 1.5, 0.05);
+                puddleLoc.getWorld().spawnParticle(Particle.DRIPPING_WATER, puddleLoc.clone().add(0, 1, 0), 10, 1.5, 0.5, 1.5, 0.0);
+
+                for (Entity e : puddleLoc.getWorld().getNearbyEntities(puddleLoc, 3.0, 2.0, 3.0)) {
+                    if (e instanceof Player target) {
+                        if (target.hasMetadata("magic_water_support")) {
+                            long expiry = target.getMetadata("magic_water_support").get(0).asLong();
+                            if (System.currentTimeMillis() < expiry) {
+                                continue;
+                            }
+                        }
+
+                        target.setMetadata("magic_water_support", new FixedMetadataValue(plugin, System.currentTimeMillis() + 30000L));
+                        target.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 600, 0, false, true, true));
+                        target.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 600, 0, false, true, true));
+
+                        target.sendMessage("§b💧 §aSupport Mode Active! §7(30s window - your support & healing casts are enhanced!)");
+                        target.sendActionBar("§b💧 §aSupport Mode Active! §e(30s window) §b💧");
+                        target.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, target.getLocation().add(0, 1, 0), 20, 0.5, 0.5, 0.5, 0.05);
+                        target.getWorld().playSound(target.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.8f, 1.6f);
+                    }
+                }
+            }
+        }.runTaskTimer(plugin, 0L, 5L);
+    }
+
+    private void castEarthHeavy(Player player, int magicLevel, EarthBlockTier tier) {
+        Snowball bolt = player.launchProjectile(Snowball.class);
+        bolt.setItem(new ItemStack(tier.material));
+        bolt.setVelocity(player.getLocation().getDirection().multiply(2.2));
+
+        trackedProjectiles.put(bolt.getUniqueId(), MagicElement.EARTH);
+        projectileShooters.put(bolt.getUniqueId(), player.getUniqueId());
+        projectileLevels.put(bolt.getUniqueId(), magicLevel);
+        earthBoltTiers.put(bolt.getUniqueId(), tier);
+
+        final EarthBlockTier t = tier;
+        plugin.getServer().getScheduler().runTaskTimer(plugin, task -> {
+            if (!bolt.isValid()) { task.cancel(); return; }
+            bolt.getWorld().spawnParticle(Particle.BLOCK, bolt.getLocation(), 9,
+                0.12, 0.12, 0.12, t.material.createBlockData());
+            bolt.getWorld().spawnParticle(Particle.SMOKE, bolt.getLocation(), 2,
+                0.06, 0.06, 0.06, 0.005);
+        }, 0L, 1L);
+
+        player.getWorld().playSound(player.getLocation(), Sound.BLOCK_GRAVEL_PLACE, 1.2f, 0.6f);
+        player.sendActionBar("§2[Earth] §7Threw " + tier.displayName + "§7! §8(Lv§a" + magicLevel + "§8)");
+    }
 
     private void castWater(Player player, int magicLevel, Action action) {
         // AoE splash on EVERY water cast — cures lightning burns self + nearby, party heal
@@ -1037,6 +1253,17 @@ public class MagicStaffListener implements Listener {
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onProjectileHit(ProjectileHitEvent event) {
+        if (event.getEntity().hasMetadata("magic_downpour_projectile")) {
+            UUID         projId    = event.getEntity().getUniqueId();
+            trackedProjectiles.remove(projId);
+            projectileShooters.remove(projId);
+            int          lvl       = projectileLevels.getOrDefault(projId, 1);
+            projectileLevels.remove(projId);
+            Location hitLoc = event.getHitEntity() != null ? event.getHitEntity().getLocation() : event.getEntity().getLocation();
+            spawnPuddleAt(hitLoc, lvl);
+            return;
+        }
+
         UUID         projId    = event.getEntity().getUniqueId();
         MagicElement element   = trackedProjectiles.remove(projId);
         UUID         shooterId = projectileShooters.remove(projId);
@@ -1335,19 +1562,28 @@ public class MagicStaffListener implements Listener {
             return;
         }
 
-        // Normal fire hit -> SCORCHED
-        double dmg = 2.0 + SkillBonusManager.magicDamageBonus(lvl) * 2;
-        target.damage(dmg, shooter);
-        int fire = 40 + (int)((lvl / 99.0) * 40);
-        applyScorched(target, 60);
-        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-            if (target.isValid()) target.setFireTicks(Math.max(target.getFireTicks(), fire));
-        }, 1L);
-        if (shooter != null) {
-            if (showHint(shooter, ComboFavoritesManager.SCORCHED_CHAIN)) {
-                shooter.sendActionBar("§c§7Fireball hit! §8Scorched §8(" + fire/20 + "s - hit again to Blaze!)");
-            } else {
-                shooter.sendActionBar("§c§7Fireball hit! §8(Scorched " + fire/20 + "s)");
+        // Normal fire hit -> SCORCHED (Only if it is an incantation - i.e., carry book + runes, Lv10+)
+        if (target.hasMetadata("fire_incantation") || target.hasMetadata("magic_fire_slime")) {
+            double dmg = 2.0 + SkillBonusManager.magicDamageBonus(lvl) * 2;
+            target.damage(dmg, shooter);
+            int fire = 40 + (int)((lvl / 99.0) * 40);
+            applyScorched(target, 60);
+            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                if (target.isValid()) target.setFireTicks(Math.max(target.getFireTicks(), fire));
+            }, 1L);
+            if (shooter != null) {
+                if (showHint(shooter, ComboFavoritesManager.SCORCHED_CHAIN)) {
+                    shooter.sendActionBar("§c§7Fireball hit! §8Scorched §8(" + fire/20 + "s - hit again to Blaze!)");
+                } else {
+                    shooter.sendActionBar("§c§7Fireball hit! §8(Scorched " + fire/20 + "s)");
+                }
+            }
+        } else {
+            // Standard Fire Blast - no burn effect
+            double dmg = 2.0 + SkillBonusManager.magicDamageBonus(lvl) * 2;
+            target.damage(dmg, shooter);
+            if (shooter != null) {
+                shooter.sendActionBar("§c§7Fire blast hit!");
             }
         }
         rollMindBomb(target, shooter);
@@ -2465,37 +2701,98 @@ public class MagicStaffListener implements Listener {
      * Uses a vertical column of ELECTRIC_SPARK + SMOKE particles to simulate
      * the bolt, plus a large burst at the strike point for impact.
      */
-    private void spawnLightningVisual(Location loc) {
+    private void spawnLightningVisual(Player player, Location loc) {
         if (loc == null || loc.getWorld() == null) return;
         var world = loc.getWorld();
 
-        // Vertical channel (top → impact)
-        for (int y = 0; y <= 8; y++) {
-            Location pt = loc.clone().add(
-                (RAND.nextDouble() - 0.5) * 0.3,
-                y,
-                (RAND.nextDouble() - 0.5) * 0.3
-            );
-            world.spawnParticle(Particle.ELECTRIC_SPARK, pt, 4, 0.1, 0.05, 0.1, 0.05);
+        String style = "CLASSIC";
+        if (player != null) {
+            try {
+                org.bukkit.NamespacedKey styleKey = new org.bukkit.NamespacedKey(plugin, "lightning_style");
+                String stored = player.getPersistentDataContainer().get(styleKey, org.bukkit.persistence.PersistentDataType.STRING);
+                if (stored != null) {
+                    style = stored;
+                }
+            } catch (Exception ignored) {}
         }
 
-        // Secondary zigzag branch
-        for (int y = 2; y <= 7; y++) {
-            if (RAND.nextInt(3) == 0) {
-                Location branch = loc.clone().add(
-                    (RAND.nextDouble() - 0.5) * 0.7,
+        if ("FIRE_SPARK".equals(style)) {
+            // Just fire and sparks flying out in particles!
+            for (int y = 0; y <= 8; y++) {
+                Location pt = loc.clone().add(
+                    (RAND.nextDouble() - 0.5) * 0.3,
                     y,
-                    (RAND.nextDouble() - 0.5) * 0.7
+                    (RAND.nextDouble() - 0.5) * 0.3
                 );
-                world.spawnParticle(Particle.ELECTRIC_SPARK, branch, 2, 0.08, 0.08, 0.08, 0.03);
+                world.spawnParticle(Particle.FLAME, pt, 5, 0.1, 0.05, 0.1, 0.02);
+                world.spawnParticle(Particle.LAVA, pt, 1, 0.1, 0.05, 0.1, 0.02);
             }
+            for (int y = 2; y <= 7; y++) {
+                if (RAND.nextInt(3) == 0) {
+                    Location branch = loc.clone().add(
+                        (RAND.nextDouble() - 0.5) * 0.7,
+                        y,
+                        (RAND.nextDouble() - 0.5) * 0.7
+                    );
+                    world.spawnParticle(Particle.FLAME, branch, 3, 0.08, 0.08, 0.08, 0.02);
+                }
+            }
+            world.spawnParticle(Particle.FLAME, loc, 60, 0.5, 0.3, 0.5, 0.15);
+            world.spawnParticle(Particle.LAVA,  loc, 25, 0.4, 0.3, 0.4, 0.1);
+            world.spawnParticle(Particle.SMOKE, loc, 20, 0.3, 0.2, 0.3, 0.02);
+            
+        } else if ("BLUE".equals(style)) {
+            // The new blue lightning style!
+            for (int y = 0; y <= 8; y++) {
+                Location pt = loc.clone().add(
+                    (RAND.nextDouble() - 0.5) * 0.3,
+                    y,
+                    (RAND.nextDouble() - 0.5) * 0.3
+                );
+                world.spawnParticle(Particle.ELECTRIC_SPARK, pt, 4, 0.1, 0.05, 0.1, 0.05);
+                world.spawnParticle(Particle.SOUL_FIRE_FLAME, pt, 3, 0.1, 0.05, 0.1, 0.02);
+            }
+            for (int y = 2; y <= 7; y++) {
+                if (RAND.nextInt(3) == 0) {
+                    Location branch = loc.clone().add(
+                        (RAND.nextDouble() - 0.5) * 0.7,
+                        y,
+                        (RAND.nextDouble() - 0.5) * 0.7
+                    );
+                    world.spawnParticle(Particle.ELECTRIC_SPARK, branch, 2, 0.08, 0.08, 0.08, 0.03);
+                    world.spawnParticle(Particle.SOUL_FIRE_FLAME, branch, 1, 0.08, 0.08, 0.08, 0.01);
+                }
+            }
+            world.spawnParticle(Particle.ELECTRIC_SPARK, loc, 50, 0.5, 0.3, 0.5, 0.18);
+            world.spawnParticle(Particle.SOUL_FIRE_FLAME, loc, 35, 0.4, 0.2, 0.4, 0.06);
+            world.spawnParticle(Particle.SOUL,            loc, 15, 0.3, 0.5, 0.3, 0.02);
+            world.spawnParticle(Particle.END_ROD,        loc, 10, 0.2, 0.8, 0.2, 0.04);
+            
+        } else {
+            // Classic style
+            for (int y = 0; y <= 8; y++) {
+                Location pt = loc.clone().add(
+                    (RAND.nextDouble() - 0.5) * 0.3,
+                    y,
+                    (RAND.nextDouble() - 0.5) * 0.3
+                );
+                world.spawnParticle(Particle.ELECTRIC_SPARK, pt, 4, 0.1, 0.05, 0.1, 0.05);
+            }
+            for (int y = 2; y <= 7; y++) {
+                if (RAND.nextInt(3) == 0) {
+                    Location branch = loc.clone().add(
+                        (RAND.nextDouble() - 0.5) * 0.7,
+                        y,
+                        (RAND.nextDouble() - 0.5) * 0.7
+                    );
+                    world.spawnParticle(Particle.ELECTRIC_SPARK, branch, 2, 0.08, 0.08, 0.08, 0.03);
+                }
+            }
+            world.spawnParticle(Particle.ELECTRIC_SPARK, loc, 50, 0.5, 0.3, 0.5, 0.18);
+            world.spawnParticle(Particle.FLAME,          loc, 20, 0.4, 0.2, 0.4, 0.06);
+            world.spawnParticle(Particle.SMOKE,          loc, 15, 0.3, 0.2, 0.3, 0.02);
+            world.spawnParticle(Particle.END_ROD,        loc, 10, 0.2, 0.8, 0.2, 0.04);
         }
-
-        // Impact burst at ground
-        world.spawnParticle(Particle.ELECTRIC_SPARK, loc, 50, 0.5, 0.3, 0.5, 0.18);
-        world.spawnParticle(Particle.FLAME,          loc, 20, 0.4, 0.2, 0.4, 0.06);
-        world.spawnParticle(Particle.SMOKE,          loc, 15, 0.3, 0.2, 0.3, 0.02);
-        world.spawnParticle(Particle.END_ROD,        loc, 10, 0.2, 0.8, 0.2, 0.04);
     }
 
     // ══════════════════════════════════════════════════════════════════════════

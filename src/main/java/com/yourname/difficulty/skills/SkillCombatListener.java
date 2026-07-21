@@ -1,5 +1,7 @@
 package com.yourname.difficulty.skills;
 
+import com.yourname.difficulty.PlayerDifficultyManager;
+import com.yourname.difficulty.DifficultyLevel;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
@@ -82,8 +84,20 @@ public class SkillCombatListener implements Listener {
 
     // ── MELEE + RANGED damage bonuses ─────────────────────────────────────────
 
+    private void tagCombat(Player player) {
+        player.setMetadata("last_combat_time", new org.bukkit.metadata.FixedMetadataValue(plugin, System.currentTimeMillis()));
+    }
+
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
+        if (event.getEntity() instanceof Player victim) {
+            tagCombat(victim);
+        }
+        if (event.getDamager() instanceof Player attacker) {
+            tagCombat(attacker);
+        } else if (event.getDamager() instanceof org.bukkit.entity.Projectile proj && proj.getShooter() instanceof Player shooter) {
+            tagCombat(shooter);
+        }
 
         // ── Case 1: Player melee attack ───────────────────────────────────────
         if (event.getDamager() instanceof Player attacker) {
@@ -185,6 +199,7 @@ public class SkillCombatListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onPlayerDamage(EntityDamageEvent event) {
         if (!(event.getEntity() instanceof Player victim)) return;
+        tagCombat(victim);
         // Skip void/fall (let those be full) — only reduce hit/projectile damage
         EntityDamageEvent.DamageCause cause = event.getCause();
         if (cause == EntityDamageEvent.DamageCause.VOID) return;
@@ -245,6 +260,27 @@ public class SkillCombatListener implements Listener {
         // Schedule 1 tick so the player fully loads before modifying attributes
         plugin.getServer().getScheduler().runTaskLater(plugin, () ->
             SkillBonusManager.applyDefenceHpBonus(player, defLevel), 1L);
+    }
+
+    @EventHandler
+    public void onPlayerDeath(org.bukkit.event.entity.PlayerDeathEvent event) {
+        Player player = event.getEntity();
+        org.bukkit.NamespacedKey deathKey = new org.bukkit.NamespacedKey(plugin, "custom_deaths");
+        var pdc = player.getPersistentDataContainer();
+        int deaths = pdc.getOrDefault(deathKey, org.bukkit.persistence.PersistentDataType.INTEGER, 0);
+        pdc.set(deathKey, org.bukkit.persistence.PersistentDataType.INTEGER, deaths + 1);
+
+        try {
+            PlayerDifficultyManager difficultyManager = ((com.yourname.difficulty.Main) plugin).getDifficultyManager();
+            if (difficultyManager != null) {
+                DifficultyLevel level = difficultyManager.getDifficulty(player.getUniqueId());
+                if (level != null) {
+                    org.bukkit.NamespacedKey diffDeathKey = new org.bukkit.NamespacedKey(plugin, "diff_deaths_" + level.name().toLowerCase());
+                    int diffDeaths = pdc.getOrDefault(diffDeathKey, org.bukkit.persistence.PersistentDataType.INTEGER, 0);
+                    pdc.set(diffDeathKey, org.bukkit.persistence.PersistentDataType.INTEGER, diffDeaths + 1);
+                }
+            }
+        } catch (Exception ignored) {}
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

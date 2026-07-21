@@ -327,6 +327,8 @@ public class Main extends JavaPlugin {
         this.partyManager  = new PartyManager();
         // Wire PartyManager into CastingEngine for support staff combo-gate
         castingEngine.setPartyManager(partyManager);
+        castingEngine.setLightningChargeManager(lightningChargeManager);
+        castingEngine.setMagicBagManager(magicBagManager);
         this.partyListener = new PartyListener(partyManager, difficultyManager, this);
         getServer().getPluginManager().registerEvents(partyListener, this);
         // Wire PartyManager into MagicStaffListener for water-splash auto-heal
@@ -573,6 +575,11 @@ public class Main extends JavaPlugin {
             tpBossPluginCmd.setExecutor(bossSpawnerCmd);
             tpBossPluginCmd.setTabCompleter(bossSpawnerCmd);
         }
+        org.bukkit.command.PluginCommand rebuildVoidPluginCmd = getCommand("rebuildvoid");
+        if (rebuildVoidPluginCmd != null) {
+            rebuildVoidPluginCmd.setExecutor(bossSpawnerCmd);
+            rebuildVoidPluginCmd.setTabCompleter(bossSpawnerCmd);
+        }
 
         registerCmd("hardcore", (sender, cmd, label, args) -> {
             if (!(sender instanceof Player player)) {
@@ -588,7 +595,7 @@ public class Main extends JavaPlugin {
                 castingEngine.buildSupportStaff());
         staffRecipe.addIngredient(Material.BOOK);
         staffRecipe.addIngredient(Material.NETHER_STAR);
-        staffRecipe.addIngredient(Material.BREEZE_ROD);
+        staffRecipe.addIngredient(Material.BLAZE_ROD);
         staffRecipe.addIngredient(Material.PRISMARINE_CRYSTALS);
         staffRecipe.addIngredient(Material.EMERALD);
         staffRecipe.addIngredient(Material.FEATHER);
@@ -610,6 +617,21 @@ public class Main extends JavaPlugin {
 
         new MagicGlowTask(itemFactory, skillManager, this).runTaskTimer(this, 5L, 4L);
         new BossQuestCapeTask(this).runTaskTimer(this, 10L, 10L);
+
+        // Playtime tracking for each difficulty level (1s interval)
+        getServer().getScheduler().runTaskTimer(this, () -> {
+            for (Player p : getServer().getOnlinePlayers()) {
+                if (p.isDead()) continue;
+                DifficultyLevel lvl = difficultyManager.getDifficulty(p.getUniqueId());
+                if (lvl != null) {
+                    String keyStr = "diff_time_" + lvl.name().toLowerCase();
+                    NamespacedKey key = new NamespacedKey(this, keyStr);
+                    var pdc = p.getPersistentDataContainer();
+                    int current = pdc.getOrDefault(key, org.bukkit.persistence.PersistentDataType.INTEGER, 0);
+                    pdc.set(key, org.bukkit.persistence.PersistentDataType.INTEGER, current + 1);
+                }
+            }
+        }, 20L, 20L);
 
         getServer().getScheduler().runTaskLater(this,
                 () -> npcQuestSpawner.restoreMissingNpcs(), 60L);
@@ -935,6 +957,8 @@ public class Main extends JavaPlugin {
     public CastingEngine  getCastingEngine()  { return castingEngine; }
     public NightmareHardcoreListener getHardcoreListener() { return hardcoreListener; }
     public CustomMonsterManager getCustomMonsterManager()  { return customMonsterManager; }
+    public PlayerDifficultyManager getDifficultyManager()  { return difficultyManager; }
+    public CapeVisualTask getCapeVisualTask() { return capeVisualTask; }
 
     // ── Null-safe command registration ────────────────────────────────────────
 

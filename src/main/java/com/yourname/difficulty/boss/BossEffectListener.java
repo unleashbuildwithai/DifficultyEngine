@@ -124,6 +124,15 @@ public class BossEffectListener implements Listener {
                 .set(shriekPdcKey, PersistentDataType.BYTE, (byte) 1);
         registry.registerShriek(boss.getUniqueId(), stand.getUniqueId());
         plugin.getLogger().info("[Boss] Shriek spawned for " + boss.getType() + " at " + loc);
+
+        // Automatically remove the shriek stand after 30 seconds (600 ticks) so it doesn't just sit there forever spitting particles
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            if (stand.isValid()) {
+                stand.remove();
+                registry.clearShriek(boss.getUniqueId());
+                plugin.getLogger().info("[Boss] Shriek automatically cleared for " + boss.getType() + " after timeout.");
+            }
+        }, 600L); // 30 seconds
     }
 
     // ── Splat zone spawning ───────────────────────────────────────────────────

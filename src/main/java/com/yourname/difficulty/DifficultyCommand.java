@@ -47,6 +47,42 @@ public class DifficultyCommand implements CommandExecutor {
             return true;
         }
 
+        boolean isAdmin = player.isOp() || player.hasPermission("difficultyengine.admin");
+        DifficultyLevel current = manager.getDifficulty(player.getUniqueId());
+
+        // ── Nightmare only admins can change to/from ──
+        if ((requested == DifficultyLevel.NIGHTMARE || current == DifficultyLevel.NIGHTMARE) && !isAdmin) {
+            player.sendMessage("§cboxup make a ticket quickly and logf out of the game**");
+            player.sendMessage("§5§l✦ §7Join our Discord: §b§nhttps://discord.gg/SreKERPhNB");
+            return true;
+        }
+
+        // ── Other stats only when out of combat, full HP, full hunger ──
+        if (!isAdmin) {
+            // Check combat status
+            if (player.hasMetadata("last_combat_time")) {
+                long lastCombat = player.getMetadata("last_combat_time").get(0).asLong();
+                if (System.currentTimeMillis() - lastCombat < 10000L) { // 10s combat tag
+                    long secondsLeft = 10L - (System.currentTimeMillis() - lastCombat) / 1000L;
+                    player.sendMessage("§c✗ §7You cannot change difficulty while in combat! §e(" + secondsLeft + "s left)");
+                    return true;
+                }
+            }
+            
+            // Check HP
+            double maxHp = player.getAttribute(org.bukkit.attribute.Attribute.GENERIC_MAX_HEALTH).getValue();
+            if (player.getHealth() < maxHp) {
+                player.sendMessage("§c✗ §7You must be at §afull HP§7 to change difficulty!");
+                return true;
+            }
+            
+            // Check hunger
+            if (player.getFoodLevel() < 20) {
+                player.sendMessage("§c✗ §7You must be at §ffull hunger (20)§7 to change difficulty!");
+                return true;
+            }
+        }
+
         // Apply it — this also syncs the PDC nightmare tag if applicable
         manager.setDifficulty(player.getUniqueId(), requested);
 

@@ -1,5 +1,6 @@
 package com.yourname.difficulty.listeners;
 
+import com.yourname.difficulty.Main;
 import com.yourname.difficulty.items.ItemFactory;
 import com.yourname.difficulty.skills.SkillCapeManager;
 import org.bukkit.Location;
@@ -143,6 +144,38 @@ public class BossEventListener implements Listener {
             if (evt.participants.contains(uid)) {
                 evt.deadParticipants.add(uid);
             }
+        }
+
+        // Reset/remove all cape visual companion entities immediately upon death
+        if (plugin instanceof Main mainPlugin) {
+            if (mainPlugin.getCapeVisualTask() != null) {
+                mainPlugin.getCapeVisualTask().removePlayerCapeVisuals(uid);
+            }
+        }
+    }
+
+    /**
+     * Prevents players from respawning inside boss arenas.
+     * Directs them back to their bed/Overworld spawn safely.
+     */
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onPlayerRespawn(org.bukkit.event.player.PlayerRespawnEvent event) {
+        Player player = event.getPlayer();
+        World world = player.getWorld();
+
+        // If the player died in a boss world (ancient_realm or void_realm), prevent respawning in that dimension
+        if (world.getName().equals("ancient_realm") || world.getName().equals("void_realm")) {
+            Location bedSpawn = player.getBedSpawnLocation();
+            if (bedSpawn != null) {
+                event.setRespawnLocation(bedSpawn);
+            } else {
+                // Respawn at default Overworld spawn
+                World overworld = plugin.getServer().getWorlds().get(0);
+                if (overworld != null) {
+                    event.setRespawnLocation(overworld.getSpawnLocation());
+                }
+            }
+            player.sendMessage("§a✓ §7You respawned safely at your home spawn, away from the boss!");
         }
     }
 

@@ -61,13 +61,21 @@ public class ItemFactory {
     public static final String RANGED_GEAR_KEY       = "ranged_gear";
     public static final String RAINBOW_AXOLOTL_KEY   = "rainbow_axolotl";
     public static final String BLAZEFIEND_SPAWNER_KEY = "de_blazefiend_spawner";
+
+    // ── Lightning Cosmetic Potions ──
+    public static final String CLASSIC_LIGHTNING_POTION_KEY    = "classic_lightning_potion";
+    public static final String FIRE_SPARK_LIGHTNING_POTION_KEY = "fire_spark_lightning_potion";
+    public static final String BLUE_LIGHTNING_POTION_KEY       = "blue_lightning_potion";
     public static final String TEMPEST_SPAWNER_KEY = "de_tempest_spawner";
+    public static final String VOID_SPAWNER_KEY = "de_void_spawner";
 
     // ── Lightning Magic system ────────────────────────────────────────────────
     public static final String CATCHING_BLOCK_KEY       = "de_catching_block";
     public static final String EMPTY_MAGIC_BOTTLE_KEY   = "de_empty_magic_bottle";
     public static final String CHARGED_MAGIC_BOTTLE_KEY = "de_charged_magic_bottle";
     public static final String QUEST_OVERVIEW_BOOK_KEY  = "de_quest_overview_book";
+    public static final String WATER_BOOK_KEY           = "de_water_book";
+    public static final String EARTH_BOOK_KEY           = "de_earth_book";
 
     /**
      * Shared PDC key strings with {@link com.yourname.difficulty.magic.SpellBookManager}.
@@ -106,12 +114,20 @@ public class ItemFactory {
     private final NamespacedKey rangedGearKey;
     private final NamespacedKey rainbowAxolotlKey;
     private final NamespacedKey blazefiendSpawnerKey;
+
+    // ── Lightning Cosmetic Potions ──
+    private final NamespacedKey classicLightningPotionKey;
+    private final NamespacedKey fireSparkLightningPotionKey;
+    private final NamespacedKey blueLightningPotionKey;
     private final NamespacedKey tempestSpawnerKey;
+    private final NamespacedKey voidSpawnerKey;
     // ── Lightning Magic NamespacedKeys ────────────────────────────────────────
     private final NamespacedKey catchingBlockKey;
     private final NamespacedKey emptyMagicBottleKey;
     private final NamespacedKey chargedMagicBottleKey;
     private final NamespacedKey questOverviewBookKey;
+    private final NamespacedKey waterBookKey;
+    private final NamespacedKey earthBookKey;
     // ── Shared SpellBook display keys (same namespace:key as SpellBookManager) ─
     /** Matches SpellBookManager.spellTomeKey so registry-given tomes open the FavoritesGUI. */
     private final NamespacedKey spellTomeDisplayKey;
@@ -179,11 +195,19 @@ public class ItemFactory {
         this.rangedGearKey      = new NamespacedKey(plugin, RANGED_GEAR_KEY);
         this.rainbowAxolotlKey      = new NamespacedKey(plugin, RAINBOW_AXOLOTL_KEY);
         this.blazefiendSpawnerKey   = new NamespacedKey(plugin, BLAZEFIEND_SPAWNER_KEY);
+
+        // ── Lightning Cosmetic Potions ──
+        this.classicLightningPotionKey   = new NamespacedKey(plugin, CLASSIC_LIGHTNING_POTION_KEY);
+        this.fireSparkLightningPotionKey = new NamespacedKey(plugin, FIRE_SPARK_LIGHTNING_POTION_KEY);
+        this.blueLightningPotionKey      = new NamespacedKey(plugin, BLUE_LIGHTNING_POTION_KEY);
         this.tempestSpawnerKey      = new NamespacedKey(plugin, TEMPEST_SPAWNER_KEY);
+        this.voidSpawnerKey         = new NamespacedKey(plugin, VOID_SPAWNER_KEY);
         this.catchingBlockKey       = new NamespacedKey(plugin, CATCHING_BLOCK_KEY);
         this.emptyMagicBottleKey    = new NamespacedKey(plugin, EMPTY_MAGIC_BOTTLE_KEY);
         this.chargedMagicBottleKey  = new NamespacedKey(plugin, CHARGED_MAGIC_BOTTLE_KEY);
         this.questOverviewBookKey   = new NamespacedKey(plugin, QUEST_OVERVIEW_BOOK_KEY);
+        this.waterBookKey           = new NamespacedKey(plugin, WATER_BOOK_KEY);
+        this.earthBookKey           = new NamespacedKey(plugin, EARTH_BOOK_KEY);
         // Shared spell-book display keys — must match SpellBookManager's key strings exactly
         this.spellTomeDisplayKey    = new NamespacedKey(plugin, SPELL_TOME_DISPLAY_KEY);
         this.spellPageDisplayKey    = new NamespacedKey(plugin, SPELL_PAGE_DISPLAY_KEY);
@@ -254,6 +278,8 @@ public class ItemFactory {
         registryPage2.add(buildElementalTheoryBook());
         registryPage2.add(buildHiddenArtsBook());
         registryPage2.add(buildMageGearGuide());
+        registryPage2.add(buildWaterBook());
+        registryPage2.add(buildEarthBook());
         registryPage2.add(buildUnicornSlippers());
         registryPage2.addAll(capeManager.buildAllCapes());
         // Earth Magic Pages — one per throwable block tier
@@ -326,6 +352,77 @@ public class ItemFactory {
     public boolean isSoulfurPotion(ItemStack item) {
         if (item == null || !item.hasItemMeta()) return false;
         return item.getItemMeta().getPersistentDataContainer().has(soulfurPotionKey, PersistentDataType.BYTE);
+    }
+
+    // ── Lightning Cosmetic Potions ────────────────────────────────────────────
+
+    public ItemStack buildClassicLightningPotion() {
+        ItemStack item = new ItemStack(Material.POTION);
+        PotionMeta meta = (PotionMeta) item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§dClassic Lightning Potion");
+            meta.setColor(Color.fromRGB(255, 255, 0));
+            meta.setLore(List.of(
+                "§7Drink to permanently set your lightning",
+                "§7appearance to the §eClassic/Default§7 style.",
+                "§8[DifficultyEngine — Cosmetic Potion]"
+            ));
+            meta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+            meta.getPersistentDataContainer().set(classicLightningPotionKey, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    public boolean isClassicLightningPotion(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer().has(classicLightningPotionKey, PersistentDataType.BYTE);
+    }
+
+    public ItemStack buildFireSparkLightningPotion() {
+        ItemStack item = new ItemStack(Material.POTION);
+        PotionMeta meta = (PotionMeta) item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§dFire & Sparks Lightning Potion");
+            meta.setColor(Color.fromRGB(255, 69, 0));
+            meta.setLore(List.of(
+                "§7Drink to permanently set your lightning",
+                "§7appearance to §cFire & Sparks§7 style.",
+                "§8[DifficultyEngine — Cosmetic Potion]"
+            ));
+            meta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+            meta.getPersistentDataContainer().set(fireSparkLightningPotionKey, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    public boolean isFireSparkLightningPotion(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer().has(fireSparkLightningPotionKey, PersistentDataType.BYTE);
+    }
+
+    public ItemStack buildBlueLightningPotion() {
+        ItemStack item = new ItemStack(Material.POTION);
+        PotionMeta meta = (PotionMeta) item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§dBlue Lightning Potion");
+            meta.setColor(Color.fromRGB(0, 191, 255));
+            meta.setLore(List.of(
+                "§7Drink to permanently set your lightning",
+                "§7appearance to the new §bBlue Lightning§7 style.",
+                "§8[DifficultyEngine — Cosmetic Potion]"
+            ));
+            meta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+            meta.getPersistentDataContainer().set(blueLightningPotionKey, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    public boolean isBlueLightningPotion(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer().has(blueLightningPotionKey, PersistentDataType.BYTE);
     }
 
     // ── Turbo Minecart ────────────────────────────────────────────────────────
@@ -725,6 +822,103 @@ public class ItemFactory {
         if (hasSpellComboBook(player)) return true;
         if (bagContents == null) return false;
         for (ItemStack s : bagContents) if (isSpellComboBook(s)) return true;
+        return false;
+    }
+
+    public ItemStack buildWaterBook() {
+        ItemStack item = new ItemStack(Material.WRITTEN_BOOK);
+        BookMeta meta = (BookMeta) item.getItemMeta();
+        if (meta != null) {
+            meta.setTitle("§bThe Water Book");
+            meta.setAuthor("§7Water Archmage");
+            meta.setGeneration(BookMeta.Generation.ORIGINAL);
+            meta.addPage(
+                "§b§l─ The Water Book ─\n\n" +
+                "§7Requires §aMagic Level 10§7+.\n\n" +
+                "§7Allows channeling the §bDownpour Spell §7by right-clicking your §bWater Staff§7.\n\n" +
+                "§d✦ Special Cast:\n" +
+                "§7Takes §e10 seconds §7of channeling to cast."
+            );
+            meta.addPage(
+                "§b§l─ Downpour Spell ─\n\n" +
+                "§7On success, spawns a localized §bwater puddle §7at a distance that despawns after §e5 seconds§7.\n\n" +
+                "§9✦ Support Synergy:\n" +
+                "§7Stepping into the puddle grants a §9Support buff §7for §e30 seconds§7!"
+            );
+            meta.addPage(
+                "§b§l─ Support Synergy ─\n\n" +
+                "§7This 30-second window gives you Regeneration I & Speed I.\n\n" +
+                "§c⚠ Non-Stacking:\n" +
+                "§7Timer does §cNOT §7refresh if you touch more water while active.\n\n" +
+                "§7This acts as your strategic combo window."
+            );
+            meta.getPersistentDataContainer().set(waterBookKey, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    public ItemStack buildEarthBook() {
+        ItemStack item = new ItemStack(Material.WRITTEN_BOOK);
+        BookMeta meta = (BookMeta) item.getItemMeta();
+        if (meta != null) {
+            meta.setTitle("§2The Earth Book");
+            meta.setAuthor("§7Earth Archmage");
+            meta.setGeneration(BookMeta.Generation.ORIGINAL);
+            meta.addPage(
+                "§2§l─ The Earth Book ─\n\n" +
+                "§7Requires §aMagic Level 10§7+.\n\n" +
+                "§7Enables throwing heavy blocks from your inventory on Right-Click.\n\n" +
+                "§aSmart Downgrading:\n" +
+                "§7If you exhaust a higher-tier block, the system automatically checks for the next highest valid page/block combo."
+            );
+            meta.addPage(
+                "§2§l─ Block Throwing ─\n\n" +
+                "§71st Right-Click: §2TRAPS §7the target (places block at their feet).\n\n" +
+                "§72nd Right-Click: §c§lSUFFOCATES §7the target (deals massive tier-scaled crushing damage!)."
+            );
+            meta.addPage(
+                "§2§l─ Fallback Bolt ─\n\n" +
+                "§7Left-clicking with the Earth Staff fires a fast, lower-tier dirt bolt.\n\n" +
+                "§7If you have no pages or blocks left, both clicks drop back to this basic bolt without interrupting your combat flow."
+            );
+            meta.getPersistentDataContainer().set(earthBookKey, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    public boolean isWaterBook(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer().has(waterBookKey, PersistentDataType.BYTE);
+    }
+
+    public boolean isEarthBook(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer().has(earthBookKey, PersistentDataType.BYTE);
+    }
+
+    public boolean hasWaterBook(Player player) {
+        for (ItemStack s : player.getInventory().getContents()) if (isWaterBook(s)) return true;
+        return false;
+    }
+
+    public boolean hasWaterBook(Player player, ItemStack[] bagContents) {
+        if (hasWaterBook(player)) return true;
+        if (bagContents == null) return false;
+        for (ItemStack s : bagContents) if (isWaterBook(s)) return true;
+        return false;
+    }
+
+    public boolean hasEarthBook(Player player) {
+        for (ItemStack s : player.getInventory().getContents()) if (isEarthBook(s)) return true;
+        return false;
+    }
+
+    public boolean hasEarthBook(Player player, ItemStack[] bagContents) {
+        if (hasEarthBook(player)) return true;
+        if (bagContents == null) return false;
+        for (ItemStack s : bagContents) if (isEarthBook(s)) return true;
         return false;
     }
 
@@ -1560,6 +1754,7 @@ public class ItemFactory {
             case 8 -> buildRegistryPage8();
             case 9  -> buildRegistryPage9();
             case 10 -> buildRegistryPage10();
+            case 11 -> buildRegistryPage11();
             default -> java.util.Collections.emptyList();
         };
     }
@@ -1658,6 +1853,8 @@ public class ItemFactory {
         p.add(buildElementalTheoryBook());
         p.add(buildHiddenArtsBook());
         p.add(buildMageGearGuide());
+        p.add(buildWaterBook());
+        p.add(buildEarthBook());
         return p;
     }
 
@@ -1666,6 +1863,9 @@ public class ItemFactory {
         p.addAll(capeManager.buildAllCapes());
         p.add(buildUnicornSlippers());
         p.add(buildRainbowAxolotl());
+        p.add(buildClassicLightningPotion());
+        p.add(buildFireSparkLightningPotion());
+        p.add(buildBlueLightningPotion());
         return p;
     }
 
@@ -1744,6 +1944,34 @@ public class ItemFactory {
     public boolean isTempestSpawner(ItemStack item) {
         if (item == null || !item.hasItemMeta()) return false;
         return item.getItemMeta().getPersistentDataContainer().has(tempestSpawnerKey, PersistentDataType.BYTE);
+    }
+
+    public ItemStack buildVoidSpawner() {
+        ItemStack item = new ItemStack(Material.BLACK_CONCRETE);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§0§lVoid Spawner Block");
+            meta.addEnchant(Enchantment.UNBREAKING, 1, true);
+            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+            meta.setLore(List.of(
+                "§8" + "─".repeat(28),
+                "§7An ancient block of dark concrete,",
+                "§7crackling with void energy.",
+                "§8" + "─".repeat(28),
+                "§c✦ §7Place and strike/click inside §5Ancient Realm",
+                "§7  to awaken the Void Realm Wither Boss.",
+                "§8" + "─".repeat(28),
+                "§8[DifficultyEngine — Spawner Block]"
+            ));
+            meta.getPersistentDataContainer().set(voidSpawnerKey, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    public boolean isVoidSpawner(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer().has(voidSpawnerKey, PersistentDataType.BYTE);
     }
 
     public ItemStack buildSupportStaff() {
@@ -1847,10 +2075,14 @@ public class ItemFactory {
 
     /** Builds a Support Spell Page with the given PDC key constant and description. */
     public ItemStack buildSupportPage(String pdcKeyConst, String displayName, String effect, String lore1, String lore2) {
-        ItemStack item = new ItemStack(Material.BOOK);
-        ItemMeta meta = item.getItemMeta();
+        ItemStack item = new ItemStack(Material.WRITTEN_BOOK);
+        BookMeta meta = (BookMeta) item.getItemMeta();
         if (meta != null) {
             meta.setDisplayName("§5✦ Support Page: §d" + displayName);
+            meta.setTitle("§5Incantation: " + displayName);
+            meta.setAuthor("§7Ancient Order");
+            meta.setGeneration(BookMeta.Generation.ORIGINAL);
+            meta.addPage("§5§l─ Incantation ─\n\n§7This scroll contains the sacred incantation of §d" + displayName + "§7.\n\n§d✦ Effect:\n§a" + effect + "\n\n§7Carry this scroll in your inventory to unlock unlimited casting of this spell via the §5Support Staff§7!");
             meta.addEnchant(Enchantment.UNBREAKING, 1, true);
             meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
             meta.setLore(List.of(
@@ -2101,8 +2333,6 @@ public class ItemFactory {
         List<ItemStack> p = new ArrayList<>();
         p.add(buildSupportStaff());
         p.add(buildSupportRune());
-        p.add(buildBlazefiendSpawner());
-        p.add(buildTempestSpawner());
         p.add(buildSupportPage(SUPPORT_PAGE_HEALING_KEY,  "Healing",       "+3 heal on target",    "Restores health to", "the buffed party member."));
         p.add(buildSupportPage(SUPPORT_PAGE_SPEED_KEY,    "Faster Speed",  "Speed II (20s)",       "Grants swift movement", "to the party member."));
         p.add(buildSupportPage(SUPPORT_PAGE_DEFENCE_KEY,  "Defence",       "Resistance II (15s)",  "Reduces damage taken", "by the party member."));
@@ -2129,6 +2359,14 @@ public class ItemFactory {
         p.add(buildSupportPotion("enervation_curse", "§8✦ Enervation Curse §d(Blessing)", Color.PURPLE, new PotionEffect(PotionEffectType.WEAKNESS, 400, 1)));
         p.add(buildSupportPotion("stasis_anchor", "§8✦ Stasis Anchor §d(Blessing)", Color.BLACK, new PotionEffect(PotionEffectType.SLOWNESS, 400, 1)));
         
+        return p;
+    }
+
+    public List<ItemStack> buildRegistryPage11() {
+        List<ItemStack> p = new ArrayList<>();
+        p.add(buildBlazefiendSpawner());
+        p.add(buildTempestSpawner());
+        p.add(buildVoidSpawner());
         return p;
     }
 }

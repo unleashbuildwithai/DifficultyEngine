@@ -60,10 +60,16 @@ public class VipShopListener implements Listener {
     private static final int    SIZE             = 27;
 
     // Shop item slots and prices
-    private static final int  SLOT_SLIPPERS  = 13;
-    private static final long PRICE_SLIPPERS = 5_000L;
+    private static final int  SLOT_CLASSIC_POTION   = 10;
+    private static final long PRICE_CLASSIC_POTION  = 2_500L;
     private static final int  SLOT_AXOLOTL   = 11;
     private static final long PRICE_AXOLOTL  = 5_000L;
+    private static final int  SLOT_FIRE_SPARK_POTION = 12;
+    private static final long PRICE_FIRE_SPARK_POTION = 2_500L;
+    private static final int  SLOT_SLIPPERS  = 13;
+    private static final long PRICE_SLIPPERS = 5_000L;
+    private static final int  SLOT_BLUE_POTION      = 14;
+    private static final long PRICE_BLUE_POTION     = 2_500L;
 
     private final JavaPlugin  plugin;
     private final ItemFactory itemFactory;
@@ -123,12 +129,12 @@ public class VipShopListener implements Listener {
         ItemStack glass = makeFiller();
         for (int i = 0; i < SIZE; i++) inv.setItem(i, glass);
 
-        // Unicorn Slippers
-        inv.setItem(SLOT_SLIPPERS, makeShopItem(
-            itemFactory.buildUnicornSlippers(),
-            PRICE_SLIPPERS,
-            "§7Creates a §drainbow aura§7 at your feet!",
-            "§7Purely cosmetic — works over any boots."
+        // Classic Lightning Potion
+        inv.setItem(SLOT_CLASSIC_POTION, makeShopItem(
+            itemFactory.buildClassicLightningPotion(),
+            PRICE_CLASSIC_POTION,
+            "§7Permanently resets your lightning",
+            "§7appearance to the §eClassic/Default§7 style."
         ));
 
         // Rainbow Axolotl
@@ -137,6 +143,30 @@ public class VipShopListener implements Listener {
             PRICE_AXOLOTL,
             "§7Right-click to summon a §dBlue Axolotl §7companion!",
             "§7Spawns with a §drainbow shimmer trail§7."
+        ));
+
+        // Fire & Sparks Lightning Potion
+        inv.setItem(SLOT_FIRE_SPARK_POTION, makeShopItem(
+            itemFactory.buildFireSparkLightningPotion(),
+            PRICE_FIRE_SPARK_POTION,
+            "§7Permanently sets your lightning",
+            "§7appearance to §cFire & Sparks§7 style."
+        ));
+
+        // Unicorn Slippers
+        inv.setItem(SLOT_SLIPPERS, makeShopItem(
+            itemFactory.buildUnicornSlippers(),
+            PRICE_SLIPPERS,
+            "§7Creates a §drainbow aura§7 at your feet!",
+            "§7Purely cosmetic — works over any boots."
+        ));
+
+        // Blue Lightning Potion
+        inv.setItem(SLOT_BLUE_POTION, makeShopItem(
+            itemFactory.buildBlueLightningPotion(),
+            PRICE_BLUE_POTION,
+            "§7Permanently sets your lightning",
+            "§7appearance to the new §bBlue Lightning§7 style."
         ));
 
         player.openInventory(inv);
@@ -154,11 +184,20 @@ public class VipShopListener implements Listener {
 
         int slot = event.getSlot();
 
-        if (slot == SLOT_SLIPPERS) {
-            handlePurchase(player, itemFactory.buildUnicornSlippers(), PRICE_SLIPPERS, "Unicorn Slippers");
+        if (slot == SLOT_CLASSIC_POTION) {
+            handlePurchase(player, itemFactory.buildClassicLightningPotion(), PRICE_CLASSIC_POTION, "Classic Lightning Potion");
         }
         if (slot == SLOT_AXOLOTL) {
             handlePurchase(player, itemFactory.buildRainbowAxolotl(), PRICE_AXOLOTL, "Rainbow Axolotl");
+        }
+        if (slot == SLOT_FIRE_SPARK_POTION) {
+            handlePurchase(player, itemFactory.buildFireSparkLightningPotion(), PRICE_FIRE_SPARK_POTION, "Fire & Sparks Lightning Potion");
+        }
+        if (slot == SLOT_SLIPPERS) {
+            handlePurchase(player, itemFactory.buildUnicornSlippers(), PRICE_SLIPPERS, "Unicorn Slippers");
+        }
+        if (slot == SLOT_BLUE_POTION) {
+            handlePurchase(player, itemFactory.buildBlueLightningPotion(), PRICE_BLUE_POTION, "Blue Lightning Potion");
         }
     }
 

@@ -10,6 +10,8 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.Set;
+import java.util.List;
+import java.util.ArrayList;
 
 /**
  * BossEffectTask — Runs every tick and processes all active boss effects.
@@ -69,6 +71,20 @@ public class BossEffectTask extends BukkitRunnable {
             Entity bossEntity = plugin.getServer().getEntity(bossUuid);
             if (bossEntity == null || !(bossEntity instanceof LivingEntity boss)
                     || boss.isDead()) continue;
+
+            // ── Random target aggro (every 100 ticks) ─────────────────────
+            if (tickCounter % 100 == 0 && bossEntity instanceof Mob mob) {
+                List<Player> nearbyP = new ArrayList<>();
+                for (Entity nearby : mob.getNearbyEntities(80, 80, 80)) {
+                    if (nearby instanceof Player player && !player.isDead()) {
+                        nearbyP.add(player);
+                    }
+                }
+                if (!nearbyP.isEmpty()) {
+                    Player randomPlayer = nearbyP.get(new java.util.Random().nextInt(nearbyP.size()));
+                    mob.setTarget(randomPlayer);
+                }
+            }
 
             // ── Leached: drain players within 3 blocks ────────────────────
             for (Entity nearby : boss.getNearbyEntities(LEACH_RADIUS, LEACH_RADIUS, LEACH_RADIUS)) {

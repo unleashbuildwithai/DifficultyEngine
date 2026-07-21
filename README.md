@@ -112,26 +112,74 @@ Six new secret quests themed to each boss room, with NPCs placed far from the du
 - **Fishing** — XP from catching fish
 - **Farming** — XP from harvesting crops
 
-### 🔮 Magic Staff System
+### 🔮 Magic System, Elemental Combat & Dual-Click Blueprint
 
-**4 Elemental Staffs:**
-- 🔥 **Fire** — Fireballs (SCORCHED → BLAZING → INFERNO VORTEX chain)
-  - Lv99: Right-click = Lightning Strike (permanent burn until food/water magic)
-- 💧 **Water** — Bolts (WET → MUDDY/CHILLED chains)
-- 🌿 **Earth** — Block throwing Lv10+ (TRAP → SUFFOCATE system, 8 block tiers)
-- 💨 **Air** — Gust (knockback + FROZEN/SHATTER instant-kill chain), hover in air
+The magic system is built around a highly responsive, predictable dual-input layout with Frictionless Fallbacks and strategic synergies.
 
-**Earth Magic Pages** (8 tiers, Registry Page 6):
-Each page unlocks a block type for throwing. Carry page + blocks → Earth Staff throws them.
+#### 🎮 Predictable Input Mapping & Controls
 
-**Status Effect Chains:**
-```
-WET → MUDDY → STATUE → ☠ CRUMBLED (Air)
-WET → CHILLED → FROZEN → ☠ SHATTERED (Air)
-SCORCHED → BLAZING → INFERNO BLAST (Air)
-```
+Every elemental staff features a clean split between **Left-Click (Offensive elemental blast)** and **Right-Click (Utility / Special / Capstone action)**:
 
-**Support Staff** — See above section
+| Staff | 🎯 Left-Click (Basic / Sustained) | ⚡ Right-Click (Utility / Special / Capstone) |
+|:---|:---|:---|
+| 🔥 **Fire** | **Fire Blast Projectile**<br>• *With Book & Runes (Lv10+):* Automatically applies **Burn** (`SCORCHED` status). Duration scales with Magic Level. Acts as the primary combo trigger.<br>• *Without Book:* Standard Fire Blast (deals damage, no status/burn). | **Lightning Strike** (Lv99 Capstone)<br>• Spawns a real vertical particle bolt (no screen flash).<br>• Inflicts **permanent burn** on players (requires target to cleanse using food or Water Staff magic). |
+| 💧 **Water** | **Water Bolt Projectile**<br>• Applies `WET` status chain.<br>• Naturally extinguishes fire and clears permanent lightning burn effects on self & allies. | **Downpour Spell** (Lv10+ Special)<br>• Requires carrying **The Water Book** (inventory/Magic Bag).<br>• Takes **10 seconds to channel** (restricts movement & hand-held item).<br>• Spawns a localized water puddle (lasts 5s). Standing in it grants a non-refreshing **30s Support buff** operational window. |
+| 🌿 **Earth** | **Fallback Dirt Bolt**<br>• Fast, lower-tier bolt scaling with magic level.<br>• Consumes **no blocks or pages**, ensuring players never dead-click in combat. | **Heavy Block-Throwing** (Tiers 1–8)<br>• Requires carrying the corresponding block & **Earth Magic Page**.<br>• **1st Hit:** Traps target (spawns block under target, applies heavy Slowness).<br>• **2nd Hit:** Crushes target with massive **Suffocate** damage.<br>• **Smart Downgrade Logic:** If you carrying multiple pages and run out of a higher-tier block, the system automatically checks for the next highest available tiered page/block combo and drops down seamlessly. |
+| 💨 **Air** | **Quick Wind Gust**<br>• Immediate high knockback and spacing.<br>• Primarily used to trigger instant-kill combos on frozen/statue targets. | **Air Hover / Flight**<br>• Drains Air Runes while hovering (scales with level and Mage Gear worn).<br>• Below Lv99: Floating slow-fall boost.<br>• At Lv99: True continuous levitation/flight. |
+
+---
+
+#### 🪄 Support Staff System (Full Specs)
+
+* **Crafting Recipe (Shapeless):** `Book + Nether Star + Blaze Rod + Prismarine Crystals + Emerald + Feather`
+* **Cost per use:** `1x Support Rune + (1x Cooked Mutton OR Baked Potato)` (Runes crafted from `4x Phantom Membrane → 8x Support Runes`).
+* **Dual-Mode Mechanics:**
+  * **Party Buff Mode (Combo Gate):** 
+    1. **Left-click** a party member while holding the Support Staff to target/mark them.
+    2. **Right-click** within 5 seconds to apply full buffs based on active Support Pages in your inventory.
+    3. **Water Synergy:** If you are within the Water Downpour's 30s Support Window, healing is **doubled** and potion durations are **increased by 50%**!
+  * **Splash Mode (Raw / No Combo):** 
+    * Right-clicking without a targeted party member fires an **8-radius AoE burst** instantly healing party members (+2❤ + Regen) or damaging non-party entities.
+
+##### Support Page Buffs (Carry in inventory/Magic Bag to unlock):
+* **Healing (Vitality Surge):** `+3❤` instant heal (increases to `+6❤` inside Water Support window).
+* **Faster Speed (Zephyr's Momentum):** Speed II (20 seconds).
+* **Defence (Aegis Ward):** Resistance II (15 seconds).
+* **Combat Boost (Berserker's Resonance):** Strength I (15 seconds).
+* **Strength (Aetheric Shielding):** Strength II (10 seconds) - overrides Combat Boost.
+* **Crit Attack (Fortune's Aura):** Luck II (20 seconds) - boosts critical strike chance.
+* **Prayer Pierce (Veil of Silence):** Haste I + temporarily strips target's active Resistance.
+
+---
+
+#### 📚 All In-Game Spell Books & Tomes Explained
+
+Players never have to guess. Every book and tome functions as both a tactical key and an in-game manual:
+
+1. **b 📜 The Water Book:**
+   * Gated for Magic level 10+. Carry to unlock the Water Staff's Downpour Spell.
+   * Explains how to channel the Downpour, spawn puddle zones, and leverage the non-refreshing 30s Support operational window to double Support healing and extend buff times.
+2. **2 📜 The Earth Book:**
+   * Gated for Magic level 10+. Carry to throw heavy blocks from inventory.
+   * Details block trap & suffocate chains, block tiers, and the Frictionless Fallback / Smart Downgrading hierarchy.
+3. **5 ✦ Spell Combo Book:**
+   * Carry in inventory or Magic Bag to activate HUD action-bar combo hints during combat.
+   * Written pages document all advanced status chains:
+     * `WET → MUDDY → STATUE → ☠ CRUMBLED (Air)`
+     * `WET → CHILLED → FROZEN → ☠ SHATTERED (Air)`
+     * `SCORCHED → BLAZING → INFERNO BLAST (Air)`
+     * `FIRE + FROZEN → THAW EXPLOSION` (Massive AoE steam burst)
+     * `WATER + FROZEN → SLUSH` (Slowness III + Blindness 3s)
+4. **c ⚠ Ancient Kill Tome:**
+   * Carry in inventory to unlock instant-death combo HUD prompts in combat.
+   * Details the lethal inputs for **Frozen Shatter** and **Statue Crumble** instant kills.
+   * Unlocked exclusively as a rare drop from Double Boss Events.
+5. **5 ✦ Arcane Tome:**
+   * Open the Favorites GUI (star/unstar combos to customize combat hints) and click "Read Full Tome" to read discovered pages.
+   * Discovered pages are unlocked by absorbing **Spell Pages** dropped at 4% from monsters.
+6. **5 ✦ Mage Gear Guide:**
+   * Gifted to players on their first-ever spell cast.
+   * Explains Apprentice (Lv1), Mage (Lv30), Alch (Lv60), and Master (Lv90) gear sets, spell cooldown reduction bonuses, and fanning speed multipliers.
 
 ### ⚔️ GunZ Sword
 Admin-only Netherite Sword with GunZ: The Duel dashing mechanics.

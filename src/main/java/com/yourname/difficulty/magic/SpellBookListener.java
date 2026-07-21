@@ -220,6 +220,27 @@ public class SpellBookListener implements Listener {
                 "§d✦ Heavy frontliner boost\n" +
                 "§d✦ Ultimate support aura");
 
+            // Page 7: Utility Books & Downpour
+            meta.addPage("§b§lUTILITY BOOKS§r\n\n" +
+                "§bThe Water Book§7\n" +
+                "§8→ Unlocks §bDownpour Spell §8(Right-Click Water Staff). Requires 10s channel. Spawns 5s puddle. Stepping in grants §a30s Support buff §8(No stack/refresh).\n\n" +
+                "§2The Earth Book§7\n" +
+                "§8→ Explains Earth block throwing and Trap/Suffocate combos.");
+
+            // Page 8: Smart Downgrade & Support Staff
+            meta.addPage("§d§lSUPPORT STAFF§r\n\n" +
+                "§5Craft (Shapeless):§7\n" +
+                "§8Book + Nether Star + Blaze Rod + Prismarine Crystals + Emerald + Feather.\n\n" +
+                "§dCost per use:§7\n" +
+                "§81x Support Rune + (Cooked Mutton OR Baked Potato).");
+
+            // Page 9: Support Staff Dual-Mode
+            meta.addPage("§d§lSUPPORT DUAL-MODE§r\n\n" +
+                "§5Buff Mode (Combo Gate):§7\n" +
+                "§8Left-click party member to target. Right-click staff within 5s to apply full buffs based on active Support Pages!\n\n" +
+                "§9Splash Mode (Raw / No Combo):§7\n" +
+                "§8Right-click directly to fire 8-radius AoE burst healing party or damaging foes!");
+
             book.setItemMeta(meta);
         }
         return book;

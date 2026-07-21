@@ -38,6 +38,7 @@
     </dependencies>
 
     <build>
+        <finalName>DifficultyEngine</finalName>
         <plugins>
             <!-- Java 21 Compiler -->
             <plugin>
@@ -66,6 +67,28 @@
                         </goals>
                         <configuration>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Automatically copy built JAR to plugins folder on successful compile -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <copy file="${project.build.directory}/DifficultyEngine.jar"
+                                      tofile="c:/Users/Owner/Desktop/minecraft server/server/plugins/DifficultyEngine.jar"
+                                      failonerror="false"/>
+                            </target>
                         </configuration>
                     </execution>
                 </executions>

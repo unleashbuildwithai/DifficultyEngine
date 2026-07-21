@@ -143,11 +143,11 @@ public class CapeVisualTask extends BukkitRunnable {
     public void run() {
         tick++;
 
-        // ── Sweep stale holograms (player offline / cape removed) ──────────
+        // ── Sweep stale holograms (player offline / dead / cape removed) ──────────
         holograms.entrySet().removeIf(entry -> {
             Player     p     = plugin.getServer().getPlayer(entry.getKey());
             ArmorStand stand = entry.getValue();
-            if (p == null || !p.isOnline() || !isWearingCape(p)) {
+            if (p == null || !p.isOnline() || p.isDead() || !isWearingCape(p)) {
                 if (!stand.isDead()) stand.remove();
                 lastCapeName.remove(entry.getKey());
                 despawnFishingOrbit(entry.getKey());
@@ -158,6 +158,13 @@ public class CapeVisualTask extends BukkitRunnable {
 
         // ── Process every online player ────────────────────────────────────
         for (Player player : plugin.getServer().getOnlinePlayers()) {
+            if (player.isDead()) {
+                ArmorStand old = holograms.remove(player.getUniqueId());
+                if (old != null && !old.isDead()) old.remove();
+                lastCapeName.remove(player.getUniqueId());
+                despawnFishingOrbit(player.getUniqueId());
+                continue;
+            }
             ItemStack cape = capeDataManager.getEquippedCape(player.getUniqueId());
 
             if (cape == null) {
@@ -912,5 +919,17 @@ public class CapeVisualTask extends BukkitRunnable {
                 capeEntityTeam.removeEntry(entry);
             }
         } catch (Exception ignored) { /* team may have been unregistered externally */ }
+    }
+
+    /**
+     * Resets and cleans up all holographic and companion entities for a specific player immediately.
+     */
+    public void removePlayerCapeVisuals(UUID uuid) {
+        ArmorStand stand = holograms.remove(uuid);
+        if (stand != null && !stand.isDead()) {
+            stand.remove();
+        }
+        lastCapeName.remove(uuid);
+        despawnFishingOrbit(uuid);
     }
 }

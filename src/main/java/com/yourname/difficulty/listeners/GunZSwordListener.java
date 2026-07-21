@@ -61,18 +61,17 @@ public class GunZSwordListener implements Listener {
     private static final double MOVE_THRESHOLD = 0.07;
 
     /**
-     * Maximum time between two consecutive presses of the same direction
-     * for a double-tap to be recognised (ms).
-     * 400 ms is generous enough for fast tapping but not so wide it fires on
-     * normal walking pattern changes.
+     * Maximum registered duration of a tap press on the server (ms) to be considered a quick tap.
+     * Due to server-side friction decay, a physical key tap of up to 200ms can register as 250-300ms.
+     * We set this to 300ms to be extremely reliable.
      */
-    private static final long DOUBLE_TAP_WINDOW_MS = 380L;
+    private static final long MAX_TAP_HOLD_MS = 300L;
 
     /**
-     * Minimum gap between two presses.  Prevents a single press that spans
-     * multiple ticks from registering as a double-tap with itself.
+     * Maximum gap between the key release and the subsequent key press (ms)
+     * to qualify as a double-tap.
      */
-    private static final long MIN_PRESS_GAP_MS = 30L;
+    private static final long MAX_TAP_RELEASE_GAP_MS = 250L;
 
     /** Cooldown between any two consecutive dashes (ms). */
     private static final long DASH_COOLDOWN_MS = 750L;
@@ -88,12 +87,15 @@ public class GunZSwordListener implements Listener {
     private final JavaPlugin   plugin;
     private       BukkitTask   samplerTask;
 
-    // ── Per-player ring-buffer press history ─────────────────────────────────
-    /**
-     * Stores the last 2 press timestamps for each direction per player.
-     * buf[0] = older press, buf[1] = most recent press.
-     */
-    private final Map<UUID, EnumMap<Dir, long[]>> pressHistory  = new HashMap<>();
+    /** Keystroke state tracker for each player direction. */
+    private static class KeyState {
+        long lastPressTime = 0L;
+        long lastReleaseTime = 0L;
+        boolean wasQuickTap = false;
+    }
+
+    // ── Per-player keystroke state tracker ───────────────────────────────────
+    private final Map<UUID, EnumMap<Dir, KeyState>> keyStates = new HashMap<>();
 
     /**
      * Directions that were active (movement detected) on the PREVIOUS tick.
@@ -135,7 +137,7 @@ public class GunZSwordListener implements Listener {
 
             if (!isHoldingGunZSword(player)) {
                 // Clean up stale state
-                pressHistory.remove(uid);
+                keyStates.remove(uid);
                 prevActive.remove(uid);
                 continue;
             }
@@ -175,29 +177,37 @@ public class GunZSwordListener implements Listener {
             if (right < -threshold) current.add(Dir.A);
 
             Set<Dir> prev = prevActive.getOrDefault(uid, new HashSet<>());
-            EnumMap<Dir, long[]> history =
-                    pressHistory.computeIfAbsent(uid, k -> new EnumMap<>(Dir.class));
+            EnumMap<Dir, KeyState> states =
+                    keyStates.computeIfAbsent(uid, k -> new EnumMap<>(Dir.class));
 
-            // ── Detect rising-edge presses (inactive → active) ────────────────
+            // ── Detect rising-edge (Press) and falling-edge (Release) ─────────
             for (Dir d : Dir.values()) {
-                if (current.contains(d) && !prev.contains(d)) {
-                    // This direction just became active — record a new press
-                    long[] buf = history.computeIfAbsent(d, k -> new long[]{0L, 0L});
-                    long gap = now - buf[1];
-                    if (gap >= MIN_PRESS_GAP_MS) {
-                        // Shift ring buffer: move most-recent → older
-                        buf[0] = buf[1];
-                        buf[1] = now;
+                boolean isPressedNow = current.contains(d);
+                boolean wasPressedBefore = prev.contains(d);
 
-                        // Check for double-tap: gap between the two presses
-                        long tapGap = buf[1] - buf[0];
-                        if (buf[0] > 0 && tapGap <= DOUBLE_TAP_WINDOW_MS) {
-                            // Double-tap detected — clear the buffer so it
-                            // doesn't fire again on the very next press
-                            buf[0] = 0L;
-                            buf[1] = 0L;
-                            triggerDash(player, d, current, now);
-                        }
+                if (isPressedNow && !wasPressedBefore) {
+                    // Rising edge (Press)
+                    KeyState state = states.computeIfAbsent(d, k -> new KeyState());
+                    state.lastPressTime = now;
+
+                    long gapSinceRelease = now - state.lastReleaseTime;
+                    if (state.wasQuickTap && gapSinceRelease <= MAX_TAP_RELEASE_GAP_MS) {
+                        // Double-tap detected — consume the tap and trigger dash
+                        state.wasQuickTap = false;
+                        triggerDash(player, d, current, now);
+                    }
+                } else if (!isPressedNow && wasPressedBefore) {
+                    // Falling edge (Release)
+                    KeyState state = states.computeIfAbsent(d, k -> new KeyState());
+                    state.lastReleaseTime = now;
+
+                    long holdDuration = state.lastReleaseTime - state.lastPressTime;
+                    // If they pressed and released within the MAX_TAP_HOLD_MS, it is a valid tap
+                    if (state.lastPressTime > 0 && holdDuration <= MAX_TAP_HOLD_MS) {
+                        state.wasQuickTap = true;
+                    } else {
+                        // Held too long (e.g. normal walking) -> invalidates double-tap
+                        state.wasQuickTap = false;
                     }
                 }
             }
@@ -224,8 +234,12 @@ public class GunZSwordListener implements Listener {
         // Right vector: 90° clockwise of facing in XZ plane
         Vector right = new Vector(facing.getZ(), 0, -facing.getX());
 
-        // Is the player currently walking forward (W held)?
-        boolean movingForward = currentDirs.contains(Dir.W);
+        // Is the player currently standing still (no active movement inputs, or just the dash key itself)?
+        boolean standingStill = currentDirs.isEmpty() || (currentDirs.size() == 1 && currentDirs.contains(dir));
+
+        // Is the player currently walking forward (W held) or standing still?
+        // "standing still force direction as if running already" -> treats standstill as if they are running forward
+        boolean movingForward = currentDirs.contains(Dir.W) || standingStill;
 
         double speed = 1.25;
         Vector dashVec;

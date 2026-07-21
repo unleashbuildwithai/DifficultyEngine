@@ -29,6 +29,10 @@ public class SkillManager {
     /** uuid → (SkillType → totalXp) */
     private final Map<UUID, Map<SkillType, Long>> skillData = new HashMap<>();
 
+    public JavaPlugin getPlugin() {
+        return plugin;
+    }
+
     public SkillManager(JavaPlugin plugin) {
         this.plugin   = plugin;
         this.dataFile = new File(plugin.getDataFolder(), "skills.yml");

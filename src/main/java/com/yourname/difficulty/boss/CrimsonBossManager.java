@@ -85,7 +85,9 @@ public class CrimsonBossManager implements Listener {
             Material.BARRIER,
             Material.END_PORTAL_FRAME,
             Material.NETHER_PORTAL,
-            Material.END_PORTAL
+            Material.END_PORTAL,
+            Material.GILDED_BLACKSTONE,
+            Material.BLACK_CONCRETE
     );
 
     private final JavaPlugin         plugin;
@@ -111,41 +113,97 @@ public class CrimsonBossManager implements Listener {
         this.itemFactory        = itemFactory;
         this.bossEffectListener = bossEffectListener;
 
-        // Periodically spawn Blazefiend guards around the Crimson Pit spawner
+        // Automatically spawn Blazefiends near any Gilded Blackstone block in player vicinity
         plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
-            World w = plugin.getServer().getWorld("ancient_realm");
-            if (w == null) return;
-            Location spawnerLoc = new Location(w, SPAWN_X, SPAWN_Y, SPAWN_Z);
-            
-            // Check if spawner block is present (ensure gilded blackstone at default spot)
-            Block b = spawnerLoc.getBlock();
-            if (b.getType() == Material.AIR) {
-                b.setType(Material.GILDED_BLACKSTONE);
-            }
+            for (Player player : plugin.getServer().getOnlinePlayers()) {
+                Location playerLoc = player.getLocation();
+                World world = playerLoc.getWorld();
+                if (world == null) continue;
 
-            if (isBossAlive()) return; // do not spawn guards while the boss is active
+                int px = playerLoc.getBlockX();
+                int py = playerLoc.getBlockY();
+                int pz = playerLoc.getBlockZ();
 
-            // Count existing guards
-            int guardsCount = 0;
-            for (Entity e : w.getNearbyEntities(spawnerLoc, 30, 20, 30)) {
-                if (e instanceof Blaze blaze && "§c🔥 Blazefiend".equals(blaze.getCustomName())) {
-                    guardsCount++;
+                int radius = 24;
+                for (int x = px - radius; x <= px + radius; x += 4) {
+                    for (int y = py - 12; y <= py + 12; y += 4) {
+                        for (int z = pz - radius; z <= pz + radius; z += 4) {
+                            Block b = world.getBlockAt(x, y, z);
+                            if (b.getType() == Material.GILDED_BLACKSTONE) {
+                                spawnGuardNear(b.getLocation());
+                            }
+                        }
+                    }
                 }
             }
+        }, 100L, 300L); // check every 15 seconds
 
-            if (guardsCount < 6) {
-                int toSpawn = Math.min(3, 6 - guardsCount);
-                for (int i = 0; i < toSpawn; i++) {
-                    double rx = SPAWN_X + (random.nextDouble() - 0.5) * 15;
-                    double rz = SPAWN_Z + (random.nextDouble() - 0.5) * 15;
-                    Location gl = new Location(w, rx, SPAWN_Y + 1.0, rz);
-                    Blaze guard = (Blaze) w.spawnEntity(gl, EntityType.BLAZE);
-                    guard.setCustomName("§c🔥 Blazefiend");
-                    guard.setCustomNameVisible(true);
-                    guard.setRemoveWhenFarAway(true);
+        // Periodically make Blazefiends wander around the map using pathfinder navigation
+        plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
+            for (World world : plugin.getServer().getWorlds()) {
+                for (Blaze blaze : world.getEntitiesByClass(Blaze.class)) {
+                    String name = blaze.getCustomName();
+                    if (name != null && name.contains("Blazefiend")) {
+                        if (blaze.getTarget() == null) {
+                            double angle = random.nextDouble() * Math.PI * 2;
+                            double dist = 8 + random.nextInt(12);
+                            double rx = blaze.getLocation().getX() + Math.cos(angle) * dist;
+                            double rz = blaze.getLocation().getZ() + Math.sin(angle) * dist;
+                            Location targetLoc = new Location(world, rx, blaze.getLocation().getY(), rz);
+                            blaze.getPathfinder().moveTo(targetLoc, 1.0);
+                        }
+                    }
                 }
             }
-        }, 100L, 400L); // check every 20 seconds
+        }, 120L, 80L); // wander every 4 seconds
+    }
+
+    private void spawnGuardNear(Location loc) {
+        if (isBossAlive()) return; // do not spawn guards while the boss is active
+
+        int guardsCount = 0;
+        for (Entity e : loc.getWorld().getNearbyEntities(loc, 15, 10, 15)) {
+            if (e instanceof Blaze blaze && "§c🔥 Blazefiend".equals(blaze.getCustomName())) {
+                guardsCount++;
+            }
+        }
+        if (guardsCount >= 3) return;
+
+        double rx = loc.getX() + 0.5 + (random.nextDouble() - 0.5) * 6;
+        double rz = loc.getZ() + 0.5 + (random.nextDouble() - 0.5) * 6;
+        Location gl = new Location(loc.getWorld(), rx, loc.getY() + 1.0, rz);
+
+        if (!gl.getBlock().getType().isAir()) return;
+
+        Blaze guard = (Blaze) loc.getWorld().spawnEntity(gl, EntityType.BLAZE);
+        guard.setCustomName("§c🔥 Blazefiend");
+        guard.setCustomNameVisible(true);
+        guard.setRemoveWhenFarAway(true);
+    }
+
+    /**
+     * Shared pack aggro: if one Blazefiend targets a player, all other
+     * nearby Blazefiends within 45 blocks are alerted to attack that player too.
+     */
+    @EventHandler(priority = EventPriority.NORMAL)
+    public void onBlazefiendTarget(org.bukkit.event.entity.EntityTargetLivingEntityEvent event) {
+        if (!(event.getEntity() instanceof Blaze blaze)) return;
+        if (!(event.getTarget() instanceof Player player)) return;
+
+        String name = blaze.getCustomName();
+        if (name == null || (!name.contains("Blazefiend") && !name.contains("Infernal Blazefiend") && !name.contains("Blaze Inferno"))) return;
+
+        // Force all other nearby Blazefiends to target the player
+        for (Entity nearby : blaze.getWorld().getNearbyEntities(blaze.getLocation(), 45.0, 30.0, 45.0)) {
+            if (nearby instanceof Blaze otherBlaze && !otherBlaze.getUniqueId().equals(blaze.getUniqueId())) {
+                String otherName = otherBlaze.getCustomName();
+                if (otherName != null && (otherName.contains("Blazefiend") || otherName.contains("Infernal") || otherName.contains("Blaze Inferno"))) {
+                    if (otherBlaze.getTarget() == null) {
+                        otherBlaze.setTarget(player);
+                    }
+                }
+            }
+        }
     }
 
     // ══ Public API ═══════════════════════════════════════════════════════════
@@ -172,7 +230,7 @@ public class CrimsonBossManager implements Listener {
         if (!isSplitInferno) {
             dismissExisting();
             // Rebuild the Crimson Pit room schematic on spawn to repair the arena
-            rebuildArena(loc, "crimson_pit");
+            rebuildArena(null, loc);
         }
 
         double roll = random.nextDouble();
@@ -230,10 +288,31 @@ public class CrimsonBossManager implements Listener {
         boss.setRemoveWhenFarAway(false);
         boss.setFireTicks(Integer.MAX_VALUE);
 
-        // Boost HP
+        // Boost HP safely preventing Health value must be between 0 and 1024 Exception
         var hpAttr = boss.getAttribute(Attribute.GENERIC_MAX_HEALTH);
-        if (hpAttr != null) hpAttr.setBaseValue(hp);
-        boss.setHealth(hp);
+        if (hpAttr != null) {
+            hpAttr.setBaseValue(hp);
+            boss.setHealth(Math.min(hp, hpAttr.getValue()));
+        } else {
+            boss.setHealth(Math.min(hp, 1024.0));
+        }
+
+        // Determine scale factor based on boss variant size requirements:
+        // Normal Boss: 10x size
+        // Special Boss (Inferno, Vortex, Amalgam split): 35x size
+        // Legendary/Rare Rare Boss (Dual Blaze Amalgam, Apocalyptic, etc.): 50x size (up to 50 blocks wide!)
+        double scaleFactor = 10.0;
+        if (amalgam || name.contains("APOCALYPTIC") || name.contains("NIGHTMARE") || name.contains("LEGENDARY")) {
+            scaleFactor = 50.0;
+        } else if (vortex || inferno || isSplitInferno) {
+            scaleFactor = 35.0;
+        }
+
+        // Apply scale factor using Paperweight scale attribute
+        var scaleAttr = boss.getAttribute(Attribute.GENERIC_SCALE);
+        if (scaleAttr != null) {
+            scaleAttr.setBaseValue(scaleFactor);
+        }
 
         // Metadata tags
         if (amalgam) {
@@ -312,26 +391,58 @@ public class CrimsonBossManager implements Listener {
         return false;
     }
 
+    private boolean isTempestSpawnerBlock(Block block) {
+        if (block == null) return false;
+        if (block.getType() != Material.CRYING_OBSIDIAN) return false;
+        if (block.hasMetadata("de_tempest_spawner")) return true;
+        if (block.getWorld().getName().equals("ancient_realm")) {
+            if (block.getX() == 115 && block.getY() == -38 && block.getZ() == -47) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isVoidSpawnerBlock(Block block) {
+        if (block == null) return false;
+        if (block.getType() != Material.BLACK_CONCRETE) return false;
+        if (block.hasMetadata("de_void_spawner")) return true;
+        if (block.getWorld().getName().equals("void_realm") || block.getWorld().getName().equals("ancient_realm")) {
+            if (block.getX() == 0 && block.getY() == 64 && block.getZ() == 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onSpawnerPlace(BlockPlaceEvent event) {
         ItemStack item = event.getItemInHand();
+        Block block = event.getBlockPlaced();
         if (itemFactory.isBlazefiendSpawner(item)) {
-            Block block = event.getBlockPlaced();
             block.setMetadata("de_blazefiend_spawner", new FixedMetadataValue(plugin, true));
             event.getPlayer().sendMessage("§a✓ §7Placed Blazefiend Spawner block!");
+        } else if (itemFactory.isTempestSpawner(item)) {
+            block.setMetadata("de_tempest_spawner", new FixedMetadataValue(plugin, true));
+            event.getPlayer().sendMessage("§a✓ §7Placed Tempest Spawner block!");
+        } else if (itemFactory.isVoidSpawner(item)) {
+            block.setMetadata("de_void_spawner", new FixedMetadataValue(plugin, true));
+            event.getPlayer().sendMessage("§a✓ §7Placed Void Spawner block!");
         }
     }
 
     @EventHandler(priority = EventPriority.HIGH)
     public void onSpawnerBreak(BlockBreakEvent event) {
         Block block = event.getBlock();
-        if (isSpawnerBlock(block)) {
+        if (isSpawnerBlock(block) || isTempestSpawnerBlock(block) || isVoidSpawnerBlock(block)) {
             Player player = event.getPlayer();
             if (!player.hasPermission("difficultyengine.cape.admin") && !player.isOp()) {
                 event.setCancelled(true);
                 player.sendMessage("§c✗ §7This spawner block is protected like bedrock! Only admins can remove it.");
             } else {
                 block.removeMetadata("de_blazefiend_spawner", plugin);
+                block.removeMetadata("de_tempest_spawner", plugin);
+                block.removeMetadata("de_void_spawner", plugin);
                 player.sendMessage("§a✓ §7Removed protected spawner block.");
             }
         }
@@ -340,27 +451,80 @@ public class CrimsonBossManager implements Listener {
     @EventHandler(priority = EventPriority.HIGH)
     public void onSpawnerStrike(BlockDamageEvent event) {
         Block block = event.getBlock();
-        if (!isSpawnerBlock(block)) return;
-
-        Player player = event.getPlayer();
-        if (isBossAlive()) {
-            player.sendActionBar("§c🔥 §7The Blazefiend already roams these caves...");
-            return;
+        if (isSpawnerBlock(block) || isTempestSpawnerBlock(block) || isVoidSpawnerBlock(block)) {
+            handleSpawnerActivation(event.getPlayer(), block);
         }
+    }
 
-        if (!block.getWorld().getName().equals("ancient_realm")) {
-            player.sendMessage("§c✗ §7The Blazefiend Spawner only works inside the §5Ancient Realm§7!");
-            return;
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onSpawnerInteract(org.bukkit.event.player.PlayerInteractEvent event) {
+        if (event.getAction() != org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK) return;
+        Block block = event.getClickedBlock();
+        if (block == null) return;
+        if (isSpawnerBlock(block) || isTempestSpawnerBlock(block) || isVoidSpawnerBlock(block)) {
+            event.setCancelled(true);
+            handleSpawnerActivation(event.getPlayer(), block);
         }
+    }
 
-        if (respawnTask != null) {
-            cancelRespawn();
-            player.sendMessage("§c☠ §4Striking the Spawner awakens the Blazefiend early!");
-        } else {
-            player.sendMessage("§c☠ §4Your strike on the Spawner has awakened the Infernal Blazefiend!");
+    public void handleSpawnerActivation(Player player, Block block) {
+        if (block == null) return;
+
+        if (isSpawnerBlock(block)) {
+            if (isBossAlive()) {
+                player.sendActionBar("§c🔥 §7The Blazefiend already roams these caves...");
+                return;
+            }
+            if (!block.getWorld().getName().equals("ancient_realm")) {
+                player.sendMessage("§c✗ §7The Blazefiend Spawner only works inside the §5Ancient Realm§7!");
+                return;
+            }
+            player.sendMessage("§c☠ §4The Spawner has been activated, awakening the Infernal Blazefiend!");
+            rebuildArena(player, block.getLocation());
+            spawnBoss(block.getLocation());
+
+        } else if (isTempestSpawnerBlock(block)) {
+            boolean isTempestAlive = false;
+            for (Entity ent : block.getWorld().getEntitiesByClass(Phantom.class)) {
+                String cName = ent.getCustomName();
+                if (cName != null && cName.contains("Tempest Overlord") && !ent.isDead()) {
+                    isTempestAlive = true;
+                    break;
+                }
+            }
+            if (isTempestAlive) {
+                player.sendActionBar("§c⚡ §7The Tempest Overlord already roams these skies...");
+                return;
+            }
+            if (!block.getWorld().getName().equals("ancient_realm")) {
+                player.sendMessage("§c✗ §7The Tempest Spawner only works inside the §5Ancient Realm§7!");
+                return;
+            }
+            player.sendMessage("§c☠ §4The Spawner has been activated, awakening the Tempest Overlord!");
+            rebuildArena(player, block.getLocation());
+            spawnTempestOverlord(block.getLocation());
+
+        } else if (isVoidSpawnerBlock(block)) {
+            boolean isWitherAlive = false;
+            for (Entity ent : block.getWorld().getEntitiesByClass(Wither.class)) {
+                String cName = ent.getCustomName();
+                if (cName != null && (cName.contains("Void Wither") || cName.contains("Void Zurion")) && !ent.isDead()) {
+                    isWitherAlive = true;
+                    break;
+                }
+            }
+            if (isWitherAlive) {
+                player.sendActionBar("§0☠ §7The Void Wither already roams this realm...");
+                return;
+            }
+            if (!block.getWorld().getName().equals("void_realm") && !block.getWorld().getName().equals("ancient_realm")) {
+                player.sendMessage("§c✗ §7The Void Spawner only works inside the §5Void Realm§7 or §5Ancient Realm§7!");
+                return;
+            }
+            player.sendMessage("§0☠ §4The Spawner has been activated, awakening the Void Wither!");
+            rebuildArena(player, block.getLocation());
+            spawnVoidWither(block.getLocation());
         }
-
-        spawnBoss(null);
     }
 
     // ══ AI Task ═══════════════════════════════════════════════════════════════
@@ -505,6 +669,48 @@ public class CrimsonBossManager implements Listener {
     private void breakBlocksInPath(Blaze boss) {
         Location loc = boss.getLocation();
         Vector vel  = boss.getVelocity();
+
+        double scale = 1.0;
+        var scaleAttr = boss.getAttribute(Attribute.GENERIC_SCALE);
+        if (scaleAttr != null) scale = scaleAttr.getBaseValue();
+
+        if (scale > 1.0) {
+            int radius = (int) Math.max(1, scale / 4.0);
+            World world = loc.getWorld();
+            if (world == null) return;
+            int bx = loc.getBlockX();
+            int by = loc.getBlockY();
+            int bz = loc.getBlockZ();
+
+            // Break blocks in a sphere/box around the giant boss
+            for (int x = bx - radius; x <= bx + radius; x++) {
+                for (int y = by - radius; y <= by + radius; y++) {
+                    for (int z = bz - radius; z <= bz + radius; z++) {
+                        double distSq = (x - bx)*(x - bx) + (y - by)*(y - by) + (z - bz)*(z - bz);
+                        if (distSq > radius * radius) continue;
+
+                        Block b = world.getBlockAt(x, y, z);
+                        if (b.getType().isAir()) continue;
+                        if (!b.getType().isSolid()) continue;
+                        if (INDESTRUCTIBLE.contains(b.getType())) continue;
+                        if (!isCaveMaterial(b.getType())) continue;
+
+                        double chance = scale >= 50.0 ? 0.8 : (scale >= 35.0 ? 0.5 : 0.3);
+                        if (random.nextDouble() < chance) {
+                            if (random.nextDouble() < 0.05) {
+                                b.breakNaturally();
+                            } else {
+                                b.setType(Material.AIR);
+                            }
+                            if (random.nextDouble() < 0.1) {
+                                world.spawnParticle(Particle.FLAME, b.getLocation().add(0.5, 0.5, 0.5), 3, 0.2, 0.2, 0.2, 0.02);
+                            }
+                        }
+                    }
+                }
+            }
+            return;
+        }
 
         // Check current block + 1 block ahead in velocity direction
         Location[] checks = {
@@ -693,8 +899,12 @@ public class CrimsonBossManager implements Listener {
             minion.setFireTicks(Integer.MAX_VALUE);
             minion.setRemoveWhenFarAway(true);
             var hpAttr = minion.getAttribute(Attribute.GENERIC_MAX_HEALTH);
-            if (hpAttr != null) hpAttr.setBaseValue(40.0);
-            minion.setHealth(40.0);
+            if (hpAttr != null) {
+                hpAttr.setBaseValue(40.0);
+                minion.setHealth(Math.min(40.0, hpAttr.getValue()));
+            } else {
+                minion.setHealth(40.0);
+            }
             minion.addPotionEffect(new PotionEffect(
                     PotionEffectType.SPEED, 99999, 1, false, false, false));
         }
@@ -947,20 +1157,64 @@ public class CrimsonBossManager implements Listener {
         if (respawnTask != null) { respawnTask.cancel(); respawnTask = null; }
     }
 
-    public void rebuildArena(Location spawnerLoc, String schematicName) {
-        Player player = null;
-        for (Player p : spawnerLoc.getWorld().getPlayers()) {
-            if (p.getLocation().distance(spawnerLoc) < 150) {
-                player = p;
-                break;
+    public void rebuildArena(Player player, Location spawnerLoc) {
+        if (spawnerLoc == null) return;
+        Block block = spawnerLoc.getBlock();
+        String schematicName = null;
+        if (block.getType() == Material.GILDED_BLACKSTONE) {
+            schematicName = "crimson_pit.schem mce";
+        } else if (block.getType() == Material.CRYING_OBSIDIAN) {
+            schematicName = "tempest_sanctum.schem mce";
+        } else if (block.getType() == Material.BLACK_CONCRETE) {
+            schematicName = "void_sanctum.schem mce";
+        } else {
+            schematicName = "void_sanctum.schem mce"; // fallback
+        }
+
+        if (player == null) {
+            for (Player p : spawnerLoc.getWorld().getPlayers()) {
+                if (p.getLocation().distance(spawnerLoc) < 150) {
+                    player = p;
+                    break;
+                }
+            }
+            if (player == null && !Bukkit.getOnlinePlayers().isEmpty()) {
+                player = Bukkit.getOnlinePlayers().iterator().next();
             }
         }
-        if (player == null && !Bukkit.getOnlinePlayers().isEmpty()) {
-            player = Bukkit.getOnlinePlayers().iterator().next();
-        }
+
         if (player != null) {
-            player.performCommand("schem load " + schematicName);
-            player.performCommand("paste -o");
+            final Player finalPlayer = player;
+            final String finalSchem = schematicName;
+            final Location finalLoc = spawnerLoc.clone();
+            
+            // Save location
+            Location prevLoc = player.getLocation().clone();
+            
+            // Teleport exactly to block center so paste -o aligns perfectly
+            Location pasteLoc = spawnerLoc.clone().add(0.5, 1.0, 0.5);
+            player.teleport(pasteLoc);
+            
+            // Execute WorldEdit commands with a delay, and restore position
+            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                finalPlayer.performCommand("schematic load " + finalSchem);
+                finalPlayer.performCommand("/paste");
+                
+                plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                    finalPlayer.teleport(prevLoc);
+                    // Restore metadata
+                    if (finalSchem.startsWith("crimson_pit")) {
+                        finalLoc.getBlock().setType(Material.GILDED_BLACKSTONE);
+                        finalLoc.getBlock().setMetadata("de_blazefiend_spawner", new FixedMetadataValue(plugin, true));
+                    } else if (finalSchem.startsWith("tempest_sanctum")) {
+                        finalLoc.getBlock().setType(Material.CRYING_OBSIDIAN);
+                        finalLoc.getBlock().setMetadata("de_tempest_spawner", new FixedMetadataValue(plugin, true));
+                    } else if (finalSchem.startsWith("void_sanctum") || finalSchem.startsWith("void_realm")) {
+                        finalLoc.getBlock().setType(Material.BLACK_CONCRETE);
+                        finalLoc.getBlock().setMetadata("de_void_spawner", new FixedMetadataValue(plugin, true));
+                    }
+                }, 3L);
+            }, 1L);
         }
     }
 
@@ -974,7 +1228,7 @@ public class CrimsonBossManager implements Listener {
         }
 
         // Rebuild Tempest Sanctum before spawning to repair any block breaks
-        rebuildArena(loc, "tempest_sanctum");
+        rebuildArena(null, loc);
 
         // Spawn a colossal Phantom as the Tempest Overlord (looks amazing and wind/sky themed!)
         Phantom phantom = (Phantom) loc.getWorld().spawnEntity(loc, EntityType.PHANTOM);
@@ -984,8 +1238,12 @@ public class CrimsonBossManager implements Listener {
         phantom.setRemoveWhenFarAway(false);
 
         var hp = phantom.getAttribute(org.bukkit.attribute.Attribute.GENERIC_MAX_HEALTH);
-        if (hp != null) hp.setBaseValue(400.0);
-        phantom.setHealth(400.0);
+        if (hp != null) {
+            hp.setBaseValue(400.0);
+            phantom.setHealth(Math.min(400.0, hp.getValue()));
+        } else {
+            phantom.setHealth(400.0);
+        }
 
         // Register with effect system (Shriek, Leached, etc.)
         bossEffectListener.registerBoss(phantom);
@@ -1030,69 +1288,157 @@ public class CrimsonBossManager implements Listener {
         return phantom;
     }
 
-    private boolean isTempestSpawnerBlock(Block block) {
-        if (block == null) return false;
-        if (block.getType() != Material.CRYING_OBSIDIAN) return false;
-        if (block.hasMetadata("de_tempest_spawner")) return true;
-        if (block.getWorld().getName().equals("ancient_realm")) {
-            if (block.getX() == 115 && block.getY() == -38 && block.getZ() == -47) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
-    public void onTempestSpawnerPlace(BlockPlaceEvent event) {
-        ItemStack item = event.getItemInHand();
-        if (item.getType() == Material.CRYING_OBSIDIAN && item.hasItemMeta() && item.getItemMeta().getPersistentDataContainer().has(new NamespacedKey(plugin, "de_tempest_spawner"), org.bukkit.persistence.PersistentDataType.BYTE)) {
-            Block block = event.getBlockPlaced();
-            block.setMetadata("de_tempest_spawner", new FixedMetadataValue(plugin, true));
-            event.getPlayer().sendMessage("§a✓ §7Placed Tempest Spawner block!");
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGH)
-    public void onTempestSpawnerBreak(BlockBreakEvent event) {
-        Block block = event.getBlock();
-        if (isTempestSpawnerBlock(block)) {
-            Player player = event.getPlayer();
-            if (!player.hasPermission("difficultyengine.cape.admin") && !player.isOp()) {
-                event.setCancelled(true);
-                player.sendMessage("§c✗ §7This spawner block is protected like bedrock! Only admins can remove it.");
-            } else {
-                block.removeMetadata("de_tempest_spawner", plugin);
-                player.sendMessage("§a✓ §7Removed protected spawner block.");
+    @EventHandler
+    public void onWitherExplode(org.bukkit.event.entity.ExplosionPrimeEvent event) {
+        Entity ent = event.getEntity();
+        if (ent instanceof WitherSkull || ent instanceof Wither) {
+            if (ent.getWorld().getName().equals("void_realm") || ent.getWorld().getName().equals("ancient_realm")) {
+                if (random.nextDouble() < 0.01) {
+                    Warden warden = (Warden) ent.getWorld().spawnEntity(ent.getLocation(), EntityType.WARDEN);
+                    warden.setCustomName("§0§lVoid Warden");
+                    warden.setCustomNameVisible(true);
+                    ent.getWorld().playSound(ent.getLocation(), Sound.ENTITY_WARDEN_EMERGE, 2.0f, 1.0f);
+                    for (Player p : ent.getWorld().getPlayers()) {
+                        p.sendMessage("§0☠ §lA Void Warden has erupted from the Zurion explosion!");
+                        p.sendTitle("§0§lWARDEN EMERGES!", "§7Freeze spells are crucial now!", 10, 70, 20);
+                    }
+                }
             }
         }
     }
 
-    @EventHandler(priority = EventPriority.HIGH)
-    public void onTempestSpawnerStrike(BlockDamageEvent event) {
-        Block block = event.getBlock();
-        if (!isTempestSpawnerBlock(block)) return;
-
-        Player player = event.getPlayer();
-        boolean isTempestAlive = false;
-        for (Entity ent : block.getWorld().getEntitiesByClass(Phantom.class)) {
-            if ("§5⚡ §l§dThe Tempest Overlord".equals(ent.getCustomName()) && !ent.isDead()) {
-                isTempestAlive = true;
-                break;
+    public Wither spawnVoidWither(Location loc) {
+        if (loc == null) {
+            World w = plugin.getServer().getWorld("void_realm");
+            if (w == null) {
+                w = plugin.getServer().getWorld("ancient_realm");
             }
+            if (w == null) {
+                w = plugin.getServer().getWorlds().get(0);
+            }
+            loc = new Location(w, 0.0, 64.0, 0.0);
         }
 
-        if (isTempestAlive) {
-            player.sendActionBar("§c⚡ §7The Tempest Overlord already roams these skies...");
-            return;
+        // Rebuild Void Realm before spawning
+        rebuildArena(null, loc);
+
+        // Spawn Main Wither
+        Wither wither = (Wither) loc.getWorld().spawnEntity(loc, EntityType.WITHER);
+        wither.setCustomName("§0§lThe Void Zurion");
+        wither.setCustomNameVisible(true);
+        wither.setRemoveWhenFarAway(false);
+
+        var hp = wither.getAttribute(org.bukkit.attribute.Attribute.GENERIC_MAX_HEALTH);
+        if (hp != null) {
+            hp.setBaseValue(1000.0);
+            wither.setHealth(Math.min(1000.0, hp.getValue()));
+        } else {
+            wither.setHealth(1000.0);
         }
 
-        if (!block.getWorld().getName().equals("ancient_realm")) {
-            player.sendMessage("§c✗ §7The Tempest Spawner only works inside the §5Ancient Realm§7!");
-            return;
+        // Spawn Inverted Passenger Wither (Dinnerbone)
+        Wither inverted = (Wither) loc.getWorld().spawnEntity(loc, EntityType.WITHER);
+        inverted.setCustomName("Dinnerbone");
+        inverted.setCustomNameVisible(false);
+        inverted.setRemoveWhenFarAway(false);
+        var ihp = inverted.getAttribute(org.bukkit.attribute.Attribute.GENERIC_MAX_HEALTH);
+        if (ihp != null) {
+            ihp.setBaseValue(1000.0);
+            inverted.setHealth(Math.min(1000.0, ihp.getValue()));
+        } else {
+            inverted.setHealth(1000.0);
         }
 
-        player.sendMessage("§c☠ §4Your strike on the Spawner has awakened the Tempest Overlord!");
-        spawnTempestOverlord(null);
+        wither.addPassenger(inverted);
+
+        // Register with effect system (Shriek, Leached, etc.)
+        bossEffectListener.registerBoss(wither);
+        bossEffectListener.registerBoss(inverted);
+        bossEffectListener.spawnShriek(wither);
+
+        // Spawn 3 floating orbiting skull ArmorStands
+        List<ArmorStand> heads = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            ArmorStand head = loc.getWorld().spawn(loc, ArmorStand.class, s -> {
+                s.setMarker(true);
+                s.setInvisible(true);
+                s.setGravity(false);
+                s.setSmall(true);
+                s.getEquipment().setHelmet(new ItemStack(Material.WITHER_SKELETON_SKULL));
+            });
+            heads.add(head);
+        }
+
+        // Run dedicated Custom AI task for the Void Zurion
+        new BukkitRunnable() {
+            int aiTick = 0;
+
+            @Override
+            public void run() {
+                if (wither.isDead() || !wither.isValid()) {
+                    if (inverted.isValid()) inverted.remove();
+                    for (ArmorStand h : heads) if (h.isValid()) h.remove();
+                    cancel();
+                    return;
+                }
+
+                aiTick++;
+
+                // ── Update orbiting heads position ─────────────────────────
+                for (int i = 0; i < heads.size(); i++) {
+                    ArmorStand head = heads.get(i);
+                    if (head.isValid()) {
+                        double angle = (aiTick * 0.08) + (i * Math.PI * 2.0 / 3.0);
+                        Location headLoc = wither.getLocation().clone().add(
+                            Math.cos(angle) * 3.0, 
+                            1.5 + Math.sin(aiTick * 0.15 + i) * 0.4, 
+                            Math.sin(angle) * 3.0
+                        );
+                        head.teleport(headLoc);
+                    }
+                }
+
+                if (wither.getTarget() instanceof Player target) {
+                    // ── Fireball attack (every 3 seconds) ────────────────────
+                    if (aiTick % 60 == 0) {
+                        Location origin = wither.getLocation().add(0, 2.5, 0);
+                        Vector dir = target.getLocation().toVector().subtract(origin.toVector()).normalize();
+                        LargeFireball fb = (LargeFireball) wither.getWorld().spawnEntity(origin.add(dir.multiply(1.5)), EntityType.FIREBALL);
+                        fb.setShooter(wither);
+                        fb.setDirection(dir.multiply(1.5));
+                        fb.setYield(0.0f); // Protect arena blocks from breaking
+                        fb.setIsIncendiary(false);
+                    }
+
+                    // ── Warden Charge Leap AI (every 8 seconds) ──────────────
+                    if (aiTick % 160 == 0) {
+                        wither.getWorld().playSound(wither.getLocation(), Sound.ENTITY_WARDEN_ROAR, 1.5f, 0.8f);
+                        for (Player p : wither.getWorld().getPlayers()) {
+                            if (p.getLocation().distance(wither.getLocation()) < 80) {
+                                p.sendMessage("§0☠ §lThe Void Zurion is charging!");
+                                p.sendTitle("§0§lZURION CHARGES!", "§7Get out of the way!", 5, 30, 5);
+                            }
+                        }
+                        Vector chargeDir = target.getLocation().toVector().subtract(wither.getLocation().toVector()).setY(0.2).normalize();
+                        wither.setVelocity(chargeDir.multiply(1.5));
+                    }
+                }
+            }
+        }.runTaskTimer(plugin, 1L, 1L);
+
+        // Announce to all players in range
+        for (Player p : loc.getWorld().getPlayers()) {
+            if (p.getLocation().distance(loc) > 120) continue;
+            p.sendMessage("");
+            p.sendMessage("§0☠ §lThe Void Zurion has awakened in the Void Realm! §0☠");
+            p.sendMessage("§7The Void Realm §8trembles§7 as inverted dark forces accumulate!");
+            p.sendMessage("§5⚠ §dDestroy its §5Shriek §5⚡ §dwith an §bAir Staff §dto expose its weakness!");
+            p.sendMessage("");
+            p.sendTitle("§0§lZURION AWAKENS!", "§7§oThe double Wither roars...", 10, 70, 20);
+            p.playSound(p.getLocation(), Sound.ENTITY_WITHER_SPAWN, 1.0f, 1.0f);
+        }
+
+        return wither;
     }
 
     private void announceSpawn(Location loc) {
