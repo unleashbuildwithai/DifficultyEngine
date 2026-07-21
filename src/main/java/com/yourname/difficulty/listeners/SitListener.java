@@ -126,21 +126,35 @@ public class SitListener implements Listener {
         World world = block.getWorld();
         Location sitLoc = new Location(world, x, block.getY() + yOffset, z, sitYaw, 0f);
 
-        // ── Spawn invisible marker seat ───────────────────────────────────────
+        // ── Spawn invisible seat ───────────────────────────────────────────────
+        // NOTE: Do NOT use setMarker(true) here — marker armor stands have no
+        // bounding box and Paper/Spigot can silently fail to properly mount a
+        // passenger on them (the "right-click sit does nothing" bug). Instead
+        // we keep a normal (non-marker) tiny/invisible/uncollidable stand.
         ArmorStand seat = (ArmorStand) world.spawnEntity(sitLoc, EntityType.ARMOR_STAND);
         seat.setVisible(false);           // hide armor / body
         seat.setGravity(false);
         seat.setInvulnerable(true);
         seat.setSmall(true);
-        seat.setMarker(true);             // no hitbox, not interactable
         seat.setCollidable(false);
         seat.setCustomName(null);         // explicitly blank — suppresses name tags
         seat.setCustomNameVisible(false); // belt-and-braces: never show name
         seat.setSilent(true);             // no sounds
         seat.setPersistent(false);        // cleaned up if server crashes
+        seat.setBasePlate(false);
+        seat.setArms(false);
         // Tag so our own HP-bar listener skips it
         seat.addScoreboardTag("DE_seat");
-        seat.addPassenger(player);
+
+        boolean mounted = seat.addPassenger(player);
+        if (!mounted) {
+            // Mounting failed — clean up immediately rather than leaving a
+            // ghost seat entity behind, and let the player know.
+            seat.remove();
+            player.sendMessage("§8[§6DifficultyEngine§8] §c✗ Could not sit here — try again.");
+            return;
+        }
+
 
         seats.put(player.getUniqueId(), seat);
         player.sendMessage("§8[§6DifficultyEngine§8] §7You sit on the ledge. §8(Sneak to stand up)");

@@ -126,6 +126,28 @@ public class SkillManager {
         saveAll();
     }
 
+    // ── Account-sharing support ───────────────────────────────────────────────
+
+    /**
+     * Returns a defensive copy of this player's full skill-XP map.
+     * Used by {@code AccountProfileManager} to snapshot a profile before
+     * switching to another shared-account profile.
+     */
+    public Map<SkillType, Long> getAllXp(UUID uuid) {
+        return new EnumMap<>(skillData.getOrDefault(uuid, Map.of()));
+    }
+
+    /**
+     * Overwrites this player's ENTIRE skill-XP map with the given data,
+     * replacing whatever was there before. Used by {@code AccountProfileManager}
+     * when switching between shared-account profiles.
+     */
+    public void setAllXp(UUID uuid, Map<SkillType, Long> xpMap) {
+        skillData.put(uuid, new EnumMap<>(xpMap));
+        saveAll();
+    }
+
+
     // ── Persistence ───────────────────────────────────────────────────────────
 
     public void saveAll() {

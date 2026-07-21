@@ -1085,6 +1085,21 @@ public class CastingEngine implements Listener {
             return;
         }
 
+        // ── Elemental Flurry requires Magic Level 99 ──────────────────────────
+        // Carrying multiple elemental staves at once only unleashes the full
+        // real-spell flurry once the player has mastered Magic (Lv99). Below
+        // that level, the Support Staff basic attack simply fizzles when
+        // elemental staves are detected (the Support Rune above was already
+        // consumed as the cost of attempting the swing).
+        int flurryLevel = skillManager != null
+                ? skillManager.getLevel(player.getUniqueId(), com.yourname.difficulty.skills.SkillType.MAGIC)
+                : 1;
+        if (flurryLevel < 99) {
+            player.sendActionBar("§c✗ §7Support Flurry requires §aMagic Level 99§7! §8(Carrying elemental staves)");
+            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 1.0f, 0.5f);
+            return;
+        }
+
         // We carry at least one core staff. Now check and consume runes for each!
         final boolean fireActive = hasFire && consumeRune(player, MagicElement.FIRE);
         final boolean waterActive = hasWater && consumeRune(player, MagicElement.WATER);

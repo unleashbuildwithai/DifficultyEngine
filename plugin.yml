@@ -1,4 +1,4 @@
-ng a name: DifficultyEngine
+name: DifficultyEngine
 version: 1.0
 main: com.yourname.difficulty.Main
 api-version: 1.21
@@ -126,6 +126,15 @@ commands:
     description: Spawn a dungeon boss at its arena location (Admin).
     usage: /spawnboss <tempest|crimson>
     aliases: [bossspawn, dungeonboss]
+
+  share:
+    description: Register profile names that can share this Minecraft login (separate difficulty/skills/gold/inventory per name).
+    usage: /share <name> [name2] [name3...]
+
+  profile:
+    description: Switch the active shared-account profile on this login.
+    usage: /profile <name>
+    aliases: [useaccount, switchaccount]
 
 permissions:
   difficultyengine.use:

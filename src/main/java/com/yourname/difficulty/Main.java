@@ -1,5 +1,6 @@
 package com.yourname.difficulty;
 
+import com.yourname.difficulty.account.AccountProfileManager;
 import com.yourname.difficulty.bag.MagicBagDeathListener;
 import com.yourname.difficulty.bag.MagicBagGUI;
 import com.yourname.difficulty.bag.MagicBagGUIListener;
@@ -12,6 +13,7 @@ import com.yourname.difficulty.boss.CrimsonBossManager;
 import com.yourname.difficulty.boss.EffectRegistry;
 import com.yourname.difficulty.boss.crimson.CrimsonBossAttacks;
 import com.yourname.difficulty.boss.crimson.CrimsonBossSpawner;
+import com.yourname.difficulty.boss.gilded.GildedBossManager;
 import com.yourname.difficulty.boss.tempest.TempestOverlordManager;
 import com.yourname.difficulty.boss.voidwither.VoidWitherManager;
 import com.yourname.difficulty.casting.BuffLogic;
@@ -45,6 +47,7 @@ import com.yourname.difficulty.listeners.MeleeGearEquipListener;
 import com.yourname.difficulty.listeners.MinecartListener;
 import com.yourname.difficulty.listeners.NightmareAggroListener;
 import com.yourname.difficulty.listeners.NightSpawnBoostListener;
+import com.yourname.difficulty.listeners.LightningMonsterSummonListener;
 import com.yourname.difficulty.listeners.PrayerListener;
 import com.yourname.difficulty.listeners.RangedGearCraftListener;
 import com.yourname.difficulty.listeners.RangedGearEquipListener;
@@ -158,6 +161,8 @@ public class Main extends JavaPlugin {
     private CrimsonBossSpawner   crimsonBossSpawner;
     private TempestOverlordManager tempestOverlordManager;
     private VoidWitherManager     voidWitherManager;
+    private GildedBossManager     gildedBossManager;
+    private AccountProfileManager accountProfileManager;
 
     /** All crafting recipe keys registered by this plugin — used for recipe-book discovery. */
     private final List<NamespacedKey> allRecipeKeys = new ArrayList<>();
@@ -401,9 +406,20 @@ public class Main extends JavaPlugin {
 
         getServer().getPluginManager().registerEvents(voidWitherManager, this);
 
+        this.gildedBossManager = new GildedBossManager(this, bossEffectListener, crimsonBossManager);
+        getServer().getPluginManager().registerEvents(gildedBossManager, this);
+
         this.crimsonBossSpawner = new CrimsonBossSpawner(
-                this, itemFactory, crimsonBossManager, tempestOverlordManager, voidWitherManager);
+                this, itemFactory, crimsonBossManager, tempestOverlordManager, voidWitherManager, gildedBossManager);
         getServer().getPluginManager().registerEvents(crimsonBossSpawner, this);
+
+        // ── Lightning-triggered bonus monster summons (1-10 mobs per strike) ────
+        getServer().getPluginManager().registerEvents(
+                new LightningMonsterSummonListener(this), this);
+
+        // ── Shared-account profile system (/share, /profile) ───────────────────
+        this.accountProfileManager = new AccountProfileManager(
+                this, difficultyManager, skillManager, goldManager, magicBagManager);
 
         // ── Register commands ─────────────────────────────────────────────────
         registerCmd("difficulty", new DifficultyCommand(difficultyManager));
@@ -603,7 +619,7 @@ public class Main extends JavaPlugin {
         // ── /spawnboss — Dungeon boss spawner ─────────────────────────────────
         BossSpawnerCommand bossSpawnerCmd =
                 new BossSpawnerCommand(this, crimsonBossManager, bossEffectListener,
-                        tempestOverlordManager, voidWitherManager);
+                        tempestOverlordManager, voidWitherManager, gildedBossManager);
         org.bukkit.command.PluginCommand spawnBossPluginCmd = getCommand("spawnboss");
         if (spawnBossPluginCmd != null) {
             spawnBossPluginCmd.setExecutor(bossSpawnerCmd);
@@ -627,6 +643,47 @@ public class Main extends JavaPlugin {
             hardcoreListener.confirmActivation(player);
             return true;
         });
+
+        // ── /share <name1> [name2...] — register shared-account identities ─────
+        registerCmd("share", (sender, cmd, label, args) -> {
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage("§cOnly players can use /share."); return true;
+            }
+            if (args.length == 0) {
+                player.sendMessage("§7Usage: §e/share <name> [name2] [name3...]");
+                player.sendMessage("§7Registers profile names that can be switched to on §ethis Minecraft login§7");
+                player.sendMessage("§7using §e/profile <name>§7 — each name keeps its own difficulty, skills, gold, and inventory.");
+                return true;
+            }
+            accountProfileManager.registerNames(player, java.util.Arrays.asList(args));
+            player.sendMessage("§5✦ §7Registered profile name(s): §d" + String.join("§7, §d", args));
+            player.sendMessage("§7Switch between them anytime with §e/profile <name>§7.");
+            return true;
+        });
+
+        // ── /profile <name> — switch active shared-account identity ─────────────
+        registerCmd("profile", (sender, cmd, label, args) -> {
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage("§cOnly players can use /profile."); return true;
+            }
+            if (args.length == 0) {
+                String active = accountProfileManager.getActiveProfile(player.getUniqueId());
+                player.sendMessage("§5✦ §7Current profile: §d" + active);
+                player.sendMessage("§7Registered profiles: §d"
+                        + String.join("§7, §d", accountProfileManager.getRegisteredNames(player.getUniqueId())));
+                player.sendMessage("§7Usage: §e/profile <name>");
+                return true;
+            }
+            boolean ok = accountProfileManager.switchProfile(player, args[0]);
+            if (!ok) {
+                player.sendMessage("§c✗ §7Unknown profile §e" + args[0] + "§7. Register it first with §e/share " + args[0]);
+                return true;
+            }
+            player.sendMessage("§5✦ §7Switched to profile §d" + args[0].toLowerCase() + "§7!");
+            player.sendMessage("§8§o(Your difficulty, skills, gold, and inventory have been swapped.)");
+            return true;
+        });
+
 
         // ── Support Staff recipe ───────────────────────────────────────────────
         NamespacedKey supportStaffKey = new NamespacedKey(this, "support_staff_recipe");

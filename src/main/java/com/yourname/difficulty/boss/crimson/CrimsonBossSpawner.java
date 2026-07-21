@@ -2,12 +2,14 @@ package com.yourname.difficulty.boss.crimson;
 
 import com.yourname.difficulty.items.ItemFactory;
 import com.yourname.difficulty.boss.CrimsonBossManager;
+import com.yourname.difficulty.boss.gilded.GildedBossManager;
 import com.yourname.difficulty.boss.tempest.TempestOverlordManager;
 import com.yourname.difficulty.boss.voidwither.VoidWitherManager;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Phantom;
+import org.bukkit.entity.Pillager;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Wither;
 import org.bukkit.event.EventHandler;
@@ -30,16 +32,19 @@ public class CrimsonBossSpawner implements Listener {
     private final CrimsonBossManager crimsonBossManager;
     private final TempestOverlordManager tempestOverlordManager;
     private final VoidWitherManager voidWitherManager;
+    private final GildedBossManager gildedBossManager;
 
     public CrimsonBossSpawner(JavaPlugin plugin, ItemFactory itemFactory,
                                CrimsonBossManager crimsonBossManager,
                                TempestOverlordManager tempestOverlordManager,
-                               VoidWitherManager voidWitherManager) {
+                               VoidWitherManager voidWitherManager,
+                               GildedBossManager gildedBossManager) {
         this.plugin = plugin;
         this.itemFactory = itemFactory;
         this.crimsonBossManager = crimsonBossManager;
         this.tempestOverlordManager = tempestOverlordManager;
         this.voidWitherManager = voidWitherManager;
+        this.gildedBossManager = gildedBossManager;
     }
 
     private boolean isSpawnerBlock(Block block) {
@@ -57,6 +62,12 @@ public class CrimsonBossSpawner implements Listener {
         return block.getType() == Material.BLACK_CONCRETE;
     }
 
+    private boolean isGildedSpawnerBlock(Block block) {
+        if (block == null) return false;
+        if (block.getType() != Material.GOLD_BLOCK) return false;
+        return block.hasMetadata("de_gilded_spawner");
+    }
+
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onSpawnerPlace(BlockPlaceEvent event) {
         ItemStack item = event.getItemInHand();
@@ -71,13 +82,16 @@ public class CrimsonBossSpawner implements Listener {
         } else if (itemFactory.isVoidSpawner(item)) {
             block.setMetadata("de_void_spawner", new FixedMetadataValue(plugin, true));
             event.getPlayer().sendMessage("§a✓ §7Placed Void Spawner block!");
+        } else if (itemFactory.isGildedSpawner(item)) {
+            block.setMetadata("de_gilded_spawner", new FixedMetadataValue(plugin, true));
+            event.getPlayer().sendMessage("§6✓ §7Placed Gilded Spawner block!");
         }
     }
 
     @EventHandler(priority = EventPriority.HIGH)
     public void onSpawnerBreak(BlockBreakEvent event) {
         Block block = event.getBlock();
-        if (isSpawnerBlock(block) || isTempestSpawnerBlock(block) || isVoidSpawnerBlock(block)) {
+        if (isSpawnerBlock(block) || isTempestSpawnerBlock(block) || isVoidSpawnerBlock(block) || isGildedSpawnerBlock(block)) {
             Player player = event.getPlayer();
             if (!player.hasPermission("difficultyengine.cape.admin") && !player.isOp()) {
                 event.setCancelled(true);
@@ -86,6 +100,7 @@ public class CrimsonBossSpawner implements Listener {
                 block.removeMetadata("de_blazefiend_spawner", plugin);
                 block.removeMetadata("de_tempest_spawner", plugin);
                 block.removeMetadata("de_void_spawner", plugin);
+                block.removeMetadata("de_gilded_spawner", plugin);
                 player.sendMessage("§a✓ §7Removed protected spawner block.");
             }
         }
@@ -94,7 +109,7 @@ public class CrimsonBossSpawner implements Listener {
     @EventHandler(priority = EventPriority.HIGH)
     public void onSpawnerStrike(BlockDamageEvent event) {
         Block block = event.getBlock();
-        if (isSpawnerBlock(block) || isTempestSpawnerBlock(block) || isVoidSpawnerBlock(block)) {
+        if (isSpawnerBlock(block) || isTempestSpawnerBlock(block) || isVoidSpawnerBlock(block) || isGildedSpawnerBlock(block)) {
             handleSpawnerActivation(event.getPlayer(), block);
         }
     }
@@ -104,7 +119,7 @@ public class CrimsonBossSpawner implements Listener {
         if (event.getAction() != org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK) return;
         Block block = event.getClickedBlock();
         if (block == null) return;
-        if (isSpawnerBlock(block) || isTempestSpawnerBlock(block) || isVoidSpawnerBlock(block)) {
+        if (isSpawnerBlock(block) || isTempestSpawnerBlock(block) || isVoidSpawnerBlock(block) || isGildedSpawnerBlock(block)) {
             event.setCancelled(true);
             handleSpawnerActivation(event.getPlayer(), block);
         }
@@ -167,6 +182,21 @@ public class CrimsonBossSpawner implements Listener {
             player.sendMessage("§0☠ §4The Spawner has been activated, awakening the Void Wither!");
             crimsonBossManager.rebuildArena(player, block.getLocation());
             voidWitherManager.spawnVoidWither(block.getLocation());
+
+        } else if (isGildedSpawnerBlock(block)) {
+            if (gildedBossManager != null && gildedBossManager.isGildedEnforcerAlive()) {
+                player.sendActionBar("§6☠ §7The Gilded Enforcer already marches these halls...");
+                return;
+            }
+            if (!block.getWorld().getName().equals("ancient_realm")) {
+                player.sendMessage("§c✗ §7The Gilded Spawner only works inside the §5Ancient Realm§7!");
+                return;
+            }
+            player.sendMessage("§6☠ §4The Spawner has been activated, awakening The Gilded Enforcer!");
+            crimsonBossManager.rebuildArena(player, block.getLocation());
+            if (gildedBossManager != null) {
+                gildedBossManager.spawnGildedEnforcer(block.getLocation());
+            }
         }
     }
 }

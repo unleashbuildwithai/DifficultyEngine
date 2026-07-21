@@ -1,5 +1,6 @@
 package com.yourname.difficulty.boss;
 
+import com.yourname.difficulty.boss.gilded.GildedBossManager;
 import com.yourname.difficulty.boss.tempest.TempestOverlordManager;
 import com.yourname.difficulty.boss.voidwither.VoidWitherManager;
 import org.bukkit.*;
@@ -43,17 +44,20 @@ public class BossSpawnerCommand implements CommandExecutor, TabCompleter {
     private final BossEffectListener     bossEffectListener;
     private final TempestOverlordManager tempestOverlordManager;
     private final VoidWitherManager      voidWitherManager;
+    private final GildedBossManager      gildedBossManager;
 
     public BossSpawnerCommand(JavaPlugin plugin,
                                CrimsonBossManager crimsonBoss,
                                BossEffectListener bossEffectListener,
                                TempestOverlordManager tempestOverlordManager,
-                               VoidWitherManager voidWitherManager) {
+                               VoidWitherManager voidWitherManager,
+                               GildedBossManager gildedBossManager) {
         this.plugin                 = plugin;
         this.crimsonBoss            = crimsonBoss;
         this.bossEffectListener     = bossEffectListener;
         this.tempestOverlordManager = tempestOverlordManager;
         this.voidWitherManager      = voidWitherManager;
+        this.gildedBossManager      = gildedBossManager;
     }
 
     private World voidWorld() {
@@ -100,6 +104,9 @@ public class BossSpawnerCommand implements CommandExecutor, TabCompleter {
                     Location loc = new Location(voidWorld(), 0.0, 64.0, 0.0);
                     player.teleport(loc);
                     player.sendMessage("§a✓ §7Teleported to §0Void Realm§7!");
+                }
+                case "gilded" -> {
+                    player.sendMessage("§6✓ §7Use §e/spawnboss gilded §7at your §5Gilded Sanctum§7 spawner location — no fixed coordinates set.");
                 }
                 default -> sender.sendMessage("§c✗ §7Unknown arena: §e" + args[0]);
             }
@@ -154,9 +161,21 @@ public class BossSpawnerCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage("§a✓ §7Void Realm schematic loaded and Void Wither respawned!");
             }
 
+            // ── Gilded Sanctum ─────────────────────────────────────────────────
+            case "gilded" -> {
+                if (gildedBossManager == null) {
+                    sender.sendMessage("§c✗ §7Gilded boss system not available.");
+                } else if (!(sender instanceof Player player)) {
+                    sender.sendMessage("§c✗ §7Only players can spawn the Gilded Enforcer (needs a location).");
+                } else {
+                    gildedBossManager.spawnGildedEnforcer(player.getLocation());
+                    sender.sendMessage("§6✓ §7The Gilded Enforcer spawned at your location!");
+                }
+            }
+
             default -> {
                 sender.sendMessage("§c✗ §7Unknown arena: §e" + args[0]);
-                sender.sendMessage("§7Valid arenas: §etempest§7, §ecrimson§7, §evoid§7, §erebuildvoid");
+                sender.sendMessage("§7Valid arenas: §etempest§7, §ecrimson§7, §evoid§7, §egilded§7, §erebuildvoid");
             }
         }
 
@@ -165,7 +184,7 @@ public class BossSpawnerCommand implements CommandExecutor, TabCompleter {
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command cmd, String label, String[] args) {
-        if (args.length == 1) return Arrays.asList("tempest", "crimson", "void", "rebuildvoid");
+        if (args.length == 1) return Arrays.asList("tempest", "crimson", "void", "gilded", "rebuildvoid");
         return List.of();
     }
 }

@@ -61,6 +61,16 @@ public class GoldManager {
     }
 
     /**
+     * Directly overwrites the player's balance (no add/subtract semantics).
+     * Used by {@code AccountProfileManager} when snapshot-swapping between
+     * shared-account profiles.
+     */
+    public void setBalance(UUID uuid, long amount) {
+        cache.put(uuid, Math.max(0, amount));
+    }
+
+
+    /**
      * Awards gold to the player, shows action-bar notification, and saves lazily.
      * @param player  the recipient
      * @param amount  gold to award

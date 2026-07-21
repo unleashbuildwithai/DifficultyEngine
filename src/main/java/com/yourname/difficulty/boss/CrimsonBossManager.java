@@ -796,6 +796,8 @@ public class CrimsonBossManager implements Listener {
             schematicName = "tempest_sanctum.schem";
         } else if (block.getType() == Material.BLACK_CONCRETE) {
             schematicName = "void_sanctum.schem";
+        } else if (block.getType() == Material.GOLD_BLOCK) {
+            schematicName = "gilded_sanctum.schem";
         } else {
             schematicName = "void_sanctum.schem"; // fallback
         }
@@ -849,6 +851,9 @@ public class CrimsonBossManager implements Listener {
                     } else if (finalSchem.startsWith("void_sanctum") || finalSchem.startsWith("void_realm")) {
                         finalLoc.getBlock().setType(Material.BLACK_CONCRETE);
                         finalLoc.getBlock().setMetadata("de_void_spawner", new FixedMetadataValue(plugin, true));
+                    } else if (finalSchem.startsWith("gilded_sanctum")) {
+                        finalLoc.getBlock().setType(Material.GOLD_BLOCK);
+                        finalLoc.getBlock().setMetadata("de_gilded_spawner", new FixedMetadataValue(plugin, true));
                     }
                 }, 3L);
             }, 1L);
