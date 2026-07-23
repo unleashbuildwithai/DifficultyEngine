@@ -29,7 +29,6 @@ import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
 import com.yourname.difficulty.realm.AncientDebrisPortalListener;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BookMeta;
@@ -42,6 +41,7 @@ import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -510,6 +510,14 @@ public class MagicStaffListener implements Listener {
     //  SPELL DISPATCH
     // ══════════════════════════════════════════════════════════════════════════
 
+    private void castSpell(Player player, MagicElement element, int magicLevel,
+                           Action action, Block clickedBlock) {
+        if      (element == MagicElement.FIRE)  castFire(player, magicLevel, (magicLevel >= 10 && itemFactory.hasSpellComboBook(player, getBagContents(player))));
+        else if (element == MagicElement.WATER) castWater(player, magicLevel, action);
+        else if (element == MagicElement.EARTH) castEarth(player, magicLevel);
+        else if (element == MagicElement.AIR)   castAir(player, magicLevel);
+    }
+
     /**
      * Public wrapper used by the Support Staff's left-click "Infused" flurry
      * (CastingEngine.executeSupportBasicAttack) to fire each active elemental
@@ -826,48 +834,6 @@ public class MagicStaffListener implements Listener {
         }
         channelingWater.remove(player.getUniqueId());
     }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    //  PLAYER QUIT CLEANUP — prevents unbounded memory growth over long uptime
-    // ══════════════════════════════════════════════════════════════════════════
-
-    /**
-     * Cleans up ALL per-player state tracked by this listener when a player
-     * disconnects. Without this, every player who ever cast a spell would
-     * leave permanent entries behind in the various tracking maps/sets below,
-     * growing without bound over a long-running server's lifetime (a slow
-     * memory leak). Cancels any active repeating tasks for the player first,
-     * then purges every UUID-keyed collection.
-     */
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onPlayerQuit(PlayerQuitEvent event) {
-        Player player = event.getPlayer();
-        UUID uuid = player.getUniqueId();
-
-        // Cancel any active repeating tasks tied to this player first
-        cancelFallenTask(uuid);
-        cancelHoverTask(uuid);
-        cancelPermaFlight(uuid);
-        BukkitTask lightningBurn = lightningBurnTasks.remove(uuid);
-        if (lightningBurn != null) lightningBurn.cancel();
-        BukkitTask downpourUpkeep = downpourUpkeepTasks.remove(uuid);
-        if (downpourUpkeep != null) downpourUpkeep.cancel();
-
-        // Purge every per-player tracking collection
-        cooldowns.remove(uuid);
-        guidedPlayers.remove(uuid);
-        downpourActiveUntil.remove(uuid);
-        channelingWater.remove(uuid);
-        channelingEarth.remove(uuid);
-        permaFlightActive.remove(uuid);
-
-        // Projectile-related maps are keyed by projectile UUID (not player UUID)
-        // and are already cleaned up per-projectile in onProjectileHit, but any
-        // shot still in flight when the shooter quits is harmless (values are
-        // just a UUID/enum/int, and stale entries are removed the moment that
-        // specific projectile is resolved). No further action needed there.
-    }
-
 
     // ══════════════════════════════════════════════════════════════════════════
     //  WATER STAFF DOWNPOUR & HELPERS
@@ -3036,6 +3002,19 @@ public class MagicStaffListener implements Listener {
         target.setVelocity(dir.multiply(velocity / Math.max(0.01, dir.length())));
     }
 
+    private LivingEntity nearestEntity(Player player, double range) {
+        Collection<Entity> nearby = player.getWorld().getNearbyEntities(
+            player.getLocation(), range, range, range);
+        LivingEntity nearest = null;
+        double nearestDist = Double.MAX_VALUE;
+        for (Entity e : nearby) {
+            if (!(e instanceof LivingEntity le) || e.equals(player)) continue;
+            double d = e.getLocation().distanceSquared(player.getLocation());
+            if (d < nearestDist) { nearestDist = d; nearest = le; }
+        }
+        return nearest;
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     //  AIR HOVER
     // ══════════════════════════════════════════════════════════════════════════
@@ -3390,7 +3369,7 @@ public class MagicStaffListener implements Listener {
                 "§7Carry this page in\nyour inventory to\nthrow §2" + tier.displayName +
                 "§7 blocks\nwith the §2Earth Staff§7.\n\n" +
                 "§8Not consumed — keep\nit in your bag!"
-            );                                                                                                                                                                   
+            );
             meta.addPage(
                 "§2§l─ Block Stats ─\n\n" +
                 "§7Block: §f" + tier.material.name() + "\n\n" +
@@ -3398,7 +3377,7 @@ public class MagicStaffListener implements Listener {
                 "§c  " + (int)(tier.trapDamage/2) + " ❤  §7+ §cSlowness\n\n" +
                 "§62nd hit (SUFFOCATE):\n" +
                 "§c  " + (int)(tier.suffocateDamage/2) + " ❤\n\n" +
-                "§8Higher tier blocks\ndeal more damage!"   
+                "§8Higher tier blocks\ndeal more damage!"
             );
             meta.addPage(
                 "§2§l─ Crafting More ─\n\n" +

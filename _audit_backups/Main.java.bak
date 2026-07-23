@@ -729,8 +729,8 @@ public class Main extends JavaPlugin {
         this.partyHudTask = new PartyHudTask(partyManager, difficultyManager, this);
         partyHudTask.runTaskTimer(this, 20L, 20L);
 
+        new CapeVisualTask(skillCapeManager, capeDataManager, this).cleanup();
         this.capeVisualTask = new CapeVisualTask(skillCapeManager, capeDataManager, this);
-        capeVisualTask.cleanup(); // sweep any orphaned holograms/entities from a previous crash/reload
         capeVisualTask.runTaskTimer(this, 10L, 10L);
 
         new MagicGlowTask(itemFactory, skillManager, this).runTaskTimer(this, 5L, 4L);
