@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "minecraft:item/breeze_rod"
+  },
+  "overrides": [
+    {
+      "predicate": { "custom_model_data": 3002 },
+      "model": "bbbosses:item/tempest_boss"
+    }
+  ]
+}

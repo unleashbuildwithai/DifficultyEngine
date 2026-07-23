@@ -25,6 +25,7 @@ import org.bukkit.util.Vector;
 
 import java.util.*;
 
+
 /**
  * CrimsonBossManager — manages §c🔥 The Infernal Blazefiend§r.
  *
@@ -104,11 +105,23 @@ public class CrimsonBossManager implements Listener {
     private final BossEffectListener bossEffectListener;
     private final Random             random = new Random();
 
+    /** Base visual scale divisor applied to the old vanilla scale-factor to size the custom crimson_boss display. */
+    private static final float CRIMSON_DISPLAY_SCALE_DIVISOR = 3.0f;
+    /** How fast the crimson_boss display spins/flickers (radians per tick). */
+    private static final double CRIMSON_SPIN_SPEED = 0.05;
+
+    /** Boss carrier UUID → paired visual ItemDisplay UUID (position-synced every tick). */
+    private final Map<UUID, UUID> carrierToDisplay = new HashMap<>();
+    /** Boss carrier UUID → current animation angle (radians), advanced each sync tick. */
+    private final Map<UUID, Double> displaySpinAngles = new HashMap<>();
+    private final NamespacedKey displayTagKey;
+
     /** All known Crimson Cube (Blazefiend spawner) locations, tracked for population upkeep. */
     private final Set<Location> crimsonCubes = Collections.synchronizedSet(new HashSet<>());
 
     /** UUIDs of all active boss entities (supports split/multiple). */
     private final Set<UUID> activeBossUuids = new HashSet<>();
+
     /** UUID of the active boss, null when not alive. */
     private UUID           bossUuid      = null;
     /** Tracks ender pearls thrown by the boss. */
@@ -147,8 +160,51 @@ public class CrimsonBossManager implements Listener {
         this.plugin             = plugin;
         this.itemFactory        = itemFactory;
         this.bossEffectListener = bossEffectListener;
+        this.displayTagKey      = new NamespacedKey(plugin, "de_crimson_display");
+
+        // Position-sync task: streams each carrier's live location to its
+        // paired crimson_boss ItemDisplay and applies a gentle flicker
+        // spin/scale-pulse animation so the flame model feels alive.
+        plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
+            if (carrierToDisplay.isEmpty()) return;
+            Iterator<Map.Entry<UUID, UUID>> it = carrierToDisplay.entrySet().iterator();
+            while (it.hasNext()) {
+                Map.Entry<UUID, UUID> entry = it.next();
+                Entity carrier = plugin.getServer().getEntity(entry.getKey());
+                Entity display = plugin.getServer().getEntity(entry.getValue());
+
+                if (!(carrier instanceof Blaze b) || b.isDead() || !b.isValid()) {
+                    if (display != null && !display.isDead()) display.remove();
+                    it.remove();
+                    displaySpinAngles.remove(entry.getKey());
+                    continue;
+                }
+                if (!(display instanceof ItemDisplay id) || display.isDead() || !display.isValid()) {
+                    it.remove();
+                    displaySpinAngles.remove(entry.getKey());
+                    continue;
+                }
+
+                Location target = carrier.getLocation().clone().add(0, 0.2, 0);
+                if (!display.getLocation().getWorld().equals(target.getWorld())
+                        || display.getLocation().distanceSquared(target) > 0.0004) {
+                    display.teleport(target);
+                }
+
+                double scaleAttrVal = 10.0;
+                var scaleAttr = b.getAttribute(Attribute.GENERIC_SCALE);
+                if (scaleAttr != null) scaleAttrVal = scaleAttr.getBaseValue();
+                float baseScale = (float) (scaleAttrVal / CRIMSON_DISPLAY_SCALE_DIVISOR);
+
+                double angle = displaySpinAngles.getOrDefault(entry.getKey(), 0.0) + CRIMSON_SPIN_SPEED;
+                displaySpinAngles.put(entry.getKey(), angle);
+                float flicker = baseScale * (float) (1.0 + 0.06 * Math.sin(angle * 3.0));
+                BossDisplayUtil.setYawRotation(id, flicker, (float) angle);
+            }
+        }, 1L, 1L);
 
         // Automatically spawn Blazefiends near any Gilded Blackstone block in player vicinity
+
         plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
             for (Player player : plugin.getServer().getOnlinePlayers()) {
                 Location playerLoc = player.getLocation();
@@ -391,9 +447,15 @@ public class CrimsonBossManager implements Listener {
 
         Blaze boss = (Blaze) loc.getWorld().spawnEntity(loc, EntityType.BLAZE);
         boss.setCustomName(name);
-        boss.setCustomNameVisible(true);
+        boss.setCustomNameVisible(false); // name lives on the crimson_boss display instead
         boss.setRemoveWhenFarAway(false);
         boss.setFireTicks(Integer.MAX_VALUE);
+        // Hide the vanilla Blaze silhouette — only the custom crimson_boss
+        // ItemDisplay model should be visible. The Blaze remains as an
+        // invisible physics/AI/hitbox carrier.
+        boss.setInvisible(true);
+        boss.setSilent(true);
+
 
         // Boost HP safely preventing Health value must be between 0 and 1024 Exception
         var hpAttr = boss.getAttribute(Attribute.GENERIC_MAX_HEALTH);
@@ -447,7 +509,13 @@ public class CrimsonBossManager implements Listener {
         activeBossUuids.add(boss.getUniqueId());
         bossUuid = boss.getUniqueId();
 
+        // Spawn the custom crimson_boss ItemDisplay visual paired to this carrier
+        ItemDisplay display = spawnCrimsonDisplay(boss, name);
+        carrierToDisplay.put(boss.getUniqueId(), display.getUniqueId());
+        displaySpinAngles.put(boss.getUniqueId(), 0.0);
+
         startBossAI();
+
         if (legendary) {
             // Server-wide legendary announcement
             for (Player online : plugin.getServer().getOnlinePlayers()) {
@@ -947,6 +1015,26 @@ public class CrimsonBossManager implements Listener {
     // com.yourname.difficulty.boss.tempest.TempestOverlordManager
     // NOTE: Void Wither (Zurion) spawning/AI + Warden-on-explode logic now lives in
     // com.yourname.difficulty.boss.voidwither.VoidWitherManager
+
+    /**
+     * Builds the Blazefiend's custom Blockbench flame visual — a
+     * fixed-orientation ItemDisplay showing the crimson_boss model, entirely
+     * independent from the now-invisible vanilla Blaze carrier underneath.
+     */
+    private ItemDisplay spawnCrimsonDisplay(Blaze carrier, String customName) {
+        double scaleAttrVal = 10.0;
+        var scaleAttr = carrier.getAttribute(Attribute.GENERIC_SCALE);
+        if (scaleAttr != null) scaleAttrVal = scaleAttr.getBaseValue();
+        float baseScale = (float) (scaleAttrVal / CRIMSON_DISPLAY_SCALE_DIVISOR);
+
+        return BossDisplayUtil.spawnDisplay(
+                carrier, 0.2, Material.BLAZE_ROD, 3001, baseScale,
+                15, 15,
+                customName,
+                displayTagKey,
+                Display.Billboard.FIXED);
+    }
+
 
     private void announceSpawn(Location loc) {
         for (Player p : loc.getWorld().getPlayers()) {

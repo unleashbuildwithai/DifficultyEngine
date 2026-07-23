@@ -11,11 +11,13 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
+import org.bukkit.event.weather.LightningStrikeEvent;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.util.Vector;
 
 import java.util.*;
 
@@ -29,6 +31,17 @@ import java.util.*;
  *
  * Tied to the Gilded Sanctum arena (boss_rooms/gilded_sanctum.schem),
  * triggered via a Gilded Spawner Block (GOLD_BLOCK).
+ *
+ * ── "Gilded Fuse" lightning event (NEW) ───────────────────────────────────
+ * If genuine natural weather lightning strikes near the rider Creeper, it
+ * gets knocked clean off the Pillager's head and enters a limited "multiply"
+ * frenzy: it clones itself repeatedly (regular, mortal, killable Creepers —
+ * NOT the immortal boss fuse) up to a hard cap. This can only happen twice
+ * per boss life: the first trigger caps at 25 total clones, the second
+ * (and final) trigger caps at 35. After both rounds are used, lightning no
+ * longer affects the fuse creeper — it simply stays on the Pillager's head
+ * as normal. This keeps the fun "chaos" idea while strictly bounding the
+ * total number of extra mobs so it can never runaway-spawn.
  */
 public class GildedBossManager implements Listener {
 
@@ -39,6 +52,22 @@ public class GildedBossManager implements Listener {
     private static final float  CREEPER_EXPLOSION_POWER = 2.0f;
     /** Cooldown between explosions (ticks). */
     private static final long   EXPLOSION_COOLDOWN_TICKS = 60L; // 3s
+
+    /** Radius within which a lightning strike can knock the fuse creeper off. */
+    private static final double LIGHTNING_TRIGGER_RADIUS = 6.0;
+    /** Max total clones spawned on the FIRST lightning-triggered multiply round. */
+    private static final int MULTIPLY_CAP_ROUND_1 = 25;
+    /** Max total clones spawned on the SECOND (final) lightning-triggered multiply round. */
+    private static final int MULTIPLY_CAP_ROUND_2 = 35;
+    /** Max clones alive SIMULTANEOUSLY during a multiply frenzy (paces the spawn burst). */
+    private static final int MULTIPLY_CONCURRENT_CAP = 10;
+    /** Ticks between each clone spawn during a multiply frenzy. */
+    private static final long MULTIPLY_SPAWN_INTERVAL_TICKS = 6L;
+
+    /** Visual scale of the Enforcer's custom gilded_boss model display. */
+    private static final float GILDED_DISPLAY_SCALE = 4.0f;
+    /** How fast the gilded_boss model bobs/rotates in place (radians per tick). */
+    private static final double GILDED_SPIN_SPEED = 0.015;
 
     private final JavaPlugin plugin;
     private final BossEffectListener bossEffectListener;
@@ -52,11 +81,61 @@ public class GildedBossManager implements Listener {
     /** Set of all Gilded Enforcer Pillager UUIDs (explosion-immune). */
     private final Set<UUID> gildedPillagers = new HashSet<>();
 
+    /** Pillager UUID → number of lightning-multiply rounds already used (0, 1, or 2). */
+    private final Map<UUID, Integer> multiplyRoundsUsed = new HashMap<>();
+    /** Pillager UUIDs currently mid-frenzy (prevents overlapping multiply tasks). */
+    private final Set<UUID> currentlyMultiplying = new HashSet<>();
+    /** Regular (mortal, non-boss) clone Creeper UUIDs spawned by the multiply frenzy. */
+    private final Set<UUID> multipliedClones = new HashSet<>();
+
+    /** Pillager carrier UUID → paired gilded_boss ItemDisplay UUID (position-synced every tick). */
+    private final Map<UUID, UUID> carrierToDisplay = new HashMap<>();
+    /** Pillager carrier UUID → current spin angle (radians), advanced each sync tick. */
+    private final Map<UUID, Double> spinAngles = new HashMap<>();
+    private final NamespacedKey displayTagKey;
+
     public GildedBossManager(JavaPlugin plugin, BossEffectListener bossEffectListener, CrimsonBossManager crimsonBossManager) {
         this.plugin = plugin;
         this.bossEffectListener = bossEffectListener;
         this.crimsonBossManager = crimsonBossManager;
+        this.displayTagKey = new NamespacedKey(plugin, "de_gilded_display");
+
+        // Position-sync task: streams each carrier's live location to its
+        // paired gilded_boss ItemDisplay and applies a gentle bob/spin
+        // animation so the gold-block golem feels alive.
+        plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
+            if (carrierToDisplay.isEmpty()) return;
+            Iterator<Map.Entry<UUID, UUID>> it = carrierToDisplay.entrySet().iterator();
+            while (it.hasNext()) {
+                Map.Entry<UUID, UUID> entry = it.next();
+                Entity carrier = plugin.getServer().getEntity(entry.getKey());
+                Entity display = plugin.getServer().getEntity(entry.getValue());
+
+                if (!(carrier instanceof Pillager p) || p.isDead() || !p.isValid()) {
+                    if (display != null && !display.isDead()) display.remove();
+                    it.remove();
+                    spinAngles.remove(entry.getKey());
+                    continue;
+                }
+                if (!(display instanceof ItemDisplay id) || display.isDead() || !display.isValid()) {
+                    it.remove();
+                    spinAngles.remove(entry.getKey());
+                    continue;
+                }
+
+                double angle = spinAngles.getOrDefault(entry.getKey(), 0.0) + GILDED_SPIN_SPEED;
+                spinAngles.put(entry.getKey(), angle);
+                double bob = Math.sin(angle * 2.0) * 0.15;
+                Location target = carrier.getLocation().clone().add(0, bob, 0);
+                if (!display.getLocation().getWorld().equals(target.getWorld())
+                        || display.getLocation().distanceSquared(target) > 0.0004) {
+                    display.teleport(target);
+                }
+                com.yourname.difficulty.boss.BossDisplayUtil.setYawRotation(id, GILDED_DISPLAY_SCALE, (float) angle);
+            }
+        }, 1L, 1L);
     }
+
 
     public boolean isGildedEnforcerAlive() {
         for (UUID uuid : new ArrayList<>(gildedPillagers)) {
@@ -79,8 +158,14 @@ public class GildedBossManager implements Listener {
 
         Pillager pillager = (Pillager) loc.getWorld().spawnEntity(loc, EntityType.PILLAGER);
         pillager.setCustomName("§6§lThe Gilded Enforcer");
-        pillager.setCustomNameVisible(true);
+        pillager.setCustomNameVisible(false); // name lives on the gilded_boss display instead
         pillager.setRemoveWhenFarAway(false);
+        // Hide the vanilla Pillager silhouette — only the custom gilded_boss
+        // ItemDisplay model should be visible. The Pillager remains as an
+        // invisible physics/AI/hitbox carrier (still rides the fuse Creeper).
+        pillager.setInvisible(true);
+        pillager.setSilent(true);
+
 
         var hpAttr = pillager.getAttribute(Attribute.GENERIC_MAX_HEALTH);
         if (hpAttr != null) {
@@ -123,10 +208,29 @@ public class GildedBossManager implements Listener {
         bossEffectListener.registerBoss(pillager);
         bossEffectListener.spawnShriek(pillager);
 
+        // Spawn the custom gilded_boss ItemDisplay visual paired to this carrier
+        ItemDisplay display = spawnGildedDisplay(pillager);
+        carrierToDisplay.put(pillager.getUniqueId(), display.getUniqueId());
+        spinAngles.put(pillager.getUniqueId(), 0.0);
+
         startAI(pillager, creeper);
         announceSpawn(loc);
 
         return pillager;
+    }
+
+    /**
+     * Builds the Gilded Enforcer's custom Blockbench gold-golem visual — a
+     * fixed-orientation ItemDisplay showing the gilded_boss model, entirely
+     * independent from the now-invisible vanilla Pillager carrier underneath.
+     */
+    private ItemDisplay spawnGildedDisplay(Pillager carrier) {
+        return com.yourname.difficulty.boss.BossDisplayUtil.spawnDisplay(
+                carrier, 0.0, Material.RAW_GOLD, 3004, GILDED_DISPLAY_SCALE,
+                15, 15,
+                "§6§lThe Gilded Enforcer",
+                displayTagKey,
+                Display.Billboard.FIXED);
     }
 
     private void startAI(Pillager pillager, Creeper creeper) {
@@ -141,10 +245,17 @@ public class GildedBossManager implements Listener {
                     gildedPillagers.remove(pillager.getUniqueId());
                     gildedRiderCreepers.remove(creeper.getUniqueId());
                     pillagerToCreeper.remove(pillager.getUniqueId());
+                    UUID displayUuid = carrierToDisplay.remove(pillager.getUniqueId());
+                    if (displayUuid != null) {
+                        Entity d = plugin.getServer().getEntity(displayUuid);
+                        if (d != null && !d.isDead()) d.remove();
+                    }
+                    spinAngles.remove(pillager.getUniqueId());
                     cancel();
                     return;
                 }
                 tick++;
+
 
                 // Keep the creeper alive & riding no matter what
                 if (creeper.isDead() || !creeper.isValid()) {
@@ -278,6 +389,110 @@ public class GildedBossManager implements Listener {
         }
     }
 
+    // ── "Gilded Fuse" lightning event: knock the fuse creeper off + multiply ───
+
+    /**
+     * Natural weather lightning striking near the fuse creeper knocks it off
+     * the Pillager's head and triggers a limited multiply frenzy. This can
+     * only happen twice per boss life (round 1 = cap 25, round 2 = cap 35).
+     * After both rounds are consumed, lightning no longer affects the fuse.
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onLightningNearFuse(LightningStrikeEvent event) {
+        // Only genuine natural weather lightning triggers this — never
+        // plugin/admin-triggered strikes.
+        if (event.getCause() != LightningStrikeEvent.Cause.WEATHER) return;
+
+        Location strikeLoc = event.getLightning().getLocation();
+
+        for (Map.Entry<UUID, UUID> entry : new ArrayList<>(pillagerToCreeper.entrySet())) {
+            UUID pillagerUuid = entry.getKey();
+            UUID creeperUuid  = entry.getValue();
+
+            if (currentlyMultiplying.contains(pillagerUuid)) continue; // already mid-frenzy
+
+            int roundsUsed = multiplyRoundsUsed.getOrDefault(pillagerUuid, 0);
+            if (roundsUsed >= 2) continue; // both rounds already consumed for this boss life
+
+            Entity creeperEnt = plugin.getServer().getEntity(creeperUuid);
+            if (!(creeperEnt instanceof Creeper fuseCreeper) || fuseCreeper.isDead() || !fuseCreeper.isValid()) continue;
+
+            if (fuseCreeper.getLocation().distanceSquared(strikeLoc) > LIGHTNING_TRIGGER_RADIUS * LIGHTNING_TRIGGER_RADIUS) continue;
+
+            Entity pillagerEnt = plugin.getServer().getEntity(pillagerUuid);
+            if (!(pillagerEnt instanceof Pillager pillager)) continue;
+
+            // ── Knock the fuse creeper off the pillager's head ────────────────
+            fuseCreeper.eject();
+            Vector knock = new Vector(
+                    (random.nextDouble() - 0.5) * 0.6,
+                    0.6,
+                    (random.nextDouble() - 0.5) * 0.6);
+            fuseCreeper.setVelocity(knock);
+
+            int roundCap = (roundsUsed == 0) ? MULTIPLY_CAP_ROUND_1 : MULTIPLY_CAP_ROUND_2;
+            multiplyRoundsUsed.put(pillagerUuid, roundsUsed + 1);
+
+            fuseCreeper.getWorld().playSound(fuseCreeper.getLocation(), Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 1.5f, 1.2f);
+            for (Player p : fuseCreeper.getWorld().getPlayers()) {
+                if (p.getLocation().distanceSquared(fuseCreeper.getLocation()) <= 14400.0) {
+                    p.sendMessage("§e⚡ §6The Gilded Fuse was struck by lightning and knocked loose! §7It's multiplying!");
+                    p.sendTitle("§6§lFUSE OVERLOAD!", "§7Creepers multiplying — cap: " + roundCap, 5, 40, 10);
+                }
+            }
+
+            startMultiplyFrenzy(pillager, fuseCreeper, roundCap);
+        }
+    }
+
+    /**
+     * Spawns regular mortal Creeper clones near the knocked-off fuse creeper,
+     * one every {@link #MULTIPLY_SPAWN_INTERVAL_TICKS}, up to {@code totalCap}
+     * total clones for this round, never allowing more than
+     * {@link #MULTIPLY_CONCURRENT_CAP} to be alive at once.
+     */
+    private void startMultiplyFrenzy(Pillager pillager, Creeper originCreeper, int totalCap) {
+        UUID pillagerUuid = pillager.getUniqueId();
+        currentlyMultiplying.add(pillagerUuid);
+
+        new BukkitRunnable() {
+            int spawnedThisRound = 0;
+
+            @Override
+            public void run() {
+                // Stop conditions: boss died, or round cap reached
+                if (pillager.isDead() || !pillager.isValid() || spawnedThisRound >= totalCap) {
+                    currentlyMultiplying.remove(pillagerUuid);
+                    cancel();
+                    return;
+                }
+
+                // Pace concurrent population — skip this tick if already at the concurrent cap
+                int aliveClones = 0;
+                for (UUID cloneUuid : multipliedClones) {
+                    Entity e = plugin.getServer().getEntity(cloneUuid);
+                    if (e instanceof LivingEntity le && !le.isDead() && le.isValid()) aliveClones++;
+                }
+                if (aliveClones >= MULTIPLY_CONCURRENT_CAP) return;
+
+                Location base = (originCreeper.isValid() ? originCreeper.getLocation() : pillager.getLocation());
+                double angle = random.nextDouble() * Math.PI * 2.0;
+                double dist  = 1.0 + random.nextDouble() * 3.0;
+                Location spawnLoc = base.clone().add(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
+
+                Creeper clone = (Creeper) base.getWorld().spawnEntity(spawnLoc, EntityType.CREEPER);
+                clone.setCustomName("§a☠ §7Gilded Fuse Spawn");
+                clone.setCustomNameVisible(true);
+                // Regular, mortal creeper — NOT tagged as a boss rider, so it can be
+                // killed normally and does not get infinite-health treatment.
+                multipliedClones.add(clone.getUniqueId());
+
+                base.getWorld().spawnParticle(Particle.EXPLOSION_EMITTER, spawnLoc, 1, 0.1, 0.1, 0.1, 0);
+                spawnedThisRound++;
+            }
+        }.runTaskTimer(plugin, 0L, MULTIPLY_SPAWN_INTERVAL_TICKS);
+    }
+
     public void cleanup() {
         for (UUID uuid : new ArrayList<>(gildedPillagers)) {
             Entity e = plugin.getServer().getEntity(uuid);
@@ -287,8 +502,15 @@ public class GildedBossManager implements Listener {
             Entity e = plugin.getServer().getEntity(uuid);
             if (e != null) e.remove();
         }
+        for (UUID uuid : new ArrayList<>(multipliedClones)) {
+            Entity e = plugin.getServer().getEntity(uuid);
+            if (e != null) e.remove();
+        }
         gildedPillagers.clear();
         gildedRiderCreepers.clear();
         pillagerToCreeper.clear();
+        multiplyRoundsUsed.clear();
+        currentlyMultiplying.clear();
+        multipliedClones.clear();
     }
 }

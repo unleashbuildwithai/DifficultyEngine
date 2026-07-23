@@ -5,8 +5,8 @@ import com.yourname.difficulty.boss.CrimsonBossManager;
 import com.yourname.difficulty.items.ItemFactory;
 import org.bukkit.*;
 import org.bukkit.attribute.Attribute;
-import org.bukkit.block.Block;
 import org.bukkit.entity.Display;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Fireball;
 import org.bukkit.entity.ItemDisplay;
@@ -16,15 +16,9 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDeathEvent;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.util.Transformation;
 import org.bukkit.util.Vector;
-import org.joml.AxisAngle4f;
-import org.joml.Vector3f;
 
 import java.util.*;
 
@@ -32,24 +26,35 @@ import java.util.*;
  * TempestOverlordManager — manages the colossal §5⚡ Tempest Overlord§r boss.
  *
  * ── Clean custom-entity architecture ────────────────────────────────────────
- * Instead of a giant scaled vanilla Phantom acting as a reskinned "big bat",
- * the Overlord is now composed of TWO paired entities:
+ * The Overlord is composed of TWO paired entities:
  *
  *  1. §7Flight carrier§r — a completely §finvisible, silent§r {@link Phantom}
  *     used ONLY for its native flight AI/pathing, hitbox, and damage/death
  *     handling. Its vanilla bat-like model is never rendered to the client.
  *
- *  2. §7Visual display§r — an {@link ItemDisplay} entity themed around wind
- *     and storms (a large billboarded arcane orb), which is what players
- *     actually see. It streams its position from the carrier every tick.
+ *  2. §7Visual display§r — a single fixed-orientation {@link ItemDisplay}
+ *     showing the custom Blockbench {@code tempest_boss} cloud/tornado
+ *     model, slowly rotating in place, with orbiting GUST wind particles
+ *     around it for atmosphere.
+ *
+ * ── "Walks through walls" (v2) ──────────────────────────────────────────────
+ * The Overlord shatters ANY non-indestructible solid block in its immediate
+ * flight path (not just "cave" materials), so it can truly plow straight
+ * through walls/structures without ever slowing down.
  */
 public class TempestOverlordManager implements Listener {
 
     /** 0.2% chance to drop the rare Sandstorm Book on death. */
     private static final double SANDSTORM_BOOK_DROP_CHANCE = 0.002;
 
-    /** Visual scale of the Overlord's storm-orb display. */
-    private static final float  OVERLORD_DISPLAY_SCALE = 6.0f;
+    /** Visual scale of the Overlord's custom tempest_boss cloud model display. */
+    private static final float  OVERLORD_DISPLAY_SCALE = 4.5f;
+
+    /** How fast the tempest_boss model slowly rotates in place (radians per tick). */
+    private static final double TORNADO_SPIN_SPEED = 0.03;
+
+    /** Radius of the ambient GUST wind particle ring around the model. */
+    private static final double WIND_RING_RADIUS = 2.2;
 
     private final JavaPlugin plugin;
     private final BossEffectListener bossEffectListener;
@@ -57,8 +62,11 @@ public class TempestOverlordManager implements Listener {
     private final Random random = new Random();
     /** UUIDs of currently-alive Tempest Overlord carriers — used to gate the death drop. */
     private final Set<UUID> activeTempestUuids = new HashSet<>();
-    /** Carrier UUID → paired visual display UUID (position-synced every tick). */
+    /** Carrier UUID → paired tempest_boss display UUID (position-synced every tick). */
     private final Map<UUID, UUID> carrierToDisplay = new HashMap<>();
+    /** Carrier UUID → current spin angle (radians), advanced each sync tick. */
+    private final Map<UUID, Double> spinAngles = new HashMap<>();
+
     /** Optional ItemFactory — wired in via setter to avoid constructor churn elsewhere. */
     private ItemFactory itemFactory = null;
 
@@ -69,27 +77,14 @@ public class TempestOverlordManager implements Listener {
     }
 
 
-    private static final Set<Material> INDESTRUCTIBLE = Set.of(
-            Material.BEDROCK,
-            Material.ANCIENT_DEBRIS,
-            Material.OBSIDIAN,
-            Material.CRYING_OBSIDIAN,
-            Material.REINFORCED_DEEPSLATE,
-            Material.BARRIER,
-            Material.END_PORTAL_FRAME,
-            Material.NETHER_PORTAL,
-            Material.END_PORTAL,
-            Material.GILDED_BLACKSTONE,
-            Material.BLACK_CONCRETE
-    );
-
     public TempestOverlordManager(JavaPlugin plugin, BossEffectListener bossEffectListener, CrimsonBossManager crimsonBossManager) {
         this.plugin = plugin;
         this.bossEffectListener = bossEffectListener;
         this.crimsonBossManager = crimsonBossManager;
         this.displayTagKey = new NamespacedKey(plugin, "de_tempest_display");
 
-        // Position-sync task: streams each carrier's live location to its display
+        // Position-sync task: spins the tempest_boss display slowly in place
+        // above each carrier's core.
         new BukkitRunnable() {
             @Override
             public void run() {
@@ -97,23 +92,33 @@ public class TempestOverlordManager implements Listener {
                 Iterator<Map.Entry<UUID, UUID>> it = carrierToDisplay.entrySet().iterator();
                 while (it.hasNext()) {
                     Map.Entry<UUID, UUID> entry = it.next();
-                    org.bukkit.entity.Entity carrier = plugin.getServer().getEntity(entry.getKey());
-                    org.bukkit.entity.Entity display = plugin.getServer().getEntity(entry.getValue());
+                    UUID carrierUuid = entry.getKey();
+                    Entity carrier = plugin.getServer().getEntity(carrierUuid);
 
                     if (!(carrier instanceof Phantom p) || p.isDead() || !p.isValid()) {
-                        if (display != null && !display.isDead()) display.remove();
+                        Entity d = plugin.getServer().getEntity(entry.getValue());
+                        if (d != null && !d.isDead()) d.remove();
                         it.remove();
+                        spinAngles.remove(carrierUuid);
                         continue;
                     }
-                    if (display == null || display.isDead() || !display.isValid()) {
+
+                    Entity display = plugin.getServer().getEntity(entry.getValue());
+                    if (!(display instanceof ItemDisplay id) || display.isDead() || !display.isValid()) {
                         it.remove();
+                        spinAngles.remove(carrierUuid);
                         continue;
                     }
+
                     Location target = carrier.getLocation().clone();
                     if (!display.getLocation().getWorld().equals(target.getWorld())
                             || display.getLocation().distanceSquared(target) > 0.0004) {
                         display.teleport(target);
                     }
+
+                    double angle = spinAngles.getOrDefault(carrierUuid, 0.0) + TORNADO_SPIN_SPEED;
+                    spinAngles.put(carrierUuid, angle);
+                    com.yourname.difficulty.boss.BossDisplayUtil.setYawRotation(id, OVERLORD_DISPLAY_SCALE, (float) angle);
                 }
             }
         }.runTaskTimer(plugin, 1L, 1L);
@@ -154,9 +159,10 @@ public class TempestOverlordManager implements Listener {
         bossEffectListener.registerBoss(phantom);
         bossEffectListener.spawnShriek(phantom);
 
-        // ── 2. Custom storm-themed visual display (billboarded, no vanilla model) ──
+        // ── 2. Custom tempest_boss cloud/tornado visual ──────────────────────
         ItemDisplay display = spawnOverlordDisplay(phantom);
         carrierToDisplay.put(phantom.getUniqueId(), display.getUniqueId());
+        spinAngles.put(phantom.getUniqueId(), 0.0);
 
         // Start Custom Tempest Overlord AI task
         new BukkitRunnable() {
@@ -165,11 +171,12 @@ public class TempestOverlordManager implements Listener {
             @Override
             public void run() {
                 if (phantom.isDead() || !phantom.isValid()) {
-                    UUID displayUuid = carrierToDisplay.remove(phantom.getUniqueId());
-                    if (displayUuid != null) {
-                        org.bukkit.entity.Entity d = plugin.getServer().getEntity(displayUuid);
+                    UUID dUuid = carrierToDisplay.remove(phantom.getUniqueId());
+                    if (dUuid != null) {
+                        Entity d = plugin.getServer().getEntity(dUuid);
                         if (d != null && !d.isDead()) d.remove();
                     }
+                    spinAngles.remove(phantom.getUniqueId());
                     cancel();
                     return;
                 }
@@ -239,47 +246,32 @@ public class TempestOverlordManager implements Listener {
                     }
                 }
 
-                // ── 4. Colossal Block-Breaking & Tunnel Carving (every 5 ticks) ──
+                // ── 4. "Walks through walls" — shatter ANY solid block in its path ──
                 if (aiTick % 5 == 0) {
                     Location center = phantom.getLocation();
                     World world = phantom.getWorld();
                     if (world != null) {
-                        int radius = 7; // Storm titan has a 7 block reach!
-                        int bx = center.getBlockX();
-                        int by = center.getBlockY();
-                        int bz = center.getBlockZ();
-
-                        for (int x = bx - radius; x <= bx + radius; x++) {
-                            for (int y = by - radius; y <= by + radius; y++) {
-                                for (int z = bz - radius; z <= bz + radius; z++) {
-                                    double distSq = (x - bx)*(x - bx) + (y - by)*(y - by) + (z - bz)*(z - bz);
-                                    if (distSq > radius * radius) continue;
-
-                                    Block b = world.getBlockAt(x, y, z);
-                                    if (b.getType().isAir()) continue;
-                                    if (!b.getType().isSolid()) continue;
-                                    if (INDESTRUCTIBLE.contains(b.getType())) continue;
-                                    if (!isCaveMaterial(b.getType())) continue;
-
-                                    // Shatter instantly!
-                                    b.setType(Material.AIR);
-                                    if (random.nextDouble() < 0.1) {
-                                        world.spawnParticle(Particle.DUST, b.getLocation().add(0.5, 0.5, 0.5), 10, 0.3, 0.3, 0.3, 0, new Particle.DustOptions(Color.GRAY, 1.0f));
-                                        world.spawnParticle(Particle.CLOUD, b.getLocation().add(0.5, 0.5, 0.5), 3, 0.2, 0.2, 0.2, 0.01);
-                                    }
-                                }
-                            }
-                        }
+                        com.yourname.difficulty.boss.BossTerrainUtil.shatterSphereDust(world, center.getBlock(), 7, random);
                         if (aiTick % 10 == 0) {
                             world.playSound(center, Sound.ENTITY_WITHER_BREAK_BLOCK, 1.5f, 0.7f);
                         }
                     }
                 }
 
-                // ── 5. Ambient Gale Storm particles ──────────────────────────
-                if (aiTick % 3 == 0) {
-                    phantom.getWorld().spawnParticle(Particle.CLOUD, phantom.getLocation().add(0, 1.0, 0), 20, 3.0, 1.5, 3.0, 0.1);
-                    phantom.getWorld().spawnParticle(Particle.GUST, phantom.getLocation().add(0, 1.0, 0), 10, 2.5, 1.0, 2.5, 0.15);
+                // ── 5. Ambient Tornado Wind — dimmed core particles + more gust ──
+                if (aiTick % 4 == 0) {
+                    phantom.getWorld().spawnParticle(Particle.CLOUD, phantom.getLocation().add(0, 1.0, 0), 6, 1.6, 1.0, 1.6, 0.04);
+                }
+                if (aiTick % 2 == 0) {
+                    // Swirling wind ring around the model, tracing the tornado silhouette
+                    double swirl = spinAngles.getOrDefault(phantom.getUniqueId(), 0.0);
+                    for (int i = 0; i < 6; i++) {
+                        double a = swirl + (i * Math.PI * 2.0 / 6);
+                        double rx = Math.cos(a) * WIND_RING_RADIUS;
+                        double rz = Math.sin(a) * WIND_RING_RADIUS;
+                        Location gustLoc = phantom.getLocation().clone().add(rx, 0.2 + (i % 3) * 0.6, rz);
+                        phantom.getWorld().spawnParticle(Particle.GUST, gustLoc, 1, 0.05, 0.05, 0.05, 0.01);
+                    }
                 }
             }
         }.runTaskTimer(plugin, 20L, 1L);
@@ -324,38 +316,18 @@ public class TempestOverlordManager implements Listener {
     }
 
     /**
-     * Builds the Tempest Overlord's custom storm-orb visual — a large
-     * billboarded ItemDisplay themed around wind/lightning, entirely
-     * independent from the invisible Phantom carrier underneath.
+     * Builds the Tempest Overlord's custom Blockbench cloud/tornado visual —
+     * a fixed-orientation ItemDisplay showing the tempest_boss model,
+     * entirely independent from the invisible Phantom carrier underneath.
+     * Slowly rotates in place each tick to feel alive.
      */
     private ItemDisplay spawnOverlordDisplay(Phantom carrier) {
-        ItemStack visual = new ItemStack(Material.BREEZE_ROD);
-        ItemMeta meta = visual.getItemMeta();
-        if (meta != null) {
-            meta.setCustomModelData(2001); // reserved model id for Tempest Overlord — resource pack can reskin freely
-            visual.setItemMeta(meta);
-        }
-
-        ItemDisplay display = carrier.getWorld().spawn(carrier.getLocation(), ItemDisplay.class, d -> {
-            d.setItemStack(visual);
-            d.setBillboard(Display.Billboard.CENTER);
-            d.setPersistent(false);
-            d.setCustomName("§5⚡ §l§dThe Tempest Overlord");
-            d.setCustomNameVisible(true);
-            d.setBrightness(new Display.Brightness(15, 15));
-
-            Transformation t = new Transformation(
-                    new Vector3f(0f, 0f, 0f),
-                    new AxisAngle4f(0f, 0f, 0f, 1f),
-                    new Vector3f(OVERLORD_DISPLAY_SCALE, OVERLORD_DISPLAY_SCALE, OVERLORD_DISPLAY_SCALE),
-                    new AxisAngle4f(0f, 0f, 0f, 1f)
-            );
-            d.setTransformation(t);
-
-            d.getPersistentDataContainer().set(displayTagKey, PersistentDataType.BYTE, (byte) 1);
-        });
-
-        return display;
+        return com.yourname.difficulty.boss.BossDisplayUtil.spawnDisplay(
+                carrier, 0.0, Material.BREEZE_ROD, 3002, OVERLORD_DISPLAY_SCALE,
+                9, 9,
+                "§5⚡ §l§dThe Tempest Overlord",
+                displayTagKey,
+                Display.Billboard.FIXED);
     }
 
     // ── Death drop: 0.2% Sandstorm Book (Tempest Overlord ONLY) ────────────────
@@ -367,9 +339,10 @@ public class TempestOverlordManager implements Listener {
         // Immediately clean up the paired visual display
         UUID displayUuid = carrierToDisplay.remove(uuid);
         if (displayUuid != null) {
-            org.bukkit.entity.Entity d = plugin.getServer().getEntity(displayUuid);
+            Entity d = plugin.getServer().getEntity(displayUuid);
             if (d != null && !d.isDead()) d.remove();
         }
+        spinAngles.remove(uuid);
 
         if (itemFactory == null) return;
 
@@ -384,24 +357,4 @@ public class TempestOverlordManager implements Listener {
         }
     }
 
-    private boolean isCaveMaterial(Material m) {
-
-        return switch (m) {
-            case STONE, DEEPSLATE, COBBLESTONE, COBBLED_DEEPSLATE,
-                    GRAVEL, DIRT, COARSE_DIRT, ROOTED_DIRT,
-                    GRANITE, DIORITE, ANDESITE,
-                    NETHERRACK, MAGMA_BLOCK, BASALT, BLACKSTONE,
-                    TUFF, CALCITE, DRIPSTONE_BLOCK,
-                    IRON_ORE, DEEPSLATE_IRON_ORE,
-                    COAL_ORE, DEEPSLATE_COAL_ORE,
-                    COPPER_ORE, DEEPSLATE_COPPER_ORE,
-                    GOLD_ORE, DEEPSLATE_GOLD_ORE, NETHER_GOLD_ORE,
-                    LAPIS_ORE, DEEPSLATE_LAPIS_ORE,
-                    REDSTONE_ORE, DEEPSLATE_REDSTONE_ORE,
-                    EMERALD_ORE, DEEPSLATE_EMERALD_ORE,
-                    DIAMOND_ORE, DEEPSLATE_DIAMOND_ORE,
-                    SMOOTH_BASALT, MUD -> true;
-            default -> false;
-        };
-    }
 }
