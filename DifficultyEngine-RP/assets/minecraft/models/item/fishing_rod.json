@@ -1,0 +1,14 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "minecraft:item/fishing_rod"
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "custom_model_data": 4007
+      },
+      "model": "difficultyengine:item/skill_fishing"
+    }
+  ]
+}

@@ -99,7 +99,11 @@ public class SkillGUI {
         ItemMeta  meta = item.getItemMeta();
         if (meta == null) return item;
 
+        int skillIconCmd = skillIconModelData(skill);
+        if (skillIconCmd > 0) meta.setCustomModelData(skillIconCmd);
+
         String maxTag = (level >= 99) ? " §6(MAX)" : "";
+
         meta.setDisplayName(skill.getColorCode() + "§l" + skill.getDisplayName()
                 + " §r§7- §aLevel " + level + maxTag);
 
@@ -233,10 +237,30 @@ public class SkillGUI {
         }
     }
 
+    /**
+     * Custom Model Data for the skill icon shown in the /mystats GUI
+     * (separate from the skill CAPE model data, CMD 1001-1010).
+     * Must match the CMDs baked into DifficultyEngine-RP by
+     * gen_skill_icon_pngs.py.
+     */
+    private int skillIconModelData(SkillType skill) {
+        return switch (skill) {
+            case MELEE       -> 4001;
+            case RANGED      -> 4002;
+            case DEFENCE     -> 4003;
+            case PRAYER      -> 4004;
+            case MAGIC       -> 4005;
+            case WOODCUTTING -> 4006;
+            case FISHING     -> 4007;
+            case FARMING     -> 4008;
+        };
+    }
+
     /** Returns §a+ if unlocked, §c- if not. */
     private String check(boolean unlocked) {
         return unlocked ? "§a[+]" : "§7[ ]";
     }
+
 
     /** Spell cooldown in seconds at the given magic level (no gear bonus). */
     private double magicCooldownSec(int level) {
