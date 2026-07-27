@@ -398,7 +398,9 @@ public class MagicBagGUIListener implements Listener {
     /**
      * Returns true if the given item is considered a "magic item" that may be
      * stored in the Magic Bag.  An item qualifies if its display name contains
-     * any of the recognised magic keywords.
+     * any of the recognised magic keywords, OR if it's a recognised Support
+     * item (Support Book/Page/Potion/Rune/Staff — previously these were NOT
+     * recognized, which was the root cause of "support isn't a magic bag item").
      */
     private boolean isMagicItem(ItemStack item) {
         if (item == null || item.getType().isAir()) return false;
@@ -409,13 +411,24 @@ public class MagicBagGUIListener implements Listener {
              || dn.contains("spell")  || dn.contains("dragon") || dn.contains("dark bow")
              || dn.contains("magic")  || dn.contains("tome")   || dn.contains("wand")
              || dn.contains("bottle") || dn.contains("dust")   || dn.contains("crystal")
-             || dn.contains("orb")    || dn.contains("scroll") || dn.contains("sigil")) {
+             || dn.contains("orb")    || dn.contains("scroll") || dn.contains("sigil")
+             || dn.contains("support")|| dn.contains("blessing") || dn.contains("page")
+             || dn.contains("potion") || dn.contains("book")) {
                 return true;
             }
         }
         // Also accept items that have a PDC magic tag (runes / staves detected by manager)
         // classifyItemToPage returns > 0 only for element-specific runes/staves,
         // but both are magic; page 0 can also hold generic magic items via display name check above.
-        return bagManager.classifyItemToPage(item) > 0;
+        if (bagManager.classifyItemToPage(item) > 0) return true;
+
+        // ── PDC-based Support item detection ──────────────────────────────────
+        // Covers Support Book, all 16 Support Pages, Support Staff, Support
+        // Rune, and all Support Potions — these were previously invisible to
+        // the bag's item filter since their display names don't always
+        // contain an obvious magic keyword.
+        return bagManager.isSupportItem(item);
     }
 }
+
+

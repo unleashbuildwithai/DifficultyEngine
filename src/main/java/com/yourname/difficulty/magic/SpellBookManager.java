@@ -31,7 +31,7 @@ import java.util.logging.Level;
  */
 public class SpellBookManager {
 
-    public static final int    TOTAL_PAGES    = 41;
+    public static final int    TOTAL_PAGES    = 45;
     public static final String SPELL_TOME_KEY = "spell_tome";
     public static final String SPELL_PAGE_KEY = "spell_page";
 
@@ -54,6 +54,15 @@ public class SpellBookManager {
             "§7Find §dSpell Pages §7dropped\n" +
             "§7by hostile mobs to unlock\n" +
             "§7each chapter.\n\n" +
+            "§7Every combo/status chain has\n" +
+            "§7a base §f15%§7 chance to proc\n" +
+            "§7and display its hint on a\n" +
+            "§7matching basic hit.\n\n" +
+            "§e⭐ Favoriting §7a chain (via the\n" +
+            "§7Tome's Favorites menu) adds\n" +
+            "§7§a+15%§7 to that chance §8(30%\n" +
+            "§8total)§7 — so star the combos\n" +
+            "§7you rely on most!\n\n" +
             "§8Right-click to read.\n\n" +
             "§8[1 / 37]";
 
@@ -530,7 +539,7 @@ public class SpellBookManager {
             "§7▶ Freeze chain (4 hits)\n" +
             "§7  is deadliest!\n" +
             "§7▶ Find more §dSpell Pages!\n\n" +
-            "§8[37 / 41]";
+            "§8[37 / 45]";
 
         // ── Mage Gear visual craft guides (pages 38-41) ──────────────────────
 
@@ -548,7 +557,7 @@ public class SpellBookManager {
             "§5◆ §8= Purple Dye\n" +
             "§7~ §8= String\n" +
             "§8Bonus: §e−100ms §8CD/piece\n" +
-            "§8[38 / 41]";
+            "§8[38 / 45]";
 
         PAGE_CONTENT[38] =
             "§5Mage Gear §8(Lv 30)\n" +
@@ -564,7 +573,7 @@ public class SpellBookManager {
             "§5◆ §8= Purple Dye\n" +
             "§6⚗ §8= Blaze Powder\n" +
             "§8Bonus: §e−250ms §8CD/piece\n" +
-            "§8[39 / 41]";
+            "§8[39 / 45]";
 
         PAGE_CONTENT[39] =
             "§bAlch Gear §8(Lv 60)\n" +
@@ -581,7 +590,7 @@ public class SpellBookManager {
             "§6⚗ §8= Blaze Powder\n" +
             "§9E §8= Eye of Ender\n" +
             "§8Bonus: §e−350ms §8CD/piece\n" +
-            "§8[40 / 41]";
+            "§8[40 / 45]";
 
         PAGE_CONTENT[40] =
             "§4Master Gear §8(Lv 90)\n" +
@@ -599,7 +608,62 @@ public class SpellBookManager {
             "§5S §8= Enchanted Shard\n" +
             "§4D §8= Dragon Breath\n" +
             "§8Bonus: §e−500ms §8CD/piece\n" +
-            "§8[41 / 41]";
+            "§8[41 / 45]";
+
+        // ── Elemental Proc pages (42-45) — passive on-hit procs ──────────────
+        // Each proc is a REAL dice-roll effect (not just a hint) that can fire
+        // on ANY basic hit with the matching element, independent of combo
+        // chains. Requires the page below to be unlocked AND the listed
+        // Magic level, AND (for the boosted 30% rate) the chain favorited via
+        // the Arcane Tome's Favorites menu.
+
+        PAGE_CONTENT[41] =
+            "§c🔥 Fire Proc: IGNITE\n" +
+            "§8──────────────\n" +
+            "§7Requires: §eMagic Lv 20+\n" +
+            "§7Chance:   §f15%§7 §8(30% ⭐)\n\n" +
+            "§7On ANY basic Fire hit, a\n" +
+            "§7chance to instantly set the\n" +
+            "§7target ablaze — separate\n" +
+            "§7from the Scorched combo.\n\n" +
+            "§7Passive. No combo needed.\n\n" +
+            "§8[42 / 45]";
+
+        PAGE_CONTENT[42] =
+            "§b💧 Water Proc: DOUSE\n" +
+            "§8──────────────\n" +
+            "§7Requires: §eMagic Lv 20+\n" +
+            "§7Chance:   §f15%§7 §8(30% ⭐)\n\n" +
+            "§7On ANY basic Water hit, a\n" +
+            "§7chance to fully extinguish\n" +
+            "§7the target AND apply a\n" +
+            "§7short chilling slow.\n\n" +
+            "§7Passive. No combo needed.\n\n" +
+            "§8[43 / 45]";
+
+        PAGE_CONTENT[43] =
+            "§2🌿 Earth Proc: STUN\n" +
+            "§8──────────────\n" +
+            "§7Requires: §eMagic Lv 35+\n" +
+            "§7Chance:   §f15%§7 §8(30% ⭐)\n\n" +
+            "§7On ANY basic Earth hit, a\n" +
+            "§7chance to root the target\n" +
+            "§7in place — heavy Slowness\n" +
+            "§7+ Mining Fatigue briefly.\n\n" +
+            "§7Passive. No combo needed.\n\n" +
+            "§8[44 / 45]";
+
+        PAGE_CONTENT[44] =
+            "§f💨 Air Proc: BURST\n" +
+            "§8──────────────\n" +
+            "§7Requires: §eMagic Lv 50+\n" +
+            "§7Chance:   §f15%§7 §8(30% ⭐)\n\n" +
+            "§7On ANY basic Air hit, a\n" +
+            "§7chance to unleash a bonus\n" +
+            "§7knockback burst, hurling\n" +
+            "§7the target further back.\n\n" +
+            "§7Passive. No combo needed.\n\n" +
+            "§8[45 / 45]";
     }
 
     // ─────────────────────────────────────────────────────────────────────────

@@ -1,9 +1,56 @@
 WARNING: A restricted method in java.lang.System has been called
-WARNING: java.lang.System::load has been called by org.fusesource.jansi.internal.JansiLoader in an unnamed module (file:/C:/temp/maven/apache-maven-3.9.9/lib/jansi-2.4.1.jar)
+WARNING: java.lang.System::load has been called by org.fusesource.jansi.internal.JansiLoader in an unnamed module (file:/C:/Users/Owner/Desktop/maven/apache-maven-3.9.9/lib/jansi-2.4.1.jar)
 WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
 WARNING: Restricted methods will be blocked in a future release unless native access is enabled
 
 WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
-WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.google.common.util.concurrent.AbstractFuture$UnsafeAtomicHelper (file:/C:/temp/maven/apache-maven-3.9.9/lib/guava-33.2.1-jre.jar)
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.google.common.util.concurrent.AbstractFuture$UnsafeAtomicHelper (file:/C:/Users/Owner/Desktop/maven/apache-maven-3.9.9/lib/guava-33.2.1-jre.jar)
 WARNING: Please consider reporting this to the maintainers of class com.google.common.util.concurrent.AbstractFuture$UnsafeAtomicHelper
 WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] -------------------< com.yourname:DifficultyEngine >--------------------
+[INFO] Building DifficultyEngine 1.0
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- clean:3.2.0:clean (default-clean) @ DifficultyEngine ---
+[INFO] Deleting c:\Users\Owner\Desktop\123\target
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ DifficultyEngine ---
+[INFO] Copying 2 resources from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.14.0:compile (default-compile) @ DifficultyEngine ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 129 source files with javac [forked debug release 21] to target\classes
+[WARNING] Unable to autodetect 'javac' path, using 'javac' from the environment.
+[WARNING] c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\skills\SkillBonusManager.java:[129,49] [removal] getUniqueId() in AttributeModifier has been deprecated and marked for removal
+[WARNING] c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\skills\SkillBonusManager.java:[135,32] [removal] AttributeModifier(@org.jetbrains.annotations.NotNull UUID,@org.jetbrains.annotations.NotNull String,double,@org.jetbrains.annotations.NotNull Operation) in AttributeModifier has been deprecated and marked for removal
+[WARNING] c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\skills\SkillBonusManager.java:[154,49] [removal] getUniqueId() in AttributeModifier has been deprecated and marked for removal
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ DifficultyEngine ---
+[INFO] skip non existing resourceDirectory c:\Users\Owner\Desktop\123\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.14.0:testCompile (default-testCompile) @ DifficultyEngine ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- surefire:3.2.5:test (default-test) @ DifficultyEngine ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ DifficultyEngine ---
+[INFO] Building jar: c:\Users\Owner\Desktop\123\target\DifficultyEngine.jar
+[INFO] 
+[INFO] --- shade:3.5.3:shade (default) @ DifficultyEngine ---
+[INFO] Replacing original artifact with shaded artifact.
+[INFO] Replacing c:\Users\Owner\Desktop\123\target\DifficultyEngine.jar with c:\Users\Owner\Desktop\123\target\DifficultyEngine-1.0-shaded.jar
+[INFO] 
+[INFO] --- antrun:3.1.0:run (default) @ DifficultyEngine ---
+[INFO] Executing tasks
+[INFO]      [copy] Copying 1 file to c:\Users\Owner\Desktop\minecraft server\server\plugins
+[INFO] Executed tasks
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  3.270 s
+[INFO] Finished at: 2026-07-23T08:12:22-05:00
+[INFO] ------------------------------------------------------------------------

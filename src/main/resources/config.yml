@@ -6,4 +6,13 @@ ancient-realm:
   spawn-y: 77.0
   spawn-z: 1.450
 
+crimson:
+  # Hard server-wide cap on total live mini Blazefiends (across ALL Crimson
+  # Cubes combined) that the population-upkeep system is allowed to maintain.
+  # Prevents the "spawns going out of control and breaking the server" bug.
+  # Fiends now also spawn spread out across the full 300-block cube radius
+  # instead of clumping together near the cube.
+  maxAliveFiends: 200
+
+
 

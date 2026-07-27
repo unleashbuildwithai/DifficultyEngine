@@ -4,24 +4,28 @@ import com.yourname.difficulty.BringCommand;
 import com.yourname.difficulty.skills.SkillManager;
 import com.yourname.difficulty.skills.SkillType;
 import com.yourname.difficulty.items.ItemFactory;
-import com.yourname.difficulty.magic.MagicElement;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockFromToEvent;
-import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
 import java.util.*;
 
+/**
+ * AncientDebrisPortalListener — Manages the Ancient Debris portal that leads
+ * to the "ancient_realm" dimension.
+ *
+ * NOTE: the low-level portal-frame geometry checks (checkPortalFrame,
+ * checkPortalFrameForPortalBlocks, isAncientDebrisPortalBlock,
+ * getPortalAirBlocks) have been extracted to {@link AncientPortalFrameUtil}
+ * during the 400-line-file cleanup pass. Behaviour is unchanged.
+ */
 public class AncientDebrisPortalListener implements Listener {
 
     private static final String REALM_WORLD_NAME    = "ancient_realm";
@@ -52,6 +56,122 @@ public class AncientDebrisPortalListener implements Listener {
                 loc.getWorld().spawnParticle(Particle.DUST, loc.clone().add(0.5, 0.5, 0.5), 3, 0.3, 0.4, 0.3, 0, new Particle.DustOptions(Color.fromRGB(0, 180, 255), 1.2f)); // electric blue
             }
         }, 5L, 5L);
+
+        // ── Ensure the Ancient Realm world (and its return portal) exist ──────
+        // Runs 40 ticks (2s) after startup so all other worlds/plugins have
+        // finished loading first. This means players never have to manually
+        // create the "ancient_realm" world folder — the plugin will do it.
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            plugin.getLogger().info("[AncientRealm] Verifying Ancient Realm world on startup...");
+            World w = ensureRealmWorld();
+            if (w != null) {
+                ensureReturnPortalExists(w);
+            }
+        }, 40L);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  WORLD MANAGEMENT — auto-create the Ancient Realm world if it's missing,
+    //  and guarantee a return portal always exists there.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Returns the Ancient Realm world, creating it automatically if it does
+     * not exist yet. This is the fix for "the portal doesn't teleport me" —
+     * previously if the world folder didn't exist the teleport silently
+     * failed with just a chat message. Now the world is generated on demand.
+     */
+    private World ensureRealmWorld() {
+        World world = plugin.getServer().getWorld(REALM_WORLD_NAME);
+        if (world != null) {
+            plugin.getLogger().info("[AncientRealm] World '" + REALM_WORLD_NAME + "' already loaded.");
+            return world;
+        }
+
+        plugin.getLogger().warning("[AncientRealm] World '" + REALM_WORLD_NAME
+                + "' was not found — creating it now (this only happens once).");
+        try {
+            WorldCreator creator = new WorldCreator(REALM_WORLD_NAME);
+            world = creator.createWorld();
+        } catch (Exception ex) {
+            plugin.getLogger().severe("[AncientRealm] Failed to create world '" + REALM_WORLD_NAME
+                    + "': " + ex.getMessage());
+            return null;
+        }
+
+        if (world == null) {
+            plugin.getLogger().severe("[AncientRealm] World creation returned null for '" + REALM_WORLD_NAME + "'.");
+            return null;
+        }
+
+        plugin.getLogger().info("[AncientRealm] World '" + REALM_WORLD_NAME + "' created successfully.");
+        return world;
+    }
+
+    /**
+     * Guarantees a physical Ancient Debris portal frame (ignited) exists at
+     * the configured Ancient Realm spawn coordinates, so players ALWAYS have
+     * a way back to the Overworld after arriving. Idempotent — if a valid
+     * frame is already there it is left untouched; otherwise it is built.
+     */
+    private void ensureReturnPortalExists(World world) {
+        double x = plugin.getConfig().getDouble("ancient-realm.spawn-x", -23.320);
+        double y = plugin.getConfig().getDouble("ancient-realm.spawn-y", 77.0);
+        double z = plugin.getConfig().getDouble("ancient-realm.spawn-z", 1.450);
+
+        int bx = (int) Math.floor(x);
+        int by = (int) Math.floor(y);
+        int bz = (int) Math.floor(z);
+
+        // Force the target chunk to load/generate before touching blocks
+        world.getChunkAt(bx >> 4, bz >> 4).load(true);
+
+        Block bottomLeftAir = world.getBlockAt(bx, by, bz);
+        int dx = 1, dz = 0; // portal oriented along the X axis
+
+        if (AncientPortalFrameUtil.checkPortalFrameForPortalBlocks(bottomLeftAir, dx, dz)) {
+            plugin.getLogger().info("[AncientRealm] Return portal already present at "
+                    + bx + "," + by + "," + bz + " — leaving it as-is.");
+            // Make sure it's tracked even if it existed before a server restart
+            for (int w = 0; w < 2; w++) {
+                for (int h = 0; h < 3; h++) {
+                    activePortalBlocks.add(bottomLeftAir.getRelative(w * dx, h, w * dz).getLocation());
+                }
+            }
+            return;
+        }
+
+        plugin.getLogger().warning("[AncientRealm] No return portal found at spawn coords — building one now.");
+
+        // Frame — bottom
+        for (int w = 0; w < 2; w++) {
+            bottomLeftAir.getRelative(w * dx, -1, w * dz).setType(Material.ANCIENT_DEBRIS);
+        }
+        // Frame — top
+        for (int w = 0; w < 2; w++) {
+            bottomLeftAir.getRelative(w * dx, 3, w * dz).setType(Material.ANCIENT_DEBRIS);
+        }
+        // Frame — left
+        for (int h = 0; h < 3; h++) {
+            bottomLeftAir.getRelative(-dx, h, -dz).setType(Material.ANCIENT_DEBRIS);
+        }
+        // Frame — right
+        for (int h = 0; h < 3; h++) {
+            bottomLeftAir.getRelative(2 * dx, h, 2 * dz).setType(Material.ANCIENT_DEBRIS);
+        }
+
+        // Interior — ignite
+        for (int w = 0; w < 2; w++) {
+            for (int h = 0; h < 3; h++) {
+                Block b = bottomLeftAir.getRelative(w * dx, h, w * dz);
+                b.setType(Material.NETHER_PORTAL);
+                activePortalBlocks.add(b.getLocation());
+            }
+        }
+
+        world.setSpawnLocation(bx, by, bz);
+        plugin.getLogger().info("[AncientRealm] Return portal built + ignited at "
+                + bx + "," + by + "," + bz + ".");
     }
 
     public void setBringCommand(BringCommand bc) { this.bringCommand = bc; }
@@ -59,10 +179,19 @@ public class AncientDebrisPortalListener implements Listener {
     /**
      * Ignites the portal if the block is part of a valid Ancient Debris portal frame.
      * Called directly by MagicStaffListener when a Lv99 Fire Staff lightning strikes it.
+     *
+     * <p>Works identically whether the struck debris is in the Overworld (or
+     * any world) OR inside the {@code ancient_realm} dimension itself — this
+     * is what powers the "two-way" portal: striking a debris frame from
+     * either side ignites it and, once the player steps through
+     * (onPlayerMove below), sends them to the opposite side.
      */
     public void triggerViaLightning(Player player, Location blockLoc) {
         Block block = blockLoc.getBlock();
-        if (block.getType() != Material.ANCIENT_DEBRIS) return;
+        if (block.getType() != Material.ANCIENT_DEBRIS) {
+            player.sendMessage("§c✗ §7[Debug] Target block is not Ancient Debris (was " + block.getType() + ").");
+            return;
+        }
 
         int magicLevel = skillManager.getLevel(player.getUniqueId(), SkillType.MAGIC);
         if (magicLevel < REQUIRED_MAGIC) {
@@ -70,8 +199,21 @@ public class AncientDebrisPortalListener implements Listener {
             return;
         }
 
-        List<Block> portalAirBlocks = getPortalAirBlocks(block);
-        if (portalAirBlocks.isEmpty()) return;
+        List<Block> portalAirBlocks = AncientPortalFrameUtil.getPortalAirBlocks(block);
+        if (portalAirBlocks.isEmpty()) {
+            player.sendMessage("§c✗ §7No valid 2×3 Ancient Debris portal frame found near that block.");
+            player.sendMessage("§8   Build a 2-wide × 3-tall air gap fully bordered by Ancient Debris, then try again.");
+            // Detailed diagnostic — shows exactly which frame blocks are
+            // missing/wrong so players can fix their build instead of
+            // guessing why detection failed.
+            String debug = AncientPortalFrameUtil.debugNearestFrameMismatch(block);
+            for (String line : debug.split("\n")) {
+                if (!line.isBlank()) player.sendMessage(line);
+            }
+            plugin.getLogger().warning("[AncientRealm] triggerViaLightning: no valid frame found near "
+                    + block.getLocation());
+            return;
+        }
 
         // Ignite the portal
         for (Block air : portalAirBlocks) {
@@ -82,7 +224,22 @@ public class AncientDebrisPortalListener implements Listener {
         block.getWorld().playSound(block.getLocation(), Sound.ITEM_FLINTANDSTEEL_USE, 1.0f, 0.5f);
         block.getWorld().playSound(block.getLocation(), Sound.BLOCK_PORTAL_TRIGGER, 0.5f, 1.5f);
         player.sendMessage("§5⚡ §7The Ancient Debris portal ignites!");
+        plugin.getLogger().info("[AncientRealm] Portal ignited by " + player.getName()
+                + " at " + block.getLocation() + " (" + portalAirBlocks.size() + " blocks lit).");
+
+        // Make sure the destination world exists before the player ever steps
+        // through — if it doesn't, build it now instead of waiting for the
+        // player to touch the portal block and hit a silent failure.
+        World realmCheck = plugin.getServer().getWorld(REALM_WORLD_NAME);
+        if (realmCheck == null) {
+            player.sendMessage("§e⚠ §7Preparing the Ancient Realm dimension for the first time — this may take a moment...");
+            World created = ensureRealmWorld();
+            if (created != null) {
+                ensureReturnPortalExists(created);
+            }
+        }
     }
+
     
     @EventHandler
     public void onPortalPhysics(org.bukkit.event.block.BlockPhysicsEvent event) {
@@ -107,7 +264,7 @@ public class AncientDebrisPortalListener implements Listener {
         if (to == null) return;
         
         Block block = to.getBlock();
-        if (block.getType() == Material.NETHER_PORTAL && (activePortalBlocks.contains(block.getLocation()) || isAncientDebrisPortalBlock(block))) {
+        if (block.getType() == Material.NETHER_PORTAL && (activePortalBlocks.contains(block.getLocation()) || AncientPortalFrameUtil.isAncientDebrisPortalBlock(block))) {
             UUID uuid = player.getUniqueId();
             
             // Check cooldown
@@ -134,16 +291,23 @@ public class AncientDebrisPortalListener implements Listener {
                     if (returnLoc == null || returnLoc.getWorld() == null) {
                         World overworld = plugin.getServer().getWorlds().get(0);
                         returnLoc = overworld.getSpawnLocation();
+                        plugin.getLogger().info("[AncientRealm] " + player.getName()
+                                + " had no saved return location — sending to overworld spawn instead.");
                     }
                     player.teleport(returnLoc);
                     player.sendMessage("§a✓ §7You have returned to the §aOverworld§7!");
+                    plugin.getLogger().info("[AncientRealm] " + player.getName() + " returned to Overworld at " + returnLoc);
                 } else {
                     // Go to Ancient Realm
                     returnLocations.put(uuid, player.getLocation().clone());
                     
                     World ancientWorld = plugin.getServer().getWorld(REALM_WORLD_NAME);
                     if (ancientWorld == null) {
-                        player.sendMessage("§c✗ §7The Ancient Realm world does not exist!");
+                        player.sendMessage("§e⚠ §7The Ancient Realm world wasn't loaded yet — creating it now, please step through again in a few seconds.");
+                        plugin.getLogger().warning("[AncientRealm] Teleport aborted for " + player.getName()
+                                + ": world '" + REALM_WORLD_NAME + "' did not exist. Creating it now.");
+                        World created = ensureRealmWorld();
+                        if (created != null) ensureReturnPortalExists(created);
                         return;
                     }
                     
@@ -153,7 +317,11 @@ public class AncientDebrisPortalListener implements Listener {
                     double z = plugin.getConfig().getDouble("ancient-realm.spawn-z", 1.450);
                     Location dest = new Location(ancientWorld, x, y, z, player.getLocation().getYaw(), player.getLocation().getPitch());
                     
+                    // Guarantee chunk is loaded before teleporting to avoid drop-through-void
+                    dest.getChunk().load(true);
+
                     player.teleport(dest);
+                    plugin.getLogger().info("[AncientRealm] " + player.getName() + " teleported to Ancient Realm at " + dest);
                     
                     if (bringCommand != null && bringCommand.isBringEnabled(uuid)) {
                         bringCommand.bringParty(player, dest, 10L);
@@ -163,120 +331,6 @@ public class AncientDebrisPortalListener implements Listener {
                 }
             }, 30L); // 1.5 second delay while glitching
         }
-    }
-
-    private boolean isAncientDebrisPortalBlock(Block block) {
-        if (block.getType() != Material.NETHER_PORTAL) return false;
-        int[][] dirs = {{1, 0, 0}, {0, 0, 1}}; // X axis portal, Z axis portal
-        for (int[] dir : dirs) {
-            int dx = dir[0];
-            int dz = dir[1];
-            for (int w = 0; w < 2; w++) {
-                for (int h = 0; h < 3; h++) {
-                    Block bottomLeftAir = block.getRelative(-w * dx, -h, -w * dz);
-                    if (checkPortalFrameForPortalBlocks(bottomLeftAir, dx, dz)) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
-    }
-
-    private boolean checkPortalFrameForPortalBlocks(Block bottomLeftAir, int dx, int dz) {
-        // Check if the 2x3 area is air, water, or portal
-        for (int w = 0; w < 2; w++) {
-            for (int h = 0; h < 3; h++) {
-                Material type = bottomLeftAir.getRelative(w * dx, h, w * dz).getType();
-                if (type != Material.AIR && type != Material.WATER && type != Material.NETHER_PORTAL) {
-                    return false;
-                }
-            }
-        }
-        
-        // Check frame (bottom)
-        for (int w = 0; w < 2; w++) {
-            if (bottomLeftAir.getRelative(w * dx, -1, w * dz).getType() != Material.ANCIENT_DEBRIS) return false;
-        }
-        // Check frame (top)
-        for (int w = 0; w < 2; w++) {
-            if (bottomLeftAir.getRelative(w * dx, 3, w * dz).getType() != Material.ANCIENT_DEBRIS) return false;
-        }
-        // Check frame (left)
-        for (int h = 0; h < 3; h++) {
-            if (bottomLeftAir.getRelative(-dx, h, -dz).getType() != Material.ANCIENT_DEBRIS) return false;
-        }
-        // Check frame (right)
-        for (int h = 0; h < 3; h++) {
-            if (bottomLeftAir.getRelative(2 * dx, h, 2 * dz).getType() != Material.ANCIENT_DEBRIS) return false;
-        }
-        
-        return true;
-    }
-
-    private List<Block> getPortalAirBlocks(Block clickedFrameBlock) {
-        // Simple 4x5 nether portal shape detection
-        // We will scan a 3x3x3 area around the clicked block to find a 2x3 air gap bounded by Ancient Debris
-        List<Block> result = new ArrayList<>();
-        
-        int[][] dirs = {{1, 0, 0}, {0, 0, 1}}; // X axis portal, Z axis portal
-        
-        for (int[] dir : dirs) {
-            int dx = dir[0];
-            int dz = dir[1];
-            
-            // Try to find bottom-left corner of the air gap relative to clicked block
-            for (int offsetX = -2; offsetX <= 2; offsetX++) {
-                for (int offsetZ = -2; offsetZ <= 2; offsetZ++) {
-                    for (int offsetY = -3; offsetY <= 1; offsetY++) { // Expanded offsetY scanner range
-                        Block bottomLeftAir = clickedFrameBlock.getRelative(offsetX * dx, offsetY, offsetZ * dz);
-                        
-                        if (checkPortalFrame(bottomLeftAir, dx, dz)) {
-                            // Collect air blocks
-                            for (int w = 0; w < 2; w++) {
-                                for (int h = 0; h < 3; h++) {
-                                    result.add(bottomLeftAir.getRelative(w * dx, h, w * dz));
-                                }
-                            }
-                            return result;
-                        }
-                    }
-                }
-            }
-        }
-        
-        return result;
-    }
-    
-    private boolean checkPortalFrame(Block bottomLeftAir, int dx, int dz) {
-        // Check if the 2x3 area is air or water
-        for (int w = 0; w < 2; w++) {
-            for (int h = 0; h < 3; h++) {
-                Material type = bottomLeftAir.getRelative(w * dx, h, w * dz).getType();
-                if (type != Material.AIR && type != Material.WATER) {
-                    return false;
-                }
-            }
-        }
-        
-        // Check frame (bottom)
-        for (int w = 0; w < 2; w++) {
-            if (bottomLeftAir.getRelative(w * dx, -1, w * dz).getType() != Material.ANCIENT_DEBRIS) return false;
-        }
-        // Check frame (top)
-        for (int w = 0; w < 2; w++) {
-            if (bottomLeftAir.getRelative(w * dx, 3, w * dz).getType() != Material.ANCIENT_DEBRIS) return false;
-        }
-        // Check frame (left)
-        for (int h = 0; h < 3; h++) {
-            if (bottomLeftAir.getRelative(-dx, h, -dz).getType() != Material.ANCIENT_DEBRIS) return false;
-        }
-        // Check frame (right)
-        for (int h = 0; h < 3; h++) {
-            if (bottomLeftAir.getRelative(2 * dx, h, 2 * dz).getType() != Material.ANCIENT_DEBRIS) return false;
-        }
-        
-        return true;
     }
 
     public boolean isAncientRealm(World world) {

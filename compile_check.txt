@@ -1,0 +1,368 @@
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\AdminLightCommand.java:3: error: package org.bukkit.command does not exist
+import org.bukkit.command.Command;
+                         ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\AdminLightCommand.java:4: error: package org.bukkit.command does not exist
+import org.bukkit.command.CommandExecutor;
+                         ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\AdminLightCommand.java:5: error: package org.bukkit.command does not exist
+import org.bukkit.command.CommandSender;
+                         ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\AdminLightCommand.java:6: error: package org.bukkit.entity does not exist
+import org.bukkit.entity.Player;
+                        ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\AdminLightCommand.java:7: error: cannot find symbol
+import org.bukkit.plugin.java.JavaPlugin;
+                             ^
+  symbol:   class JavaPlugin
+  location: package org.bukkit.plugin.java
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\AdminLightCommand.java:8: error: package org.bukkit.potion does not exist
+import org.bukkit.potion.PotionEffect;
+                        ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\AdminLightCommand.java:9: error: package org.bukkit.potion does not exist
+import org.bukkit.potion.PotionEffectType;
+                        ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\AdminLightCommand.java:10: error: package org.bukkit.scheduler does not exist
+import org.bukkit.scheduler.BukkitRunnable;
+                           ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\AdminLightCommand.java:11: error: package org.bukkit.scheduler does not exist
+import org.bukkit.scheduler.BukkitTask;
+                           ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\AdminLightCommand.java:32: error: cannot find symbol
+public class AdminLightCommand implements CommandExecutor {
+                                          ^
+  symbol: class CommandExecutor
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\AdminLightCommand.java:34: error: cannot find symbol
+    private final JavaPlugin              plugin;
+                  ^
+  symbol:   class JavaPlugin
+  location: class AdminLightCommand
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\AdminLightCommand.java:36: error: cannot find symbol
+    private final Map<UUID, BukkitTask>  activeTasks = new HashMap<>();
+                            ^
+  symbol:   class BukkitTask
+  location: class AdminLightCommand
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\AdminLightCommand.java:44: error: cannot find symbol
+    public AdminLightCommand(JavaPlugin plugin) {
+                             ^
+  symbol:   class JavaPlugin
+  location: class AdminLightCommand
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\AdminLightCommand.java:49: error: cannot find symbol
+    public boolean onCommand(CommandSender sender, Command command,
+                             ^
+  symbol:   class CommandSender
+  location: class AdminLightCommand
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\AdminLightCommand.java:49: error: cannot find symbol
+    public boolean onCommand(CommandSender sender, Command command,
+                                                   ^
+  symbol:   class Command
+  location: class AdminLightCommand
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\AdminLightCommand.java:79: error: cannot find symbol
+    private void enable(Player player, UUID uuid) {
+                        ^
+  symbol:   class Player
+  location: class AdminLightCommand
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\AdminLightCommand.java:104: error: cannot find symbol
+    private void disable(Player player, UUID uuid) {
+                         ^
+  symbol:   class Player
+  location: class AdminLightCommand
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\AdminLightCommand.java:115: error: cannot find symbol
+    private void applyNightVision(Player player) {
+                                  ^
+  symbol:   class Player
+  location: class AdminLightCommand
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:4: error: package org.bukkit does not exist
+import org.bukkit.Bukkit;
+                 ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:5: error: package org.bukkit does not exist
+import org.bukkit.Color;
+                 ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:6: error: package org.bukkit does not exist
+import org.bukkit.Location;
+                 ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:7: error: package org.bukkit does not exist
+import org.bukkit.Particle;
+                 ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:8: error: package org.bukkit does not exist
+import org.bukkit.Sound;
+                 ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:9: error: package org.bukkit does not exist
+import org.bukkit.World;
+                 ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:10: error: package org.bukkit.command does not exist
+import org.bukkit.command.Command;
+                         ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:11: error: package org.bukkit.command does not exist
+import org.bukkit.command.CommandExecutor;
+                         ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:12: error: package org.bukkit.command does not exist
+import org.bukkit.command.CommandSender;
+                         ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:13: error: package org.bukkit.entity does not exist
+import org.bukkit.entity.Player;
+                        ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:14: error: package org.bukkit.event does not exist
+import org.bukkit.event.EventHandler;
+                       ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:15: error: package org.bukkit.event does not exist
+import org.bukkit.event.EventPriority;
+                       ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:16: error: package org.bukkit.event does not exist
+import org.bukkit.event.Listener;
+                       ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:17: error: package org.bukkit.event.player does not exist
+import org.bukkit.event.player.PlayerPortalEvent;
+                              ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:18: error: cannot find symbol
+import org.bukkit.plugin.java.JavaPlugin;
+                             ^
+  symbol:   class JavaPlugin
+  location: package org.bukkit.plugin.java
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:41: error: cannot find symbol
+public class BringCommand implements CommandExecutor, Listener {
+                                     ^
+  symbol: class CommandExecutor
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:41: error: cannot find symbol
+public class BringCommand implements CommandExecutor, Listener {
+                                                      ^
+  symbol: class Listener
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:43: error: cannot find symbol
+    private final JavaPlugin   plugin;
+                  ^
+  symbol:   class JavaPlugin
+  location: class BringCommand
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\party\PartyManager.java:3: error: package org.bukkit.entity does not exist
+import org.bukkit.entity.Player;
+                        ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:49: error: cannot find symbol
+    public BringCommand(JavaPlugin plugin, PartyManager partyManager) {
+                        ^
+  symbol:   class JavaPlugin
+  location: class BringCommand
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:57: error: cannot find symbol
+    public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
+                             ^
+  symbol:   class CommandSender
+  location: class BringCommand
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:57: error: cannot find symbol
+    public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
+                                                   ^
+  symbol:   class Command
+  location: class BringCommand
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:114: error: cannot find symbol
+    public void bringParty(Player leader, Location dest, long delayTicks) {
+                           ^
+  symbol:   class Player
+  location: class BringCommand
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:114: error: cannot find symbol
+    public void bringParty(Player leader, Location dest, long delayTicks) {
+                                          ^
+  symbol:   class Location
+  location: class BringCommand
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:158: error: cannot find symbol
+    public void spawnPortalVortex(Location center) {
+                                  ^
+  symbol:   class Location
+  location: class BringCommand
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\BringCommand.java:207: error: cannot find symbol
+    public void onPlayerPortal(PlayerPortalEvent event) {
+                               ^
+  symbol:   class PlayerPortalEvent
+  location: class BringCommand
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\CureCosmeticCommand.java:3: error: package org.bukkit.command does not exist
+import org.bukkit.command.Command;
+                         ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\CureCosmeticCommand.java:4: error: package org.bukkit.command does not exist
+import org.bukkit.command.CommandExecutor;
+                         ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\CureCosmeticCommand.java:5: error: package org.bukkit.command does not exist
+import org.bukkit.command.CommandSender;
+                         ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\CureCosmeticCommand.java:6: error: package org.bukkit.entity does not exist
+import org.bukkit.entity.Player;
+                        ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\CureCosmeticCommand.java:7: error: package org.bukkit.potion does not exist
+import org.bukkit.potion.PotionEffectType;
+                        ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\CureCosmeticCommand.java:23: error: cannot find symbol
+public class CureCosmeticCommand implements CommandExecutor {
+                                            ^
+  symbol: class CommandExecutor
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\CureCosmeticCommand.java:26: error: cannot find symbol
+    private static final List<PotionEffectType> COSMETIC_EFFECTS = List.of(
+                              ^
+  symbol:   class PotionEffectType
+  location: class CureCosmeticCommand
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\CureCosmeticCommand.java:36: error: cannot find symbol
+    public boolean onCommand(CommandSender sender, Command command,
+                             ^
+  symbol:   class CommandSender
+  location: class CureCosmeticCommand
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\CureCosmeticCommand.java:36: error: cannot find symbol
+    public boolean onCommand(CommandSender sender, Command command,
+                                                   ^
+  symbol:   class Command
+  location: class CureCosmeticCommand
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\DifficultyCommand.java:3: error: package org.bukkit.command does not exist
+import org.bukkit.command.Command;
+                         ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\DifficultyCommand.java:4: error: package org.bukkit.command does not exist
+import org.bukkit.command.CommandExecutor;
+                         ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\DifficultyCommand.java:5: error: package org.bukkit.command does not exist
+import org.bukkit.command.CommandSender;
+                         ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\DifficultyCommand.java:6: error: package org.bukkit.entity does not exist
+import org.bukkit.entity.Player;
+                        ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\DifficultyCommand.java:17: error: cannot find symbol
+public class DifficultyCommand implements CommandExecutor {
+                                          ^
+  symbol: class CommandExecutor
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\PlayerDifficultyManager.java:3: error: package org.bukkit does not exist
+import org.bukkit.NamespacedKey;
+                 ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\PlayerDifficultyManager.java:4: error: package org.bukkit.configuration.file does not exist
+import org.bukkit.configuration.file.YamlConfiguration;
+                                    ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\PlayerDifficultyManager.java:5: error: package org.bukkit.entity does not exist
+import org.bukkit.entity.Player;
+                        ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\PlayerDifficultyManager.java:6: error: package org.bukkit.persistence does not exist
+import org.bukkit.persistence.PersistentDataType;
+                             ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\DifficultyCommand.java:26: error: cannot find symbol
+    public boolean onCommand(CommandSender sender, Command command,
+                             ^
+  symbol:   class CommandSender
+  location: class DifficultyCommand
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\DifficultyCommand.java:26: error: cannot find symbol
+    public boolean onCommand(CommandSender sender, Command command,
+                                                   ^
+  symbol:   class Command
+  location: class DifficultyCommand
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\Main.java:99: error: package net.md_5.bungee.api.chat does not exist
+import net.md_5.bungee.api.chat.ClickEvent;
+                               ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\Main.java:100: error: package net.md_5.bungee.api.chat does not exist
+import net.md_5.bungee.api.chat.TextComponent;
+                               ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\Main.java:101: error: package org.bukkit does not exist
+import org.bukkit.Material;
+                 ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\Main.java:102: error: package org.bukkit does not exist
+import org.bukkit.NamespacedKey;
+                 ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\Main.java:103: error: package org.bukkit.entity does not exist
+import org.bukkit.entity.Player;
+                        ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\Main.java:104: error: package org.bukkit.event does not exist
+import org.bukkit.event.EventHandler;
+                       ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\Main.java:105: error: package org.bukkit.event does not exist
+import org.bukkit.event.Listener;
+                       ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\Main.java:106: error: package org.bukkit.event.player does not exist
+import org.bukkit.event.player.PlayerJoinEvent;
+                              ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\Main.java:107: error: package org.bukkit.inventory does not exist
+import org.bukkit.inventory.ItemStack;
+                           ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\Main.java:108: error: package org.bukkit.inventory does not exist
+import org.bukkit.inventory.ShapelessRecipe;
+                           ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\Main.java:109: error: cannot find symbol
+import org.bukkit.plugin.java.JavaPlugin;
+                             ^
+  symbol:   class JavaPlugin
+  location: package org.bukkit.plugin.java
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\Main.java:114: error: cannot find symbol
+public class Main extends JavaPlugin {
+                          ^
+  symbol: class JavaPlugin
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\PlayerDifficultyManager.java:40: error: cannot find symbol
+    private final NamespacedKey nightmareKey;
+                  ^
+  symbol:   class NamespacedKey
+  location: class PlayerDifficultyManager
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\PlayerDifficultyManager.java:64: error: cannot find symbol
+    public void syncNightmareTag(Player player, DifficultyLevel level) {
+                                 ^
+  symbol:   class Player
+  location: class PlayerDifficultyManager
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\PlayerDifficultyManager.java:73: error: cannot find symbol
+    public boolean isNightmareTagged(Player player) {
+                                     ^
+  symbol:   class Player
+  location: class PlayerDifficultyManager
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\PlayerDifficultyManager.java:197: error: cannot find symbol
+    public NamespacedKey getNightmareKey() { return nightmareKey; }
+           ^
+  symbol:   class NamespacedKey
+  location: class PlayerDifficultyManager
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\items\ItemFactory.java:9: error: package org.bukkit does not exist
+import org.bukkit.Color;
+                 ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\items\ItemFactory.java:10: error: package org.bukkit does not exist
+import org.bukkit.Material;
+                 ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\items\ItemFactory.java:11: error: package org.bukkit does not exist
+import org.bukkit.NamespacedKey;
+                 ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\items\ItemFactory.java:12: error: package org.bukkit.enchantments does not exist
+import org.bukkit.enchantments.Enchantment;
+                              ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\items\ItemFactory.java:13: error: package org.bukkit.entity does not exist
+import org.bukkit.entity.Player;
+                        ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\items\ItemFactory.java:14: error: package org.bukkit.inventory does not exist
+import org.bukkit.inventory.ItemFlag;
+                           ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\items\ItemFactory.java:15: error: package org.bukkit.inventory does not exist
+import org.bukkit.inventory.ItemStack;
+                           ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\items\ItemFactory.java:16: error: package org.bukkit.inventory.meta does not exist
+import org.bukkit.inventory.meta.BookMeta;
+                                ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\items\ItemFactory.java:17: error: package org.bukkit.inventory.meta does not exist
+import org.bukkit.inventory.meta.ItemMeta;
+                                ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\items\ItemFactory.java:18: error: package org.bukkit.inventory.meta does not exist
+import org.bukkit.inventory.meta.LeatherArmorMeta;
+                                ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\items\ItemFactory.java:19: error: package org.bukkit.inventory.meta does not exist
+import org.bukkit.inventory.meta.PotionMeta;
+                                ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\items\ItemFactory.java:20: error: package org.bukkit.persistence does not exist
+import org.bukkit.persistence.PersistentDataType;
+                             ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\items\ItemFactory.java:21: error: cannot find symbol
+import org.bukkit.plugin.java.JavaPlugin;
+                             ^
+  symbol:   class JavaPlugin
+  location: package org.bukkit.plugin.java
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\items\ItemFactory.java:22: error: package org.bukkit.potion does not exist
+import org.bukkit.potion.PotionEffect;
+                        ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\items\ItemFactory.java:23: error: package org.bukkit.potion does not exist
+import org.bukkit.potion.PotionEffectType;
+                        ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\gui\RegistryGUI.java:4: error: package org.bukkit does not exist
+import org.bukkit.Bukkit;
+                 ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\gui\RegistryGUI.java:5: error: package org.bukkit does not exist
+import org.bukkit.Material;
+                 ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\gui\RegistryGUI.java:6: error: package org.bukkit.entity does not exist
+import org.bukkit.entity.Player;
+                        ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\gui\RegistryGUI.java:7: error: package org.bukkit.inventory does not exist
+import org.bukkit.inventory.Inventory;
+                           ^
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\gui\RegistryGUI.java:8: error: package org.bukkit.inventory does not exist
+import org.bukkit.inventory.InventoryView;
+                           ^
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+100 errors
+only showing the first 100 errors, of 8254 total; use -Xmaxerrs if you would like to see more

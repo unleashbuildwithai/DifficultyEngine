@@ -177,14 +177,21 @@ public class MagicBagChestInterceptListener implements Listener {
         // If it classifies to a non-zero page it's an elemental item
         if (bagManager.classifyItemToPage(item) != 0) return true;
 
+        // ── PDC-based Support item detection (fixes "support isn't a magic
+        // bag item" — previously only display-name keywords were checked
+        // here, which missed the Support Book/Pages/Potions/Rune/Staff). ──
+        if (bagManager.isSupportItem(item)) return true;
+
         // Check display name for magic keywords
         if (!item.hasItemMeta() || !item.getItemMeta().hasDisplayName()) return false;
         String name = item.getItemMeta().getDisplayName().toLowerCase();
         return name.contains("rune") || name.contains("staff") || name.contains("mage")
             || name.contains("spell") || name.contains("dragon") || name.contains("dark bow")
             || name.contains("arcane") || name.contains("earth") || name.contains("support staff")
-            || name.contains("survivor token");
+            || name.contains("survivor token") || name.contains("support") || name.contains("blessing")
+            || name.contains("page") || name.contains("potion") || name.contains("book");
     }
+
 
     private static String getItemName(ItemStack item) {
         if (item.hasItemMeta() && item.getItemMeta().hasDisplayName())

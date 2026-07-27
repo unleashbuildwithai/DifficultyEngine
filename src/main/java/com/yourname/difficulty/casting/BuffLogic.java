@@ -9,7 +9,7 @@ import org.bukkit.potion.PotionEffectType;
 import java.util.Collection;
 
 /**
- * BuffLogic — Applies the gameplay effect for each BuffType.
+ * BuffLogic â€” Applies the gameplay effect for each BuffType.
  *
  * Called by CastingEngine after a matching combo is detected.
  * Each method applies particle effects, sounds, potion effects,
@@ -59,14 +59,14 @@ public class BuffLogic {
         }
     }
 
-    // ── Offensive ─────────────────────────────────────────────────────────────
+    // â”€â”€ Offensive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private void infernoBlast(Player caster) {
         Location loc = caster.getLocation();
         loc.getWorld().spawnParticle(Particle.FLAME, loc, 60, 3, 2, 3, 0.1);
         loc.getWorld().playSound(loc, Sound.ENTITY_BLAZE_SHOOT, 1.5f, 0.8f);
         nearbyMobs(caster).forEach(e -> e.setFireTicks(100)); // 5s fire
-        caster.sendMessage("§c🔥 §lInferno Burst§r §7— nearby enemies ignited!");
+        caster.sendMessage("Â§cðŸ”¥ Â§lInferno BurstÂ§r Â§7â€” nearby enemies ignited!");
     }
 
     private void steamBlast(Player caster) {
@@ -78,7 +78,7 @@ public class BuffLogic {
                 le.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 60, 0));
             }
         });
-        caster.sendMessage("§b💨 §lSteam Blast§r §7— nearby enemies blinded for 3s!");
+        caster.sendMessage("Â§bðŸ’¨ Â§lSteam BlastÂ§r Â§7â€” nearby enemies blinded for 3s!");
     }
 
     private void magmaTrap(Player caster) {
@@ -91,7 +91,7 @@ public class BuffLogic {
                 e.setFireTicks(60);
             }
         });
-        caster.sendMessage("§6🌋 §lMagma Trap§r §7— nearby enemies slowed and burning!");
+        caster.sendMessage("Â§6ðŸŒ‹ Â§lMagma TrapÂ§r Â§7â€” nearby enemies slowed and burning!");
     }
 
     private void tornadoFlame(Player caster) {
@@ -102,10 +102,10 @@ public class BuffLogic {
         caster.setVelocity(caster.getVelocity().add(new org.bukkit.util.Vector(0, 0.8, 0)));
         // Fire nova
         nearbyMobs(caster).forEach(e -> e.setFireTicks(80));
-        caster.sendMessage("§e🌪 §lTornado Flame§r §7— fire nova launched!");
+        caster.sendMessage("Â§eðŸŒª Â§lTornado FlameÂ§r Â§7â€” fire nova launched!");
     }
 
-    // ── Defensive ─────────────────────────────────────────────────────────────
+    // â”€â”€ Defensive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private void tidalSurge(Player caster) {
         Location loc = caster.getLocation();
@@ -116,14 +116,14 @@ public class BuffLogic {
                 le.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 100, 1));
             }
         });
-        caster.sendMessage("§b🌊 §lTidal Surge§r §7— nearby mobs slowed!");
+        caster.sendMessage("Â§bðŸŒŠ Â§lTidal SurgeÂ§r Â§7â€” nearby mobs slowed!");
     }
 
     private void stoneSkin(Player caster) {
         caster.getWorld().spawnParticle(Particle.ENCHANTED_HIT, caster.getLocation(), 30, 1, 1, 1, 0.1);
         caster.getWorld().playSound(caster.getLocation(), Sound.BLOCK_STONE_BREAK, 2f, 0.5f);
         caster.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 200, 1)); // 10s Resistance II
-        caster.sendMessage("§2🪨 §lStone Skin§r §7— Resistance II for 10 seconds!");
+        caster.sendMessage("Â§2ðŸª¨ Â§lStone SkinÂ§r Â§7â€” Resistance II for 10 seconds!");
     }
 
     private void quicksand(Player caster) {
@@ -136,7 +136,7 @@ public class BuffLogic {
                 le.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 120, 3)); // Slowness IV
             }
         });
-        caster.sendMessage("§a🌿 §lQuicksand§r §7— nearby mobs rooted!");
+        caster.sendMessage("Â§aðŸŒ¿ Â§lQuicksandÂ§r Â§7â€” nearby mobs rooted!");
     }
 
     private void mistVeil(Player caster) {
@@ -144,10 +144,10 @@ public class BuffLogic {
         caster.getWorld().playSound(caster.getLocation(), Sound.ITEM_BOTTLE_FILL, 2f, 1.5f);
         caster.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, 120, 0)); // 6s
         caster.addPotionEffect(new PotionEffect(PotionEffectType.SPEED,        120, 1));
-        caster.sendMessage("§f🌫 §lMist Veil§r §7— invisible + Speed II for 6 seconds!");
+        caster.sendMessage("Â§fðŸŒ« Â§lMist VeilÂ§r Â§7â€” invisible + Speed II for 6 seconds!");
     }
 
-    // ── Elemental reactions ───────────────────────────────────────────────────
+    // â”€â”€ Elemental reactions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private void sandstorm(Player caster) {
         Location loc = caster.getLocation();
@@ -165,7 +165,7 @@ public class BuffLogic {
                 le.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 80, 1));
             }
         });
-        caster.sendMessage("§e⚡ §lSandstorm§r §7— sand blinds nearby mobs!");
+        caster.sendMessage("Â§eâš¡ Â§lSandstormÂ§r Â§7â€” sand blinds nearby mobs!");
     }
 
     private void galeForce(Player caster) {
@@ -178,7 +178,7 @@ public class BuffLogic {
             vel.setY(1.2);
             e.setVelocity(vel);
         });
-        caster.sendMessage("§f🌀 §lGale Force§r §7— nearby mobs launched into the air!");
+        caster.sendMessage("Â§fðŸŒ€ Â§lGale ForceÂ§r Â§7â€” nearby mobs launched into the air!");
     }
 
     private void mudWall(Player caster) {
@@ -199,23 +199,23 @@ public class BuffLogic {
             }, 200L);
         }
         caster.getWorld().playSound(front, Sound.BLOCK_STONE_PLACE, 2f, 0.8f);
-        caster.sendMessage("§2🧱 §lMud Wall§r §7— barrier placed (10s duration)!");
+        caster.sendMessage("Â§2ðŸ§± Â§lMud WallÂ§r Â§7â€” barrier placed (10s duration)!");
     }
 
     private void grandHarmony(Player caster) {
         caster.getWorld().spawnParticle(Particle.DRAGON_BREATH, caster.getLocation(), 100, 2, 2, 2, 0.1);
         caster.getWorld().playSound(caster.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 1f, 1f);
         double maxHp = caster.getAttribute(
-                org.bukkit.attribute.Attribute.GENERIC_MAX_HEALTH).getValue();
+                org.bukkit.attribute.Attribute.MAX_HEALTH).getValue();
         caster.setHealth(maxHp); // Full heal
         caster.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 300, 1)); // 15s Strength II
         caster.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 300, 1));
         caster.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 100, 1));
-        caster.sendMessage("§d✦ §lGrand Harmony§r §7— FULL HEAL + Strength II + Resistance II!");
-        caster.sendTitle("§d§l✦ GRAND HARMONY ✦", "§7All elements united!", 5, 60, 10);
+        caster.sendMessage("Â§dâœ¦ Â§lGrand HarmonyÂ§r Â§7â€” FULL HEAL + Strength II + Resistance II!");
+        caster.sendTitle("Â§dÂ§lâœ¦ GRAND HARMONY âœ¦", "Â§7All elements united!", 5, 60, 10);
     }
 
-    // ── Support ───────────────────────────────────────────────────────────────
+    // â”€â”€ Support â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private void cleanse(Player caster) {
         caster.getWorld().spawnParticle(Particle.TOTEM_OF_UNDYING, caster.getLocation(), 60, 1, 1, 1, 0.1);
@@ -223,24 +223,24 @@ public class BuffLogic {
         caster.getActivePotionEffects().stream()
                 .filter(e -> isNegative(e.getType()))
                 .forEach(e -> caster.removePotionEffect(e.getType()));
-        caster.sendMessage("§a✨ §lCleanse§r §7— all negative effects removed!");
+        caster.sendMessage("Â§aâœ¨ Â§lCleanseÂ§r Â§7â€” all negative effects removed!");
     }
 
     private void blazeDash(Player caster) {
         caster.getWorld().spawnParticle(Particle.FLAME, caster.getLocation(), 30, 0.5, 0.5, 0.5, 0.1);
         caster.getWorld().playSound(caster.getLocation(), Sound.ENTITY_BLAZE_SHOOT, 1f, 1.5f);
         caster.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 80, 3)); // 4s Speed IV
-        caster.sendMessage("§c🔥 §lBlaze Dash§r §7— Speed IV for 4 seconds!");
+        caster.sendMessage("Â§cðŸ”¥ Â§lBlaze DashÂ§r Â§7â€” Speed IV for 4 seconds!");
     }
 
     private void fortify(Player caster) {
         caster.getWorld().spawnParticle(Particle.CRIT, caster.getLocation(), 40, 1, 1, 1, 0.1);
         caster.getWorld().playSound(caster.getLocation(), Sound.ITEM_SHIELD_BLOCK, 2f, 0.5f);
         caster.addPotionEffect(new PotionEffect(PotionEffectType.ABSORPTION, 600, 1)); // 30s Absorption II
-        caster.sendMessage("§6🛡 §lFortify§r §7— Absorption II for 30 seconds!");
+        caster.sendMessage("Â§6ðŸ›¡ Â§lFortifyÂ§r Â§7â€” Absorption II for 30 seconds!");
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private Collection<Entity> nearbyMobs(Player caster) {
         return caster.getWorld().getNearbyEntities(

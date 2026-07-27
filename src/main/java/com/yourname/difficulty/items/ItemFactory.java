@@ -77,6 +77,11 @@ public class ItemFactory {
     public static final String QUEST_OVERVIEW_BOOK_KEY  = "de_quest_overview_book";
     public static final String WATER_BOOK_KEY           = "de_water_book";
     public static final String EARTH_BOOK_KEY           = "de_earth_book";
+    /** Shared PDC key applied to the 4 general lore books (Novice Primer, Mage's Primer, Elemental Theory, Hidden Arts) for Magic Bag categorisation. */
+    public static final String LORE_BOOK_KEY            = "de_lore_book";
+    /** PDC key for the Mage Gear Guide (previously untagged) — needed for Magic Bag book-zone detection. */
+    public static final String MAGE_GEAR_GUIDE_KEY      = "de_mage_gear_guide";
+
 
     /**
      * Shared PDC key strings with {@link com.yourname.difficulty.magic.SpellBookManager}.
@@ -146,6 +151,9 @@ public class ItemFactory {
     private final NamespacedKey questOverviewBookKey;
     private final NamespacedKey waterBookKey;
     private final NamespacedKey earthBookKey;
+    private final NamespacedKey loreBookKey;
+    private final NamespacedKey mageGearGuideKey;
+
     // ── Shared SpellBook display keys (same namespace:key as SpellBookManager) ─
     /** Matches SpellBookManager.spellTomeKey so registry-given tomes open the FavoritesGUI. */
     private final NamespacedKey spellTomeDisplayKey;
@@ -239,6 +247,9 @@ public class ItemFactory {
         this.questOverviewBookKey   = new NamespacedKey(plugin, QUEST_OVERVIEW_BOOK_KEY);
         this.waterBookKey           = new NamespacedKey(plugin, WATER_BOOK_KEY);
         this.earthBookKey           = new NamespacedKey(plugin, EARTH_BOOK_KEY);
+        this.loreBookKey            = new NamespacedKey(plugin, LORE_BOOK_KEY);
+        this.mageGearGuideKey       = new NamespacedKey(plugin, MAGE_GEAR_GUIDE_KEY);
+
         // Shared spell-book display keys — must match SpellBookManager's key strings exactly
         this.spellTomeDisplayKey    = new NamespacedKey(plugin, SPELL_TOME_DISPLAY_KEY);
         this.spellPageDisplayKey    = new NamespacedKey(plugin, SPELL_PAGE_DISPLAY_KEY);
@@ -281,11 +292,13 @@ public class ItemFactory {
         this.supportPageStasisKey        = new NamespacedKey(plugin, SUPPORT_PAGE_STASIS_KEY);
         this.supportBookKey              = new NamespacedKey(plugin, SUPPORT_BOOK_KEY);
         this.sandstormBookKey            = new NamespacedKey(plugin, SANDSTORM_BOOK_KEY);
+        this.noSpawnZoneKey              = new NamespacedKey(plugin, NO_SPAWN_ZONE_KEY);
 
         this.capeManager = capeManager;
         register();
 
     }
+
 
     // ── Registration ──────────────────────────────────────────────────────────
 
@@ -941,6 +954,19 @@ public class ItemFactory {
         return item.getItemMeta().getPersistentDataContainer().has(earthBookKey, PersistentDataType.BYTE);
     }
 
+    /** Returns true if the item is one of the 4 general lore books (Novice Primer, Mage's Primer, Elemental Theory, Hidden Arts). */
+    public boolean isLoreBook(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer().has(loreBookKey, PersistentDataType.BYTE);
+    }
+
+    /** Returns true if the item is the Mage Gear Guide book. */
+    public boolean isMageGearGuideBook(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer().has(mageGearGuideKey, PersistentDataType.BYTE);
+    }
+
+
     public boolean hasWaterBook(Player player) {
         for (ItemStack s : player.getInventory().getContents()) if (isWaterBook(s)) return true;
         return false;
@@ -1014,7 +1040,9 @@ public class ItemFactory {
         ItemStack item = new ItemStack(Material.WRITTEN_BOOK);
         BookMeta meta = (BookMeta) item.getItemMeta();
         if (meta != null) {
+            meta.getPersistentDataContainer().set(mageGearGuideKey, PersistentDataType.BYTE, (byte) 1);
             meta.setTitle("§5Mage Gear Guide");
+
             meta.setAuthor("§7DifficultyEngine");
             meta.setGeneration(BookMeta.Generation.ORIGINAL);
             meta.addPage(
@@ -1085,7 +1113,9 @@ public class ItemFactory {
         ItemStack item = new ItemStack(Material.WRITTEN_BOOK);
         BookMeta meta = (BookMeta) item.getItemMeta();
         if (meta != null) {
+            meta.getPersistentDataContainer().set(loreBookKey, PersistentDataType.BYTE, (byte) 1);
             meta.setTitle("§aNovice's Spell Guide");
+
             meta.setAuthor("§7Wandering Apprentice");
             meta.setGeneration(BookMeta.Generation.ORIGINAL);
             meta.addPage(
@@ -1147,7 +1177,9 @@ public class ItemFactory {
         ItemStack item = new ItemStack(Material.WRITTEN_BOOK);
         BookMeta meta = (BookMeta) item.getItemMeta();
         if (meta != null) {
+            meta.getPersistentDataContainer().set(loreBookKey, PersistentDataType.BYTE, (byte) 1);
             meta.setTitle("§5The Mage's Primer");
+
             meta.setAuthor("§7Master Aldric");
             meta.setGeneration(BookMeta.Generation.ORIGINAL);
             meta.addPage("§8§l─ The Mage's Primer ─\n\n§7Status effects are the\ncore of combo magic.\n\nHit targets to apply\na status, then follow\nup with the right\nelement to combo!");
@@ -1166,7 +1198,9 @@ public class ItemFactory {
         ItemStack item = new ItemStack(Material.WRITTEN_BOOK);
         BookMeta meta = (BookMeta) item.getItemMeta();
         if (meta != null) {
+            meta.getPersistentDataContainer().set(loreBookKey, PersistentDataType.BYTE, (byte) 1);
             meta.setTitle("§9Advanced Elemental Theory");
+
             meta.setAuthor("§7Archmage Vethis");
             meta.setGeneration(BookMeta.Generation.ORIGINAL);
             meta.addPage("§8§l─ Advanced Theory ─\n\n§7You have mastered the\nbasics. Now learn the\ndeadly chains.\n\n§7The freeze chain and\nstatue trap can end\nfights instantly.\n\n§8Seek the §cAncient\nKill Tome §8for the\nfinal steps.");
@@ -1185,7 +1219,9 @@ public class ItemFactory {
         ItemStack item = new ItemStack(Material.WRITTEN_BOOK);
         BookMeta meta = (BookMeta) item.getItemMeta();
         if (meta != null) {
+            meta.getPersistentDataContainer().set(loreBookKey, PersistentDataType.BYTE, (byte) 1);
             meta.setTitle("§4The Hidden Arts");
+
             meta.setAuthor("§7Unknown");
             meta.setGeneration(BookMeta.Generation.ORIGINAL);
             meta.addPage("§8§l─ The Hidden Arts ─\n\n§7Few mages reach this\nlevel of mastery.\n\n§7These combos are not\ntaught — they must be\ndiscovered.\n\n§4Guard this knowledge.");
@@ -2272,6 +2308,47 @@ public class ItemFactory {
         return false;
     }
 
+    /**
+     * All Support Page PDC key constants — used by {@link #isSupportItem}
+     * to detect any of the 16 Support Pages regardless of which element/
+     * effect they unlock.
+     */
+    private static final String[] ALL_SUPPORT_PAGE_KEYS = {
+        SUPPORT_PAGE_HEALING_KEY, SUPPORT_PAGE_SPEED_KEY, SUPPORT_PAGE_DEFENCE_KEY,
+        SUPPORT_PAGE_COMBAT_KEY, SUPPORT_PAGE_STRENGTH_KEY, SUPPORT_PAGE_CRIT_KEY,
+        SUPPORT_PAGE_PRAYER_KEY, SUPPORT_PAGE_BULWARK_KEY, SUPPORT_PAGE_CHRONO_KEY,
+        SUPPORT_PAGE_GRAVITIC_KEY, SUPPORT_PAGE_FEATHERWEIGHT_KEY, SUPPORT_PAGE_OCULAR_KEY,
+        SUPPORT_PAGE_PYRIC_KEY, SUPPORT_PAGE_ABYSSAL_KEY, SUPPORT_PAGE_ENERVATION_KEY,
+        SUPPORT_PAGE_STASIS_KEY
+    };
+
+    /**
+     * Returns true if the given item is any recognised "Support" system item:
+     * the Support Book, any of the 16 Support Pages, the Support Staff, the
+     * Support Rune, or any Support Potion (PDC key prefixed "de_support_potion_").
+     * Used by the Magic Bag's item filter so these items are properly
+     * recognised as storable Magic Bag contents (previously they were NOT,
+     * causing "support isn't a magic bag item").
+     */
+    public boolean isSupportItem(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        if (isSupportBook(item)) return true;
+        if (isSupportStaff(item)) return true;
+        if (isSupportRune(item)) return true;
+        if (isSandstormBook(item)) return true;
+
+        var pdc = item.getItemMeta().getPersistentDataContainer();
+        for (String pageKeyConst : ALL_SUPPORT_PAGE_KEYS) {
+            NamespacedKey key = resolvePageKey(pageKeyConst);
+            if (key != null && pdc.has(key, PersistentDataType.BYTE)) return true;
+        }
+        for (NamespacedKey key : pdc.getKeys()) {
+            if (key.getKey().startsWith("de_support_potion_")) return true;
+        }
+        return false;
+    }
+
+
 
     /**
      * Returns true if the player carries the named support page in inventory.
@@ -2443,10 +2520,16 @@ public class ItemFactory {
             meta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
             meta.getPersistentDataContainer()
                     .set(chargedMagicBottleKey, PersistentDataType.INTEGER, charges);
+            // Potions do NOT stack in vanilla (max stack size 1) — override so
+            // Charged Magic Bottles can stack up to 64 like any other item.
+            // This is the root cause of "magic lightning bottles don't stack"
+            // filling up inventories/the Catching Block's virtual slots fast.
+            try { meta.setMaxStackSize(64); } catch (Throwable ignored) {}
             item.setItemMeta(meta);
         }
         return item;
     }
+
 
     /** Returns {@code true} if the item is a Charged Magic Bottle. */
     public boolean isChargedMagicBottle(ItemStack item) {
@@ -2557,10 +2640,76 @@ public class ItemFactory {
         return item;
     }
 
+    /**
+     * Builds the special "Hydration Relief" Support Potion — instantly refills
+     * Sandstorm hydration to full when drunk. Uses the same arming rules as
+     * regular Blessing Potions (Support Book + matching Page + Support Rune).
+     */
+    public ItemStack buildHydrationPotion() {
+        ItemStack item = new ItemStack(Material.POTION);
+        PotionMeta meta = (PotionMeta) item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§b✦ Hydration Relief §d(Blessing)");
+            meta.setColor(Color.AQUA);
+            meta.setLore(List.of(
+                "§d✦ Support Blessing Potion ✦",
+                "§7Instantly restores your §bSandstorm Hydration§7 to full!",
+                "§7Unlimited use if carrying a §5Support Rune§7.",
+                "§c☠ Warning: §7Breaks on use without a §5Support Rune§7!",
+                "§8[DifficultyEngine — Support Blessing]"
+            ));
+            meta.getPersistentDataContainer().set(new NamespacedKey(plugin, "de_support_potion_hydration_relief"), PersistentDataType.BYTE, (byte) 1);
+            meta.getPersistentDataContainer().set(new NamespacedKey(plugin, "de_hydration_potion"), PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    /** Returns true if the given item is the special Hydration Relief potion. */
+    public boolean isHydrationPotion(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer()
+                .has(new NamespacedKey(plugin, "de_hydration_potion"), PersistentDataType.BYTE);
+    }
+
+    /**
+     * Builds the special "Sandstorm Immunity" Support Potion — grants 2 minutes
+     * of full immunity to Sandstorm AND Sand Rain damage when drunk. Uses the
+     * same arming rules as regular Blessing Potions.
+     */
+    public ItemStack buildSandstormImmunityPotion() {
+        ItemStack item = new ItemStack(Material.POTION);
+        PotionMeta meta = (PotionMeta) item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§6✦ Sandstorm Immunity §d(Blessing)");
+            meta.setColor(Color.ORANGE);
+            meta.setLore(List.of(
+                "§d✦ Support Blessing Potion ✦",
+                "§7Grants §f2 minutes §7of full immunity to",
+                "§6Sandstorm §7and §2Sand Rain §7damage!",
+                "§7Unlimited use if carrying a §5Support Rune§7.",
+                "§c☠ Warning: §7Breaks on use without a §5Support Rune§7!",
+                "§8[DifficultyEngine — Support Blessing]"
+            ));
+            meta.getPersistentDataContainer().set(new NamespacedKey(plugin, "de_support_potion_sandstorm_immunity"), PersistentDataType.BYTE, (byte) 1);
+            meta.getPersistentDataContainer().set(new NamespacedKey(plugin, "de_sandstorm_immunity_potion"), PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    /** Returns true if the given item is the special Sandstorm Immunity potion. */
+    public boolean isSandstormImmunityPotion(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer()
+                .has(new NamespacedKey(plugin, "de_sandstorm_immunity_potion"), PersistentDataType.BYTE);
+    }
+
     /** Builds all 7 support pages + rune for registry page 9. */
     public List<ItemStack> buildRegistryPage9() {
         List<ItemStack> p = new ArrayList<>();
         p.add(buildSupportStaff());
+
         p.add(buildSupportRune());
         p.add(buildSupportBook());
         p.add(buildSupportPage(SUPPORT_PAGE_HEALING_KEY,  "Healing",       "+3 heal on target",    "Restores health to", "the buffed party member."));
@@ -2598,9 +2747,14 @@ public class ItemFactory {
         p.add(buildSupportPotion("abyssal_lung", "§3✦ Abyssal Lung §d(Blessing)", Color.SILVER, new PotionEffect(PotionEffectType.WATER_BREATHING, 1200, 0)));
         p.add(buildSupportPotion("enervation_curse", "§8✦ Enervation Curse §d(Blessing)", Color.PURPLE, new PotionEffect(PotionEffectType.WEAKNESS, 400, 1)));
         p.add(buildSupportPotion("stasis_anchor", "§8✦ Stasis Anchor §d(Blessing)", Color.BLACK, new PotionEffect(PotionEffectType.SLOWNESS, 400, 1)));
-        
+
+        // ── Sandstorm-related Blessing Potions ─────────────────────────────────
+        p.add(buildHydrationPotion());
+        p.add(buildSandstormImmunityPotion());
+
         return p;
     }
+
 
     public List<ItemStack> buildRegistryPage11() {
         List<ItemStack> p = new ArrayList<>();
@@ -2609,8 +2763,46 @@ public class ItemFactory {
         p.add(buildVoidSpawner());
         p.add(buildGildedSpawner());
         p.add(buildSandstormBook());
+        p.add(buildNoSpawnZoneBlock());
         return p;
     }
+
+    // ── No-Spawn Zone Block ─────────────────────────────────────────────────
+    // Admin-only utility block: when placed, prevents ANY monster from
+    // naturally spawning within 500 blocks of it. ONLY functions in the
+    // "starter" (or "starter_mv") world — placing it in any other world has
+    // no effect, by design (this is meant for a peaceful hub/starter area).
+    public static final String NO_SPAWN_ZONE_KEY = "de_no_spawn_zone";
+    private final NamespacedKey noSpawnZoneKey;
+
+    public ItemStack buildNoSpawnZoneBlock() {
+        ItemStack item = new ItemStack(Material.SEA_LANTERN);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§b§lNo-Spawn Zone Block §8(Admin)");
+            meta.addEnchant(Enchantment.UNBREAKING, 1, true);
+            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+            meta.setLore(List.of(
+                "§8" + "─".repeat(30),
+                "§7Place this block to prevent §cANY monster",
+                "§7from naturally spawning within §e500 blocks§7.",
+                "§8" + "─".repeat(30),
+                "§c⚠ §7Only functions in the §bstarter §7world!",
+                "§7Placing it anywhere else does nothing.",
+                "§8" + "─".repeat(30),
+                "§8[DifficultyEngine — Admin Utility Block]"
+            ));
+            meta.getPersistentDataContainer().set(noSpawnZoneKey, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    public boolean isNoSpawnZoneBlock(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer().has(noSpawnZoneKey, PersistentDataType.BYTE);
+    }
+
 
 
     /** Builds the secret Death Reset Relic item for owner use. */
@@ -2639,4 +2831,50 @@ public class ItemFactory {
         if (item == null || !item.hasItemMeta()) return false;
         return item.getItemMeta().getPersistentDataContainer().has(new NamespacedKey(plugin, "de_death_reset_relic"), PersistentDataType.BYTE);
     }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  BAG WARD — rare death-protection item for the Magic Bag's contents
+    // ══════════════════════════════════════════════════════════════════════════
+
+    public static final String BAG_WARD_KEY = "de_bag_ward";
+
+    /**
+     * Builds the Bag Ward — a rare consumable that, when carried in the
+     * player's main inventory at time of death, prevents the Magic Bag's
+     * virtual contents from spilling out onto the ground one time.
+     * Drops at 0.01% chance from the Crimson, Tempest, Void and Gilded bosses.
+     */
+    public ItemStack buildBagWard() {
+        ItemStack item = new ItemStack(Material.TOTEM_OF_UNDYING);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§d✦ §5Bag Ward §d✦");
+            meta.setEnchantmentGlintOverride(true);
+            meta.setLore(List.of(
+                "§8" + "─".repeat(28),
+                "§7A shimmering ward woven from arcane thread,",
+                "§7bound to protect your §dMagic Bag§7.",
+                "§8" + "─".repeat(28),
+                "§d✦ §7Consumes on death — prevents your",
+                "§7§dMagic Bag's §7contents from dropping/spilling",
+                "§7one time. §8(Books/pages are always kept safe",
+                "§7regardless of carrying a Ward.)",
+                "§8" + "─".repeat(28),
+                "§8Rarity: §d0.01% §8drop — Crimson, Tempest,",
+                "§8Void, and Gilded bosses only.",
+                "§8[DifficultyEngine — Bag Ward]"
+            ));
+            meta.getPersistentDataContainer().set(new NamespacedKey(plugin, BAG_WARD_KEY), PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    /** Returns true if the item is a Bag Ward. */
+    public boolean isBagWard(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer().has(new NamespacedKey(plugin, BAG_WARD_KEY), PersistentDataType.BYTE);
+    }
 }
+
+

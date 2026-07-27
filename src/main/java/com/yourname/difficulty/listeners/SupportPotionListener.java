@@ -41,6 +41,10 @@ public class SupportPotionListener implements Listener {
     private final ItemFactory itemFactory;
     /** Optional CastingEngine — wired in via setter from Main after both exist. */
     private CastingEngine castingEngine;
+    /** Optional SandstormManager — handles Hydration Relief + Sandstorm Immunity potions. */
+    private com.yourname.difficulty.magic.SandstormManager sandstormManager;
+    /** Optional WeatherStormManager — extends Sandstorm Immunity to cover Sand Rain too. */
+    private com.yourname.difficulty.magic.WeatherStormManager weatherStormManager;
 
     public SupportPotionListener(ItemFactory itemFactory) {
         this.itemFactory = itemFactory;
@@ -50,6 +54,17 @@ public class SupportPotionListener implements Listener {
     public void setCastingEngine(CastingEngine castingEngine) {
         this.castingEngine = castingEngine;
     }
+
+    /** Wires in the SandstormManager for the Hydration Relief + Immunity potions. */
+    public void setSandstormManager(com.yourname.difficulty.magic.SandstormManager mgr) {
+        this.sandstormManager = mgr;
+    }
+
+    /** Wires in the WeatherStormManager so Sandstorm Immunity also covers Sand Rain. */
+    public void setWeatherStormManager(com.yourname.difficulty.magic.WeatherStormManager mgr) {
+        this.weatherStormManager = mgr;
+    }
+
 
     private boolean isSupportPotion(ItemStack item) {
         if (item == null || !item.hasItemMeta()) return false;
@@ -119,6 +134,20 @@ public class SupportPotionListener implements Listener {
             // Consume one Support Rune as the "unlimited cast cost"
             consumeSupportRune(player);
 
+            // ── Special-case potions: Hydration Relief + Sandstorm Immunity ────
+            if (itemFactory.isHydrationPotion(item)) {
+                if (sandstormManager != null) sandstormManager.refillHydration(player);
+                player.getWorld().playSound(player.getLocation(), Sound.ENTITY_GENERIC_DRINK, 1.0f, 1.0f);
+                return;
+            }
+            if (itemFactory.isSandstormImmunityPotion(item)) {
+                long durationMs = 2L * 60L * 1000L; // 2 minutes
+                if (sandstormManager != null) sandstormManager.grantImmunity(player, durationMs);
+                if (weatherStormManager != null) weatherStormManager.grantSandRainImmunity(player, durationMs);
+                player.getWorld().playSound(player.getLocation(), Sound.ENTITY_GENERIC_DRINK, 1.0f, 1.0f);
+                return;
+            }
+
             // Manually apply potion effects since the consume event is cancelled
             PotionMeta meta = (PotionMeta) item.getItemMeta();
             List<PotionEffect> effects = new ArrayList<>();
@@ -129,16 +158,16 @@ public class SupportPotionListener implements Listener {
                 }
             }
 
-            // ── Arm the effect for a ranged Support Staff cast (non-stacking) ──
+            // ── Arm the effect for a ranged Support Staff cast ──────────────────
+            // NO CAP: per user request ("lets not cap the potions a support can
+            // drink and cast... let them drink as many as they like"), every
+            // successfully-armed potion is appended to the player's armed list
+            // and ALL of them discharge together on the next Support Staff cast.
             if (castingEngine != null) {
-                ArmedSupportEffect existing = castingEngine.getArmedEffect(player.getUniqueId());
-                if (existing == null) {
-                    castingEngine.armEffect(player, effects, potionId);
-                    player.sendMessage("§5✦ §7Blessing armed! §7Right-click your §dSupport Staff§7 to unleash it at range.");
-                } else {
-                    player.sendMessage("§c✗ §7You already have an armed Blessing! §7This potion's arming was wasted.");
-                }
+                castingEngine.armEffect(player, effects, potionId);
+                player.sendMessage("§5✦ §7Blessing armed! §7Right-click your §dSupport Staff§7 to unleash it at range.");
             }
+
 
             player.getWorld().playSound(player.getLocation(), Sound.ENTITY_GENERIC_DRINK, 1.0f, 1.0f);
             player.sendMessage("§5✦ §7Blessing applied successfully! §8(1× Support Rune consumed)");

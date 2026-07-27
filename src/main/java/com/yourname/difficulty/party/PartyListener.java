@@ -26,28 +26,28 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.util.*;
 
 /**
- * PartyListener — handles Party Stone right-click (nearby player invite GUI),
+ * PartyListener â€” handles Party Stone right-click (nearby player invite GUI),
  * damage tracking for rolling DPS, and player disconnect handling.
  *
- * ── /party sub-commands ───────────────────────────────────────────────────
- *   invite <player>   — invite a player to your party
- *   accept            — accept a pending invite
- *   leave             — leave your party
- *   list              — show party members (offline shown in grey)
- *   info [player]     — show detailed info for your or another player's party
+ * â”€â”€ /party sub-commands â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+ *   invite <player>   â€” invite a player to your party
+ *   accept            â€” accept a pending invite
+ *   leave             â€” leave your party
+ *   list              â€” show party members (offline shown in grey)
+ *   info [player]     â€” show detailed info for your or another player's party
  *
- * ── Offline handling ──────────────────────────────────────────────────────
+ * â”€â”€ Offline handling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  *   When a party member goes offline they are NOT removed from the party.
  *   They are marked offline (PartyManager.markOffline) so:
- *     • /party list shows them in §8 grey.
- *     • PartyHudTask skips them (they're not online to show a bar to).
+ *     â€¢ /party list shows them in Â§8 grey.
+ *     â€¢ PartyHudTask skips them (they're not online to show a bar to).
  *   When they reconnect, markOnline() restores them and they get a welcome
  *   message. They must /party leave to permanently quit.
  */
 public class PartyListener implements Listener, org.bukkit.command.CommandExecutor {
 
     private static final String PDC_KEY   = "party_stone";
-    private static final String GUI_TITLE = "§8Invite a Player";
+    private static final String GUI_TITLE = "Â§8Invite a Player";
 
     private final PartyManager            partyManager;
     private final PlayerDifficultyManager diffManager;
@@ -63,18 +63,18 @@ public class PartyListener implements Listener, org.bukkit.command.CommandExecut
         this.stoneKey     = new NamespacedKey(plugin, PDC_KEY);
     }
 
-    // ── Party Stone item builder ──────────────────────────────────────────────
+    // â”€â”€ Party Stone item builder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public ItemStack buildPartyStone() {
         ItemStack item = new ItemStack(Material.COMPASS);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
-            meta.setDisplayName("§6Party Stone");
+            meta.setDisplayName("Â§6Party Stone");
             meta.setLore(List.of(
-                "§7Right-click to invite nearby players.",
-                "§8Use §7/party leave §8to leave your party.",
-                "§8Use §7/party list §8to see members.",
-                "§8Use §7/party info §8for party details."
+                "Â§7Right-click to invite nearby players.",
+                "Â§8Use Â§7/party leave Â§8to leave your party.",
+                "Â§8Use Â§7/party list Â§8to see members.",
+                "Â§8Use Â§7/party info Â§8for party details."
             ));
             meta.getPersistentDataContainer()
                 .set(stoneKey, PersistentDataType.BYTE, (byte) 1);
@@ -89,7 +89,7 @@ public class PartyListener implements Listener, org.bukkit.command.CommandExecut
             .has(stoneKey, PersistentDataType.BYTE);
     }
 
-    // ── Right-click Party Stone → Nearby Player Selector GUI ─────────────────
+    // â”€â”€ Right-click Party Stone â†’ Nearby Player Selector GUI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     @EventHandler(priority = EventPriority.NORMAL)
     public void onRightClick(PlayerInteractEvent event) {
@@ -107,7 +107,7 @@ public class PartyListener implements Listener, org.bukkit.command.CommandExecut
             if (e instanceof Player p && !p.equals(opener)) nearby.add(p);
         }
         if (nearby.isEmpty()) {
-            opener.sendMessage("§7No players within 15 blocks to invite.");
+            opener.sendMessage("Â§7No players within 15 blocks to invite.");
             return;
         }
         int size = Math.min(27, ((nearby.size() / 9) + 1) * 9);
@@ -119,13 +119,13 @@ public class PartyListener implements Listener, org.bukkit.command.CommandExecut
             SkullMeta skull = (SkullMeta) head.getItemMeta();
             if (skull != null) {
                 skull.setOwningPlayer(target);
-                skull.setDisplayName("§a" + target.getName());
+                skull.setDisplayName("Â§a" + target.getName());
                 double hp    = Math.round(target.getHealth() * 10.0) / 10.0;
-                var maxAttr  = target.getAttribute(org.bukkit.attribute.Attribute.GENERIC_MAX_HEALTH);
+                var maxAttr  = target.getAttribute(org.bukkit.attribute.Attribute.MAX_HEALTH);
                 double maxHp = maxAttr != null ? maxAttr.getValue() : 20.0;
                 skull.setLore(List.of(
-                    "§7HP: §c" + hp + " / " + (int) maxHp,
-                    "§7Click to invite to your party."
+                    "Â§7HP: Â§c" + hp + " / " + (int) maxHp,
+                    "Â§7Click to invite to your party."
                 ));
                 head.setItemMeta(skull);
             }
@@ -134,7 +134,7 @@ public class PartyListener implements Listener, org.bukkit.command.CommandExecut
         opener.openInventory(gui);
     }
 
-    // ── GUI Click: Select player to invite ────────────────────────────────────
+    // â”€â”€ GUI Click: Select player to invite â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     @EventHandler(priority = EventPriority.NORMAL)
     public void onGuiClick(InventoryClickEvent event) {
@@ -152,64 +152,64 @@ public class PartyListener implements Listener, org.bukkit.command.CommandExecut
 
         Player target = Bukkit.getPlayerExact(targetName);
         if (target == null || !target.isOnline()) {
-            opener.sendMessage("§cThat player is no longer available.");
+            opener.sendMessage("Â§cThat player is no longer available.");
             opener.closeInventory();
             return;
         }
 
         partyManager.sendInvite(opener.getUniqueId(), target.getUniqueId());
         opener.closeInventory();
-        opener.sendMessage("§6Party invite sent to §e" + target.getName() + "§6!");
+        opener.sendMessage("Â§6Party invite sent to Â§e" + target.getName() + "Â§6!");
         target.sendMessage("");
-        target.sendMessage("§6[Party] §e" + opener.getName() + " §7invited you to their party!");
-        target.sendMessage("§7Type §a/party accept §7or §c/party leave §7to decline.");
+        target.sendMessage("Â§6[Party] Â§e" + opener.getName() + " Â§7invited you to their party!");
+        target.sendMessage("Â§7Type Â§a/party accept Â§7or Â§c/party leave Â§7to decline.");
         target.sendMessage("");
     }
 
-    // ── /party command ────────────────────────────────────────────────────────
+    // â”€â”€ /party command â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     @Override
     public boolean onCommand(org.bukkit.command.CommandSender sender,
                              org.bukkit.command.Command command,
                              String label, String[] args) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage("§cOnly players can use /party.");
+            sender.sendMessage("Â§cOnly players can use /party.");
             return true;
         }
         if (args.length == 0) {
-            player.sendMessage("§6/party §8<invite|accept|leave|list|info>");
+            player.sendMessage("Â§6/party Â§8<invite|accept|leave|list|info>");
             return true;
         }
         switch (args[0].toLowerCase()) {
 
             case "invite" -> {
                 if (args.length < 2) {
-                    player.sendMessage("§c Usage: /party invite <player>");
+                    player.sendMessage("Â§c Usage: /party invite <player>");
                     return true;
                 }
                 Player target = Bukkit.getPlayerExact(args[1]);
                 if (target == null || !target.isOnline()) {
-                    player.sendMessage("§cPlayer not found or not online: §e" + args[1]);
+                    player.sendMessage("Â§cPlayer not found or not online: Â§e" + args[1]);
                     return true;
                 }
                 if (target.equals(player)) {
-                    player.sendMessage("§cYou cannot invite yourself.");
+                    player.sendMessage("Â§cYou cannot invite yourself.");
                     return true;
                 }
                 if (partyManager.isInParty(target.getUniqueId())
                         && partyManager.getPartyMembers(target.getUniqueId())
                                        .contains(player.getUniqueId())) {
-                    player.sendMessage("§e" + target.getName() + " §cis already in your party.");
+                    player.sendMessage("Â§e" + target.getName() + " Â§cis already in your party.");
                     return true;
                 }
                 partyManager.sendInvite(player.getUniqueId(), target.getUniqueId());
-                player.sendMessage("§6Party invite sent to §e" + target.getName() + "§6!");
+                player.sendMessage("Â§6Party invite sent to Â§e" + target.getName() + "Â§6!");
                 target.sendMessage("");
-                target.sendMessage("§6┌─ §e[Party Invite] §6────────────────────");
-                target.sendMessage("§6│ §e" + player.getName() + " §7has invited you to their party!");
-                target.sendMessage("§6│ §aType: §f/party accept §7to join");
-                target.sendMessage("§6│ §cType: §f/party leave §7to decline");
-                target.sendMessage("§6└────────────────────────────────────");
+                target.sendMessage("Â§6â”Œâ”€ Â§e[Party Invite] Â§6â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€");
+                target.sendMessage("Â§6â”‚ Â§e" + player.getName() + " Â§7has invited you to their party!");
+                target.sendMessage("Â§6â”‚ Â§aType: Â§f/party accept Â§7to join");
+                target.sendMessage("Â§6â”‚ Â§cType: Â§f/party leave Â§7to decline");
+                target.sendMessage("Â§6â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€");
                 target.sendMessage("");
                 target.playSound(target.getLocation(),
                         org.bukkit.Sound.BLOCK_NOTE_BLOCK_BELL, 1f, 1.2f);
@@ -217,19 +217,19 @@ public class PartyListener implements Listener, org.bukkit.command.CommandExecut
 
             case "accept" -> {
                 if (!partyManager.hasPendingInvite(player.getUniqueId())) {
-                    player.sendMessage("§cYou have no pending party invite.");
+                    player.sendMessage("Â§cYou have no pending party invite.");
                     return true;
                 }
                 UUID inviterUuid = partyManager.getInviter(player.getUniqueId());
                 partyManager.acceptInvite(player.getUniqueId());
-                player.sendMessage("§aYou joined the party!");
+                player.sendMessage("Â§aYou joined the party!");
                 Player inviter = Bukkit.getPlayer(inviterUuid);
                 if (inviter != null)
-                    inviter.sendMessage("§a" + player.getName() + " §7joined the party!");
+                    inviter.sendMessage("Â§a" + player.getName() + " Â§7joined the party!");
                 for (UUID m : partyManager.getPartyMembers(player.getUniqueId())) {
                     Player mp = Bukkit.getPlayer(m);
                     if (mp != null && !mp.equals(player))
-                        mp.sendMessage("§a" + player.getName() + " §7has joined the party.");
+                        mp.sendMessage("Â§a" + player.getName() + " Â§7has joined the party.");
                 }
             }
 
@@ -237,41 +237,41 @@ public class PartyListener implements Listener, org.bukkit.command.CommandExecut
                 if (!partyManager.isInParty(player.getUniqueId())) {
                     if (partyManager.hasPendingInvite(player.getUniqueId())) {
                         partyManager.declineInvite(player.getUniqueId());
-                        player.sendMessage("§7Party invite declined.");
+                        player.sendMessage("Â§7Party invite declined.");
                     } else {
-                        player.sendMessage("§cYou are not in a party.");
+                        player.sendMessage("Â§cYou are not in a party.");
                     }
                     return true;
                 }
                 List<UUID> remaining = partyManager.leaveParty(player.getUniqueId());
-                player.sendMessage("§7You left the party.");
+                player.sendMessage("Â§7You left the party.");
                 for (UUID m : remaining) {
                     Player mp = Bukkit.getPlayer(m);
                     if (mp != null)
-                        mp.sendMessage("§c" + player.getName() + " §7left the party.");
+                        mp.sendMessage("Â§c" + player.getName() + " Â§7left the party.");
                 }
             }
 
             case "list" -> {
                 if (!partyManager.isInParty(player.getUniqueId())) {
-                    player.sendMessage("§cYou are not in a party.");
+                    player.sendMessage("Â§cYou are not in a party.");
                     return true;
                 }
-                player.sendMessage("§6=== Party Members ===");
+                player.sendMessage("Â§6=== Party Members ===");
                 for (UUID m : partyManager.getPartyMembers(player.getUniqueId())) {
                     Player mp      = Bukkit.getPlayer(m);
                     boolean online = (mp != null && mp.isOnline() && !partyManager.isOffline(m));
                     String  name   = mp != null ? mp.getName()
                             : Bukkit.getOfflinePlayer(m).getName();
                     if (name == null) name = m.toString().substring(0, 8);
-                    String leader  = partyManager.isLeader(m) ? " §6[Leader]" : "";
-                    String status  = online ? "§f" : "§8[offline] §7";
+                    String leader  = partyManager.isLeader(m) ? " Â§6[Leader]" : "";
+                    String status  = online ? "Â§f" : "Â§8[offline] Â§7";
                     player.sendMessage("  " + status + name + leader);
                 }
             }
 
             case "info" -> {
-                // /party info [player] — show another (or your own) party's details
+                // /party info [player] â€” show another (or your own) party's details
                 String lookupName = (args.length >= 2) ? args[1] : player.getName();
                 Player target = Bukkit.getPlayerExact(lookupName);
                 UUID targetUid = (target != null)
@@ -279,10 +279,10 @@ public class PartyListener implements Listener, org.bukkit.command.CommandExecut
                         : Bukkit.getOfflinePlayer(lookupName).getUniqueId();
 
                 if (!partyManager.isInParty(targetUid)) {
-                    player.sendMessage("§e" + lookupName + " §cis not in a party.");
+                    player.sendMessage("Â§e" + lookupName + " Â§cis not in a party.");
                     return true;
                 }
-                player.sendMessage("§6=== " + lookupName + "'s Party ===");
+                player.sendMessage("Â§6=== " + lookupName + "'s Party ===");
                 for (UUID m : partyManager.getPartyMembers(targetUid)) {
                     Player  mp     = Bukkit.getPlayer(m);
                     boolean online = (mp != null && mp.isOnline() && !partyManager.isOffline(m));
@@ -290,20 +290,20 @@ public class PartyListener implements Listener, org.bukkit.command.CommandExecut
                             : Bukkit.getOfflinePlayer(m).getName();
                     if (mName == null) mName = m.toString().substring(0, 8);
                     String  hp     = online
-                            ? "§c❤ " + (int) mp.getHealth() + "  " : "";
-                    String  ldr    = partyManager.isLeader(m) ? " §6★" : "";
-                    String  status = online ? "§a● §f" : "§8● §7";
+                            ? "Â§câ¤ " + (int) mp.getHealth() + "  " : "";
+                    String  ldr    = partyManager.isLeader(m) ? " Â§6â˜…" : "";
+                    String  status = online ? "Â§aâ— Â§f" : "Â§8â— Â§7";
                     player.sendMessage("  " + status + mName + ldr + "  " + hp);
                 }
             }
 
             default -> player.sendMessage(
-                    "§6/party §8<invite|accept|leave|list|info [player]>");
+                    "Â§6/party Â§8<invite|accept|leave|list|info [player]>");
         }
         return true;
     }
 
-    // ── DPS tracking ──────────────────────────────────────────────────────────
+    // â”€â”€ DPS tracking â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onDamage(EntityDamageByEntityEvent event) {
@@ -313,11 +313,11 @@ public class PartyListener implements Listener, org.bukkit.command.CommandExecut
         partyManager.recordDamage(damager.getUniqueId(), event.getFinalDamage());
     }
 
-    // ── Offline handling ──────────────────────────────────────────────────────
+    // â”€â”€ Offline handling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * On disconnect: keep the player in their party but mark them offline.
-     * Online party members receive a notice. The player is NOT removed —
+     * Online party members receive a notice. The player is NOT removed â€”
      * they will be welcomed back on reconnect.
      */
     @EventHandler
@@ -332,8 +332,8 @@ public class PartyListener implements Listener, org.bukkit.command.CommandExecut
                 if (m.equals(uuid)) continue;
                 Player mp = Bukkit.getPlayer(m);
                 if (mp != null)
-                    mp.sendMessage("§8[Party] §7" + player.getName()
-                        + " §8went offline — still in party.");
+                    mp.sendMessage("Â§8[Party] Â§7" + player.getName()
+                        + " Â§8went offline â€” still in party.");
             }
         }
     }
@@ -349,18 +349,18 @@ public class PartyListener implements Listener, org.bukkit.command.CommandExecut
 
         if (partyManager.isInParty(uuid) && partyManager.isOffline(uuid)) {
             partyManager.markOnline(uuid);
-            player.sendMessage("§6[Party] §7Welcome back! You are still in your party.");
-            player.sendMessage("§8  Type §c/party leave §8to leave.");
+            player.sendMessage("Â§6[Party] Â§7Welcome back! You are still in your party.");
+            player.sendMessage("Â§8  Type Â§c/party leave Â§8to leave.");
             for (UUID m : partyManager.getPartyMembers(uuid)) {
                 if (m.equals(uuid)) continue;
                 Player mp = Bukkit.getPlayer(m);
                 if (mp != null)
-                    mp.sendMessage("§a[Party] §f" + player.getName() + " §7came back online!");
+                    mp.sendMessage("Â§a[Party] Â§f" + player.getName() + " Â§7came back online!");
             }
         }
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private Player getDamagerPlayer(Entity damager) {
         if (damager instanceof Player p) return p;

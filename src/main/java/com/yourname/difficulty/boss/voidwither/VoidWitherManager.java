@@ -28,16 +28,16 @@ import org.joml.Vector3f;
 import java.util.*;
 
 /**
- * VoidWitherManager — manages the terrifying §0§lVoid Zurion§r boss.
+ * VoidWitherManager â€” manages the terrifying Â§0Â§lVoid ZurionÂ§r boss.
  *
- * ── Clean custom-entity architecture ─────────────────────────────────────
+ * â”€â”€ Clean custom-entity architecture â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  * Rather than stacking two vanilla Withers (the old "double Wither" hack),
  * the Zurion is built from an invisible/silent {@link Wither} "physics
- * carrier" (native flight AI, hitbox, damage/death handling only — model
+ * carrier" (native flight AI, hitbox, damage/death handling only â€” model
  * never shown) paired with a billboarded {@link ItemDisplay} void-orb visual
  * with orbiting skull props, entirely independent of the vanilla silhouette.
  *
- * ── Key fixes ─────────────────────────────────────────────────────────────
+ * â”€â”€ Key fixes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  * Custom flight AI + active block-shattering prevents the carrier getting
  * physically stuck when {@code mobGriefing} is off. A manually-driven
  * {@link BossBar} covers for the fact invisible entities don't reliably show
@@ -61,11 +61,11 @@ public class VoidWitherManager implements Listener {
     private final CrimsonBossManager crimsonBossManager;
     private final Random random = new Random();
 
-    /** Carrier UUID → paired visual display UUID (position-synced every tick). */
+    /** Carrier UUID â†’ paired visual display UUID (position-synced every tick). */
     private final Map<UUID, UUID> carrierToDisplay = new HashMap<>();
-    /** Carrier UUID → live health BossBar shown to nearby players. */
+    /** Carrier UUID â†’ live health BossBar shown to nearby players. */
     private final Map<UUID, BossBar> healthBars = new HashMap<>();
-    /** Carrier UUID → current spin angle (radians), advanced each sync tick. */
+    /** Carrier UUID â†’ current spin angle (radians), advanced each sync tick. */
     private final Map<UUID, Double> spinAngles = new HashMap<>();
     private final NamespacedKey displayTagKey;
 
@@ -133,7 +133,7 @@ public class VoidWitherManager implements Listener {
         if (ent instanceof WitherSkull || ent instanceof Wither) {
             if (ent.getWorld().getName().equals("void_realm") || ent.getWorld().getName().equals("ancient_realm")) {
 
-                // ── Hard gates: at most 1 alive bonus Warden, and only 1 roll per 5 minutes ──
+                // â”€â”€ Hard gates: at most 1 alive bonus Warden, and only 1 roll per 5 minutes â”€â”€
                 if (isAliveEntity(activeWardenUuid)) return; // a Warden from this boss is already alive
                 long now = System.currentTimeMillis();
                 if (now - lastWardenRollTime < WARDEN_ROLL_COOLDOWN_MS) return; // still on cooldown
@@ -150,7 +150,7 @@ public class VoidWitherManager implements Listener {
 
                 if (random.nextDouble() < chance) {
                     Warden warden = (Warden) ent.getWorld().spawnEntity(ent.getLocation(), EntityType.WARDEN);
-                    warden.setCustomName("§5§lVoid Warden");
+                    warden.setCustomName("Â§5Â§lVoid Warden");
                     warden.setCustomNameVisible(true);
                     activeWardenUuid = warden.getUniqueId();
 
@@ -161,8 +161,8 @@ public class VoidWitherManager implements Listener {
 
                     ent.getWorld().playSound(ent.getLocation(), Sound.ENTITY_WARDEN_EMERGE, 2.0f, 1.0f);
                     for (Player p : ent.getWorld().getPlayers()) {
-                        p.sendMessage("§d☠ §lA Void Warden has erupted from the Zurion explosion!");
-                        p.sendTitle("§d§lWARDEN EMERGES!", "§7Freeze spells are crucial now!", 10, 70, 20);
+                        p.sendMessage("Â§dâ˜  Â§lA Void Warden has erupted from the Zurion explosion!");
+                        p.sendTitle("Â§dÂ§lWARDEN EMERGES!", "Â§7Freeze spells are crucial now!", 10, 70, 20);
                     }
                 }
             }
@@ -170,13 +170,13 @@ public class VoidWitherManager implements Listener {
     }
 
     public Wither spawnVoidWither(Location loc) {
-        // ── Hard gate: only ONE Void Zurion may exist at a time ─────────────────
+        // â”€â”€ Hard gate: only ONE Void Zurion may exist at a time â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         if (isAliveEntity(activeZurionUuid)) {
             Entity existing = plugin.getServer().getEntity(activeZurionUuid);
             if (existing instanceof Wither w) {
                 for (Player p : w.getWorld().getPlayers()) {
                     if (p.getLocation().distanceSquared(w.getLocation()) <= 14400.0) {
-                        p.sendActionBar("§0☠ §7The Void Zurion already roams this realm — it cannot be duplicated.");
+                        p.sendActionBar("Â§0â˜  Â§7The Void Zurion already roams this realm â€” it cannot be duplicated.");
                     }
                 }
                 return w;
@@ -197,7 +197,7 @@ public class VoidWitherManager implements Listener {
         // Rebuild Void Realm before spawning
         crimsonBossManager.rebuildArena(null, loc);
 
-        // ── 1. Single invisible physics carrier (no stacked vanilla Withers) ────
+        // â”€â”€ 1. Single invisible physics carrier (no stacked vanilla Withers) â”€â”€â”€â”€
         Wither wither = (Wither) loc.getWorld().spawnEntity(loc, EntityType.WITHER);
         wither.setCustomNameVisible(false); // name lives on the display instead
         wither.setRemoveWhenFarAway(false);
@@ -208,7 +208,7 @@ public class VoidWitherManager implements Listener {
 
         activeZurionUuid = wither.getUniqueId();
 
-        var hp = wither.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        var hp = wither.getAttribute(Attribute.MAX_HEALTH);
         if (hp != null) {
             hp.setBaseValue(2000.0); // combined HP of the old double-wither stack
             wither.setHealth(Math.min(2000.0, hp.getValue()));
@@ -220,13 +220,13 @@ public class VoidWitherManager implements Listener {
         bossEffectListener.registerBoss(wither);
         bossEffectListener.spawnShriek(wither);
 
-        // ── Manual health BossBar (invisible entities don't reliably show the
-        // vanilla Wither boss-bar UI to the client) ─────────────────────────────
-        BossBar healthBar = Bukkit.createBossBar("§0☠ §lThe Void Zurion", BarColor.PURPLE, BarStyle.SEGMENTED_10);
+        // â”€â”€ Manual health BossBar (invisible entities don't reliably show the
+        // vanilla Wither boss-bar UI to the client) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        BossBar healthBar = Bukkit.createBossBar("Â§0â˜  Â§lThe Void Zurion", BarColor.PURPLE, BarStyle.SEGMENTED_10);
         healthBar.setProgress(1.0);
         healthBars.put(wither.getUniqueId(), healthBar);
 
-        // ── 2. Custom void/abyss visual display (billboarded, no vanilla model) ──
+        // â”€â”€ 2. Custom void/abyss visual display (billboarded, no vanilla model) â”€â”€
         ItemDisplay display = spawnZurionDisplay(wither);
         carrierToDisplay.put(wither.getUniqueId(), display.getUniqueId());
 
@@ -266,7 +266,7 @@ public class VoidWitherManager implements Listener {
 
                 aiTick++;
 
-                // ── Update orbiting heads position ─────────────────────────
+                // â”€â”€ Update orbiting heads position â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                 for (int i = 0; i < heads.size(); i++) {
                     ArmorStand head = heads.get(i);
                     if (head.isValid()) {
@@ -280,15 +280,15 @@ public class VoidWitherManager implements Listener {
                     }
                 }
 
-                // ── Update health BossBar + nearby player visibility ─────────
+                // â”€â”€ Update health BossBar + nearby player visibility â”€â”€â”€â”€â”€â”€â”€â”€â”€
                 BossBar bar = healthBars.get(wither.getUniqueId());
                 if (bar != null) {
-                    AttributeInstance maxHpAttr = wither.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+                    AttributeInstance maxHpAttr = wither.getAttribute(Attribute.MAX_HEALTH);
                     double maxHp = maxHpAttr != null ? maxHpAttr.getValue() : 2000.0;
                     double pct = Math.max(0.0, Math.min(1.0, wither.getHealth() / maxHp));
                     bar.setProgress(pct);
-                    bar.setTitle("§0☠ §lThe Void Zurion §7— §f" + (int) Math.ceil(wither.getHealth())
-                            + " §7/ §f" + (int) Math.round(maxHp));
+                    bar.setTitle("Â§0â˜  Â§lThe Void Zurion Â§7â€” Â§f" + (int) Math.ceil(wither.getHealth())
+                            + " Â§7/ Â§f" + (int) Math.round(maxHp));
 
                     Set<Player> shouldSee = new HashSet<>();
                     for (Player p : wither.getWorld().getPlayers()) {
@@ -306,7 +306,7 @@ public class VoidWitherManager implements Listener {
                 if (wither.getTarget() instanceof Player t) {
                     target = t;
                 } else {
-                    // No native target acquired (can happen if walls block line-of-sight) —
+                    // No native target acquired (can happen if walls block line-of-sight) â€”
                     // actively find + set the nearest player so Zurion never idles.
                     double closest = 100.0;
                     for (Player p : wither.getWorld().getPlayers()) {
@@ -318,7 +318,7 @@ public class VoidWitherManager implements Listener {
                 }
 
                 if (target != null) {
-                    // ── Active flight pull toward target (never gets "stuck idle") ──
+                    // â”€â”€ Active flight pull toward target (never gets "stuck idle") â”€â”€
                     Location pLoc = target.getLocation().add(0, 1.5, 0);
                     Vector dir = pLoc.toVector().subtract(wither.getLocation().toVector());
                     double dist = dir.length();
@@ -330,7 +330,7 @@ public class VoidWitherManager implements Listener {
                         wither.setVelocity(blended);
                     }
 
-                    // ── Fireball attack (every 3 seconds) ────────────────────
+                    // â”€â”€ Fireball attack (every 3 seconds) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                     if (aiTick % 60 == 0) {
                         Location origin = wither.getLocation().add(0, 2.5, 0);
                         Vector fdir = target.getLocation().toVector().subtract(origin.toVector()).normalize();
@@ -341,13 +341,13 @@ public class VoidWitherManager implements Listener {
                         fb.setIsIncendiary(false);
                     }
 
-                    // ── Warden Charge Leap AI (every 8 seconds) ──────────────
+                    // â”€â”€ Warden Charge Leap AI (every 8 seconds) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                     if (aiTick % 160 == 0) {
                         wither.getWorld().playSound(wither.getLocation(), Sound.ENTITY_WARDEN_ROAR, 1.5f, 0.8f);
                         for (Player p : wither.getWorld().getPlayers()) {
                             if (p.getLocation().distance(wither.getLocation()) < 80) {
-                                p.sendMessage("§0☠ §lThe Void Zurion is charging!");
-                                p.sendTitle("§0§lZURION CHARGES!", "§7Get out of the way!", 5, 30, 5);
+                                p.sendMessage("Â§0â˜  Â§lThe Void Zurion is charging!");
+                                p.sendTitle("Â§0Â§lZURION CHARGES!", "Â§7Get out of the way!", 5, 30, 5);
                             }
                         }
                         Vector chargeDir = target.getLocation().toVector().subtract(wither.getLocation().toVector()).setY(0.2).normalize();
@@ -355,7 +355,7 @@ public class VoidWitherManager implements Listener {
                     }
                 }
 
-                // ── Block-breaking flight path (every 4 ticks) — never gets stuck ──
+                // â”€â”€ Block-breaking flight path (every 4 ticks) â€” never gets stuck â”€â”€
                 // Fixes the "boss stuck in place because mobGriefing is off" bug:
                 // instead of relying on vanilla Wither block-breaking (which
                 // respects mobGriefing and can leave it wedged against terrain),
@@ -369,7 +369,7 @@ public class VoidWitherManager implements Listener {
                     }
                 }
 
-                // ── Ambient void particles around the display ────────────────
+                // â”€â”€ Ambient void particles around the display â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                 if (aiTick % 4 == 0) {
                     wither.getWorld().spawnParticle(Particle.SOUL, wither.getLocation().add(0, 1.5, 0), 8, 1.0, 1.0, 1.0, 0.02);
                     wither.getWorld().spawnParticle(Particle.PORTAL, wither.getLocation().add(0, 1.5, 0), 10, 1.2, 1.2, 1.2, 0.05);
@@ -381,11 +381,11 @@ public class VoidWitherManager implements Listener {
         for (Player p : loc.getWorld().getPlayers()) {
             if (p.getLocation().distance(loc) > 120) continue;
             p.sendMessage("");
-            p.sendMessage("§0☠ §lThe Void Zurion has awakened in the Void Realm! §0☠");
-            p.sendMessage("§7The Void Realm §8trembles§7 as inverted dark forces accumulate!");
-            p.sendMessage("§5⚠ §dDestroy its §5Shriek §5⚡ §dwith an §bAir Staff §dto expose its weakness!");
+            p.sendMessage("Â§0â˜  Â§lThe Void Zurion has awakened in the Void Realm! Â§0â˜ ");
+            p.sendMessage("Â§7The Void Realm Â§8tremblesÂ§7 as inverted dark forces accumulate!");
+            p.sendMessage("Â§5âš  Â§dDestroy its Â§5Shriek Â§5âš¡ Â§dwith an Â§bAir Staff Â§dto expose its weakness!");
             p.sendMessage("");
-            p.sendTitle("§0§lZURION AWAKENS!", "§7§oThe abyss stirs...", 10, 70, 20);
+            p.sendTitle("Â§0Â§lZURION AWAKENS!", "Â§7Â§oThe abyss stirs...", 10, 70, 20);
             p.playSound(p.getLocation(), Sound.ENTITY_WITHER_SPAWN, 1.0f, 1.0f);
         }
 
@@ -393,7 +393,7 @@ public class VoidWitherManager implements Listener {
     }
 
     /**
-     * Builds the Void Zurion's custom Blockbench void_boss visual — a
+     * Builds the Void Zurion's custom Blockbench void_boss visual â€” a
      * fixed-orientation ItemDisplay, entirely independent from the invisible
      * Wither carrier underneath (no stacked/inverted vanilla Wither models).
      * Slowly rotates in place each tick to feel alive.
@@ -402,12 +402,12 @@ public class VoidWitherManager implements Listener {
         return com.yourname.difficulty.boss.BossDisplayUtil.spawnDisplay(
                 carrier, 1.0, Material.NETHER_STAR, 3003, ZURION_DISPLAY_SCALE,
                 15, 15,
-                "§0§lThe Void Zurion",
+                "Â§0Â§lThe Void Zurion",
                 displayTagKey,
                 Display.Billboard.FIXED);
     }
 
 
-    // ── Void Boss (Wither) & Warden peaceful team non-hostility alliance ──────
+    // â”€â”€ Void Boss (Wither) & Warden peaceful team non-hostility alliance â”€â”€â”€â”€â”€â”€
     // (kept in BossEffectListener for shared logic across boss types)
 }

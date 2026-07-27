@@ -42,7 +42,9 @@ public class MagicBagGUI {
         "§b💧 Water",
         "§2🌍 Earth",
         "§7💨 Air",
+        "§d✦ Support",
     };
+
 
     /** GUI inventory size. */
     public static final int SIZE = 54;
@@ -63,7 +65,9 @@ public class MagicBagGUI {
         Material.CYAN_STAINED_GLASS_PANE,   // 💧 Water
         Material.LIME_STAINED_GLASS_PANE,   // 🌍 Earth
         Material.WHITE_STAINED_GLASS_PANE,  // 💨 Air
+        Material.PURPLE_STAINED_GLASS_PANE, // ✦ Support
     };
+
 
     private final MagicBagManager bagManager;
 

@@ -14,15 +14,26 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * LightningMonsterSummonListener — Whenever lightning strikes anywhere in the
- * world (natural thunderstorm strikes OR any plugin-triggered
- * {@code world.strikeLightning(...)} call, e.g. the Support Staff's chance-
- * on-hit lightning), 1-10 extra hostile mobs are summoned around the strike
- * location.
+ * LightningMonsterSummonListener — "Monster Storms".
  *
- * This does NOT fire for purely-visual {@code strikeLightningEffect(...)}
- * calls (those don't create a real Lightning entity / event), only for real
- * lightning strikes.
+ * Whenever §fgenuine natural weather lightning§r strikes anywhere in the
+ * world, there is a §e20% chance§r that strike becomes a "Monster Storm" and
+ * summons 1-10 extra hostile mobs around the strike location.
+ *
+ * ── IMPORTANT: ONLY weather lightning can trigger this ──────────────────────
+ * Any lightning triggered BY the plugin itself — admin/dev commands
+ * (/adminlight, /lightningadmin), the Support Staff's on-hit lightning proc,
+ * boss lightning barrages (Tempest Overlord, Crimson boss, etc.) — must NOT
+ * spawn bonus mobs. Those are identified via {@link LightningStrikeEvent#getCause()}
+ * being anything other than {@code Cause.WEATHER}, and are ignored entirely.
+ *
+ * This was the actual cause of the server-crashing mob overload: admin/player
+ * -triggered lightning was ALSO spawning 1-10 mobs per strike with no gate,
+ * so spell/boss lightning barrages (which can fire many strikes rapidly)
+ * were compounding into hundreds of extra mobs. Restricting bonus spawns to
+ * real weather strikes only — plus the 20% chance gate — fixes this while
+ * keeping the original 1-10 mob "Monster Storm" flavour intact for natural
+ * thunderstorms.
  */
 public class LightningMonsterSummonListener implements Listener {
 
@@ -35,12 +46,15 @@ public class LightningMonsterSummonListener implements Listener {
         EntityType.HUSK
     };
 
-    /** Minimum and maximum number of bonus mobs summoned per lightning strike. */
+    /** Minimum and maximum number of bonus mobs summoned per triggered Monster Storm. */
     private static final int MIN_MOBS = 1;
     private static final int MAX_MOBS = 10;
 
     /** Radius around the strike within which mobs are scattered. */
     private static final double SCATTER_RADIUS = 6.0;
+
+    /** Chance that a genuine weather lightning strike becomes a "Monster Storm". */
+    private static final double MONSTER_STORM_CHANCE = 0.20; // 20%
 
     private final JavaPlugin plugin;
 
@@ -50,11 +64,19 @@ public class LightningMonsterSummonListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onLightningStrike(LightningStrikeEvent event) {
+        // ── ONLY genuine natural weather lightning can trigger a Monster Storm ──
+        // Admin lightning, spell procs, and boss lightning barrages are all
+        // plugin-triggered (Cause != WEATHER) and must never spawn bonus mobs.
+        if (event.getCause() != LightningStrikeEvent.Cause.WEATHER) return;
+
+        // ── 20% chance gate — most weather strikes are just weather ─────────────
+        ThreadLocalRandom rand = ThreadLocalRandom.current();
+        if (rand.nextDouble() >= MONSTER_STORM_CHANCE) return;
+
         Location loc = event.getLightning().getLocation();
         World world = loc.getWorld();
         if (world == null) return;
 
-        ThreadLocalRandom rand = ThreadLocalRandom.current();
         int count = MIN_MOBS + rand.nextInt(MAX_MOBS - MIN_MOBS + 1); // 1-10 inclusive
 
         for (int i = 0; i < count; i++) {
@@ -71,7 +93,7 @@ public class LightningMonsterSummonListener implements Listener {
             EntityType type = POOL[rand.nextInt(POOL.length)];
             var spawned = world.spawnEntity(spawnLoc, type);
             if (spawned instanceof Monster mob) {
-                world.spawnParticle(Particle.LARGE_SMOKE, spawnLoc.add(0, 1, 0), 8, 0.4, 0.4, 0.4, 0.02);
+                world.spawnParticle(Particle.LARGE_SMOKE, spawnLoc.clone().add(0, 1, 0), 8, 0.4, 0.4, 0.4, 0.02);
             }
         }
     }

@@ -168,6 +168,8 @@ public class Main extends JavaPlugin {
     private VoidWitherManager     voidWitherManager;
     private GildedBossManager     gildedBossManager;
     private AccountProfileManager accountProfileManager;
+    private com.yourname.difficulty.boss.BossSpawnerRegistry bossSpawnerRegistry;
+
 
     /** All crafting recipe keys registered by this plugin — used for recipe-book discovery. */
     private final List<NamespacedKey> allRecipeKeys = new ArrayList<>();
@@ -403,8 +405,13 @@ public class Main extends JavaPlugin {
                 new NightSpawnBoostListener(this, difficultyManager, partyManager), this);
 
         // ── Per-player difficulty-aware monster population cap + storm scaling ─
+        MonsterCapListener monsterCapListener = new MonsterCapListener(this, difficultyManager, partyManager);
+        getServer().getPluginManager().registerEvents(monsterCapListener, this);
+
+        // ── No-Spawn Zone Block (Registry page 11, admin-placed, starter world only) ─
         getServer().getPluginManager().registerEvents(
-                new MonsterCapListener(this, difficultyManager, partyManager), this);
+                new com.yourname.difficulty.listeners.NoSpawnZoneListener(itemFactory, monsterCapListener), this);
+
 
 
         // ── Ancient Debris Portal ──────────────────────────────────────────────
@@ -427,8 +434,10 @@ public class Main extends JavaPlugin {
         // ── Dungeon Bosses ─────────────────────────────────────────────────────
         // CrimsonBossManager: The Infernal Blazefiend at Crimson Pit (-108,-26,-14)
         // BossSpawnerCommand: /spawnboss tempest | crimson | void
-        this.crimsonBossManager    = new CrimsonBossManager(this, itemFactory, bossEffectListener);
+        this.bossSpawnerRegistry   = new com.yourname.difficulty.boss.BossSpawnerRegistry(this);
+        this.crimsonBossManager    = new CrimsonBossManager(this, itemFactory, bossEffectListener, bossSpawnerRegistry);
         getServer().getPluginManager().registerEvents(crimsonBossManager, this);
+
 
         this.crimsonBossAttacks    = new CrimsonBossAttacks(this, itemFactory, crimsonBossManager);
         getServer().getPluginManager().registerEvents(crimsonBossAttacks, this);
@@ -445,8 +454,10 @@ public class Main extends JavaPlugin {
         getServer().getPluginManager().registerEvents(gildedBossManager, this);
 
         this.crimsonBossSpawner = new CrimsonBossSpawner(
-                this, itemFactory, crimsonBossManager, tempestOverlordManager, voidWitherManager, gildedBossManager);
+                this, itemFactory, crimsonBossManager, tempestOverlordManager, voidWitherManager, gildedBossManager,
+                bossSpawnerRegistry);
         getServer().getPluginManager().registerEvents(crimsonBossSpawner, this);
+
 
         // ── Lightning-triggered bonus monster summons (1-10 mobs per strike) ────
         getServer().getPluginManager().registerEvents(

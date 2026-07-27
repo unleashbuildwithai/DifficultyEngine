@@ -23,8 +23,18 @@ import java.util.UUID;
  */
 public class SkillManager {
 
+    /**
+     * Hard ceiling on total stored XP per skill. Once a skill's XP reaches
+     * this value, further XP gains for that skill are simply discarded
+     * (level stays at 99 — XP_TABLE tops out at 13,034,431 anyway — but the
+     * total XP counter itself stops climbing forever in the background).
+     * Applies uniformly to all {@link SkillType}s.
+     */
+    public static final long MAX_TRACKED_XP = 500_000_000L;
+
     private final JavaPlugin plugin;
     private final File       dataFile;
+
 
     /** uuid → (SkillType → totalXp) */
     private final Map<UUID, Map<SkillType, Long>> skillData = new HashMap<>();
@@ -64,8 +74,12 @@ public class SkillManager {
     public int addXp(UUID uuid, SkillType skill, long amount) {
         int oldLevel = getLevel(uuid, skill);
 
-        skillData.computeIfAbsent(uuid, k -> new EnumMap<>(SkillType.class))
-                 .merge(skill, amount, Long::sum);
+        Map<SkillType, Long> map = skillData.computeIfAbsent(uuid, k -> new EnumMap<>(SkillType.class));
+        long current = map.getOrDefault(skill, 0L);
+        // Hard-cap total stored XP at MAX_TRACKED_XP — once reached, further
+        // gains are simply discarded rather than counting up forever.
+        long updated = Math.min(MAX_TRACKED_XP, current + Math.max(0L, amount));
+        map.put(skill, updated);
 
         int newLevel = getLevel(uuid, skill);
 
@@ -75,6 +89,7 @@ public class SkillManager {
 
         return newLevel;
     }
+
 
     /**
      * Adds fractional XP to the given skill (e.g. 12.5).

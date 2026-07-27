@@ -302,7 +302,7 @@ public final class NpcQuestRegistry {
         q.add(kill(227,  "Magma Titan",     "Magma Baron",       NT, MAGMA_CUBE,   50,1200).secret().build());
         q.add(collect(228,"Snout Armor",    "Piglin Warlord",    NT, NETHERITE_INGOT,1,2000).secret().sneak().build());
         q.add(collect(229,"Red Nether Brick","Red Mason",        NT, RED_NETHER_BRICKS,32,700).secret().build());
-        q.add(collect(230,"Chain Lord",     "Chain Lord",        NT, CHAIN,        16, 600).secret().build());
+        q.add(collect(230,"Chain Lord",     "Chain Lord",        NT, IRON_CHAIN,        16, 600).secret().build());
 
         q.add(kill(231,  "Enderman Nether", "End Stalker Nether",NT, ENDERMAN,     20, 900).secret().build());
         q.add(collect(232,"Nether Wart Blk","Wart Block Sage",   NT, NETHER_WART_BLOCK,8,500).secret().sneak().build());

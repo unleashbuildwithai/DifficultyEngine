@@ -23,6 +23,7 @@ c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\boss\BossEffect
 c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\boss\BossEnchantmentManager.java
 c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\boss\BossImmunityListener.java
 c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\boss\BossSpawnerCommand.java
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\boss\BossSpawnerRegistry.java
 c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\boss\BossTerrainUtil.java
 c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\boss\CrimsonBossManager.java
 c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\boss\CryingDomeParticleCommand.java
@@ -72,6 +73,7 @@ c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\listeners\Minec
 c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\listeners\MonsterCapListener.java
 c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\listeners\NightmareAggroListener.java
 c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\listeners\NightSpawnBoostListener.java
+c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\listeners\NoSpawnZoneListener.java
 c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\listeners\PrayerListener.java
 c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\listeners\RangedGearCraftListener.java
 c:\Users\Owner\Desktop\123\src\main\java\com\yourname\difficulty\listeners\RangedGearEquipListener.java

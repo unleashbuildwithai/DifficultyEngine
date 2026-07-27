@@ -35,8 +35,9 @@ import java.util.*;
  */
 public class MagicBagManager {
 
-    /** Pages (elements). */
-    public static final int PAGES          = 4;
+    /** Pages (elements + Support). */
+    public static final int PAGES          = 5;
+
     /** Item slots per page (4 rows × 9 cols). */
     public static final int SLOTS_PER_PAGE = 36;
     /** Total virtual storage slots. */
@@ -70,6 +71,17 @@ public class MagicBagManager {
 
     public boolean isMagicBag(ItemStack item) { return itemFactory.isMagicBag(item); }
 
+    /**
+     * Returns true if the item is a recognised "Support" system item — the
+     * Support Book, any of the 16 Support Pages, the Support Staff, the
+     * Support Rune, or any Support Potion. Delegates to
+     * {@link ItemFactory#isSupportItem(ItemStack)} so the Magic Bag's item
+     * filter (MagicBagGUIListener.isMagicItem) correctly recognises these
+     * items as valid Magic Bag contents.
+     */
+    public boolean isSupportItem(ItemStack item) { return itemFactory.isSupportItem(item); }
+
+
     // ── Page labels ───────────────────────────────────────────────────────────
 
     /** Returns the coloured display label for a given page index. */
@@ -79,9 +91,11 @@ public class MagicBagManager {
             case 1  -> "§b💧 Water";
             case 2  -> "§2🌍 Earth";
             case 3  -> "§7💨 Air";
+            case 4  -> "§d✦ Support";
             default -> "§5✦ Magic";
         };
     }
+
 
     /** @deprecated use {@link #pageLabel(int)} */
     @Deprecated
@@ -109,10 +123,13 @@ public class MagicBagManager {
     public int classifyItemToPage(ItemStack item) {
         if (item == null || item.getType().isAir()) return 0;
 
+        // ── Support page (page 4) — Support Book, Pages, Potions, Rune, Staff ──
+        if (itemFactory.isSupportItem(item)) return 4;
+
         MagicElement[] elements = MagicElement.values();
 
         // Check runes / rune-dust per element
-        for (int i = 0; i < Math.min(elements.length, PAGES); i++) {
+        for (int i = 0; i < Math.min(elements.length, 4); i++) {
             MagicElement el = elements[i];
             if (itemFactory.isRune(item, el))     return i;
             if (itemFactory.isRuneDust(item, el)) return i;
@@ -121,7 +138,7 @@ public class MagicBagManager {
         // Check staff element
         MagicElement staffEl = itemFactory.getStaffElement(item);
         if (staffEl != null) {
-            for (int i = 0; i < Math.min(elements.length, PAGES); i++) {
+            for (int i = 0; i < Math.min(elements.length, 4); i++) {
                 if (elements[i] == staffEl) return i;
             }
         }
@@ -129,6 +146,7 @@ public class MagicBagManager {
         // Everything else (gear, books, weapons, misc) → page 0 (inbox)
         return 0;
     }
+
 
     /**
      * @deprecated use {@link #classifyItemToPage(ItemStack)}

@@ -24,11 +24,15 @@ import com.yourname.difficulty.skills.SkillType;
 
 public class LightningChargeManager implements Listener {
 
+    /** Hard cap on Lightning Charges a single player may carry at once. */
+    public static final int MAX_CHARGES = 8;
+
     private final JavaPlugin plugin;
     private final ItemFactory itemFactory;
     private final SkillManager skillManager;
     private final Map<UUID, Integer> playerCharges = new HashMap<>();
     private final Map<UUID, Long> damageBuffEndTime = new HashMap<>();
+
 
     public LightningChargeManager(JavaPlugin plugin, ItemFactory itemFactory, SkillManager skillManager) {
         this.plugin = plugin;
@@ -59,12 +63,20 @@ public class LightningChargeManager implements Listener {
     }
 
     public void setCharges(Player player, int charges) {
-        playerCharges.put(player.getUniqueId(), charges);
+        playerCharges.put(player.getUniqueId(), Math.max(0, Math.min(MAX_CHARGES, charges)));
     }
 
-    public void addCharges(Player player, int amount) {
-        setCharges(player, getCharges(player) + amount);
+    /**
+     * Adds charges, clamped to {@link #MAX_CHARGES}. Returns the number of
+     * charges actually added (may be less than {@code amount} if the cap
+     * was hit), so callers can inform the player when charges overflowed.
+     */
+    public int addCharges(Player player, int amount) {
+        int before = getCharges(player);
+        setCharges(player, before + amount);
+        return getCharges(player) - before;
     }
+
 
     public boolean consumeCharge(Player player) {
         int charges = getCharges(player);
@@ -105,10 +117,18 @@ public class LightningChargeManager implements Listener {
             int magicLevel = skillManager.getLevel(player.getUniqueId(), SkillType.MAGIC);
             
             if (magicLevel >= 99) {
-                // Add 4 charges for Lightning Strike
-                addCharges(player, 4);
-                player.sendMessage("§b⚡ §7You absorbed §b4 Lightning Charges§7!");
+                // Add 4 charges for Lightning Strike (capped at MAX_CHARGES)
+                int added = addCharges(player, 4);
+                if (added <= 0) {
+                    player.sendMessage("§c✗ §7Your Lightning Charges are already at the max §8(" + MAX_CHARGES + ")§7!");
+                } else if (added < 4) {
+                    player.sendMessage("§b⚡ §7You absorbed §b" + added + " Lightning Charge" + (added == 1 ? "" : "s")
+                            + "§7! §8(capped at " + MAX_CHARGES + ")");
+                } else {
+                    player.sendMessage("§b⚡ §7You absorbed §b4 Lightning Charges§7!");
+                }
             } else {
+
                 // 5 minute damage buff
                 player.setMetadata("lightning_damage_buff", new org.bukkit.metadata.FixedMetadataValue(plugin, System.currentTimeMillis() + (5 * 60 * 1000L)));
                 player.sendMessage("§b⚡ §7You feel a surge of lightning power! §8(+50% damage vs monsters, +30% vs players for 5m)");

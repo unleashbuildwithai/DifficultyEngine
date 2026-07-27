@@ -3,7 +3,6 @@ package com.yourname.difficulty.boss;
 import com.yourname.difficulty.items.ItemFactory;
 import com.yourname.difficulty.magic.MagicElement;
 import com.yourname.difficulty.skills.SkillManager;
-import com.yourname.difficulty.skills.SkillType;
 import org.bukkit.*;
 import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
@@ -31,7 +30,6 @@ import java.util.*;
  *       → cancel fire damage
  *     • When player with Air Staff hits the Shriek ArmorStand
  *       → remove the stand, mark boss VULNERABLE for 5s
- *     • castEnchantment() — requires Magic level ≥ 60
  *
  *  2. PlayerMoveEvent
  *     • Check if player enters a "Splat" zone (PDC-tagged ArmorStand area)
@@ -43,6 +41,12 @@ import java.util.*;
  *  4. Boss registration
  *     • When a boss entity spawns (via BossEventListener), it should be
  *       registered via registerBoss(). This listener tags the boss with PDC.
+ *
+ * NOTE: The castEnchantment() buff system and the boss immunity /
+ * non-hostility rules that used to live in this class have been extracted
+ * to {@link BossEnchantmentManager} and {@link BossImmunityListener}
+ * respectively (see getEnchantmentManager()), to keep this file under the
+ * project's 400-line cleanliness guideline. Behaviour is unchanged.
  */
 public class BossEffectListener implements Listener {
 
@@ -60,19 +64,15 @@ public class BossEffectListener implements Listener {
     /** Vulnerability duration (5 seconds). */
     private static final long VULNERABLE_DURATION_MS = 5_000L;
 
-    /** Minimum Magic level required to use castEnchantment(). */
-    private static final int ENCHANT_MIN_LEVEL = 60;
-
     private final JavaPlugin     plugin;
     private final EffectRegistry registry;
-    private final SkillManager   skillManager;
     private final ItemFactory    itemFactory;
 
     /** Set of active tracked boss UUIDs — shared with BossEffectTask. */
     public final Set<UUID> trackedBosses = Collections.synchronizedSet(new HashSet<>());
 
-    /** Active castEnchantment buffs: UUID → expiry timestamp (ms) */
-    private final Map<UUID, Long> enchantmentBuffs = new HashMap<>();
+    /** castEnchantment logic extracted to its own class — see getEnchantmentManager(). */
+    private final BossEnchantmentManager enchantmentManager;
 
     private final NamespacedKey bossPdcKey;
     private final NamespacedKey splatPdcKey;
@@ -82,8 +82,8 @@ public class BossEffectListener implements Listener {
                                SkillManager skillManager, ItemFactory itemFactory) {
         this.plugin       = plugin;
         this.registry     = registry;
-        this.skillManager = skillManager;
         this.itemFactory  = itemFactory;
+        this.enchantmentManager = new BossEnchantmentManager(registry, skillManager);
         this.bossPdcKey   = new NamespacedKey(plugin, PDC_IS_BOSS);
         this.splatPdcKey  = new NamespacedKey(plugin, PDC_IS_SPLAT);
         this.shriekPdcKey = new NamespacedKey(plugin, PDC_IS_SHRIEK);
@@ -100,6 +100,11 @@ public class BossEffectListener implements Listener {
             }
             plugin.getLogger().info("[Boss] Completed startup sweep of orphaned Shriek stands.");
         }, 100L); // 5 seconds delay to ensure worlds are fully loaded
+    }
+
+    /** Access to the extracted castEnchantment()/hasEnchantmentBuff() logic. */
+    public BossEnchantmentManager getEnchantmentManager() {
+        return enchantmentManager;
     }
 
     // ── Boss registration ─────────────────────────────────────────────────────
@@ -298,164 +303,6 @@ public class BossEffectListener implements Listener {
             Entity shriek = plugin.getServer().getEntity(shriekUuid);
             if (shriek != null) shriek.remove();
             registry.clearShriek(uuid);
-        }
-    }
-
-    // ── castEnchantment ───────────────────────────────────────────────────────
-
-    /**
-     * Applies a named enchantment buff to the target player.
-     *
-     * <p>The caster must have Magic level ≥ 60.  The buff is stored in
-     * {@code enchantmentBuffs} with an expiry timestamp.
-     *
-     * @param caster   the player casting the enchantment
-     * @param target   the player receiving the buff
-     * @param buffType a string identifier for the buff (e.g. "STRENGTH_AURA")
-     * @param durationMs duration in milliseconds
-     * @return true if the enchantment was applied, false if level requirement not met
-     */
-    public boolean castEnchantment(Player caster, Player target,
-                                   String buffType, long durationMs) {
-        int magicLevel = skillManager.getLevel(caster.getUniqueId(), SkillType.MAGIC);
-        if (magicLevel < ENCHANT_MIN_LEVEL) {
-            caster.sendMessage("§c✗ §7You need §bMagic level " + ENCHANT_MIN_LEVEL
-                    + " §7to cast enchantments. (Current: §b" + magicLevel + "§7)");
-            return false;
-        }
-
-        long expiry = System.currentTimeMillis() + durationMs;
-        enchantmentBuffs.put(target.getUniqueId(), expiry);
-        registry.apply(target.getUniqueId(), EffectType.ENCHANTED, durationMs);
-
-        // Apply visual potion effect
-        switch (buffType.toUpperCase()) {
-            case "STRENGTH_AURA" ->
-                target.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH,
-                        (int)(durationMs / 50), 0, false, true, true));
-            case "SHIELD_AURA" ->
-                target.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE,
-                        (int)(durationMs / 50), 0, false, true, true));
-            case "SPEED_AURA" ->
-                target.addPotionEffect(new PotionEffect(PotionEffectType.SPEED,
-                        (int)(durationMs / 50), 1, false, true, true));
-            case "REGEN_AURA" ->
-                target.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION,
-                        (int)(durationMs / 50), 0, false, true, true));
-            default -> {}
-        }
-
-        target.sendMessage("§5✦ §d" + caster.getName()
-                + " §7cast §5" + buffType + " §7on you!");
-        caster.sendMessage("§5✦ §7Enchantment §5" + buffType
-                + " §7applied to §d" + target.getName() + "§7!");
-        return true;
-    }
-
-    /**
-     * Returns true if the given player has an active castEnchantment buff.
-     */
-    public boolean hasEnchantmentBuff(UUID playerUuid) {
-        Long expiry = enchantmentBuffs.get(playerUuid);
-        if (expiry == null) return false;
-        if (System.currentTimeMillis() > expiry) {
-            enchantmentBuffs.remove(playerUuid);
-            return false;
-        }
-        return true;
-    }
-
-    // ── Void Boss (Wither) & Warden peaceful team non-hostility alliance ──────
-
-    @EventHandler(priority = EventPriority.HIGH)
-    public void onWardenTargetVoidWither(org.bukkit.event.entity.EntityTargetLivingEntityEvent event) {
-        if (event.getEntity() instanceof Warden && event.getTarget() instanceof Wither) {
-            String name = event.getTarget().getCustomName();
-            if (name != null && (name.contains("Void Zurion") || name.equals("Dinnerbone"))) {
-                event.setCancelled(true);
-            }
-        } else if (event.getEntity() instanceof Wither && event.getTarget() instanceof Warden) {
-            String name = event.getEntity().getCustomName();
-            if (name != null && (name.contains("Void Zurion") || name.equals("Dinnerbone"))) {
-                event.setCancelled(true);
-            }
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGH)
-    public void onWardenDamageVoidWither(org.bukkit.event.entity.EntityDamageByEntityEvent event) {
-        if (event.getDamager() instanceof Warden && event.getEntity() instanceof Wither) {
-            String name = event.getEntity().getCustomName();
-            if (name != null && (name.contains("Void Zurion") || name.equals("Dinnerbone"))) {
-                event.setCancelled(true);
-            }
-        } else if (event.getDamager() instanceof Wither && event.getEntity() instanceof Warden) {
-            String name = event.getDamager().getCustomName();
-            if (name != null && (name.contains("Void Zurion") || name.equals("Dinnerbone"))) {
-                event.setCancelled(true);
-            }
-        }
-    }
-
-    // ── Void spawner block explosion protection ──────────────────────────────
-
-    @EventHandler(priority = EventPriority.HIGH)
-    public void onVoidBlockExplode(org.bukkit.event.entity.EntityExplodeEvent event) {
-        event.blockList().removeIf(b -> b.getType() == Material.BLACK_CONCRETE 
-                || b.getType() == Material.CRYING_OBSIDIAN 
-                || b.getType() == Material.GILDED_BLACKSTONE);
-    }
-
-    // ── Raid Boss attack negation immunities (MELEE / RANGED / FIRE) ─────────
-
-    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-    public void onBossDamageNegation(EntityDamageByEntityEvent event) {
-        Entity target = event.getEntity();
-        if (!(target instanceof LivingEntity le)) return;
-        if (!le.hasMetadata("de_damage_negation")) return;
-
-        String immunity = le.getMetadata("de_damage_negation").get(0).asString();
-        
-        // Determine damage type
-        boolean isMelee = false;
-        boolean isRanged = false;
-        boolean isFire = false;
-
-        if (event.getDamager() instanceof Player) {
-            isMelee = true; // physical sword/staff strike
-        } else if (event.getDamager() instanceof Projectile proj) {
-            isRanged = true; // arrow or other projectile
-            if (proj instanceof SmallFireball || proj instanceof Fireball) {
-                isFire = true; // fire magic!
-            }
-        } else if (event.getCause() == org.bukkit.event.entity.EntityDamageEvent.DamageCause.FIRE 
-                || event.getCause() == org.bukkit.event.entity.EntityDamageEvent.DamageCause.FIRE_TICK 
-                || event.getCause() == org.bukkit.event.entity.EntityDamageEvent.DamageCause.LAVA) {
-            isFire = true;
-        }
-
-        // Apply immunities
-        if (immunity.equals("MELEE") && isMelee) {
-            event.setCancelled(true);
-            playImmuneEffect(le, "MELEE");
-        } else if (immunity.equals("RANGED") && isRanged && !isFire) {
-            event.setCancelled(true);
-            playImmuneEffect(le, "RANGED");
-        } else if (immunity.equals("FIRE") && isFire) {
-            event.setCancelled(true);
-            playImmuneEffect(le, "FIRE/ELEMENTAL magic");
-        }
-    }
-
-    private void playImmuneEffect(LivingEntity target, String attackType) {
-        target.getWorld().playSound(target.getLocation(), Sound.BLOCK_ANVIL_PLACE, 0.5f, 1.8f);
-        target.getWorld().spawnParticle(Particle.BLOCK, target.getLocation().add(0, 1, 0), 10, 0.3, 0.3, 0.3, Material.IRON_BLOCK.createBlockData());
-        
-        // Alert nearby players in action bar
-        for (Entity nearby : target.getNearbyEntities(30, 30, 30)) {
-            if (nearby instanceof Player player) {
-                player.sendActionBar("§c✗ §7The boss is §e§lIMMUNE §7to §c§l" + attackType + " §7attacks! Switch styles!");
-            }
         }
     }
 }

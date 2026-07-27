@@ -28,19 +28,19 @@ import java.nio.file.Files;
 import java.util.*;
 
 /**
- * CustomMonsterManager — Defines and spawns fully custom, independent monsters.
+ * CustomMonsterManager â€” Defines and spawns fully custom, independent monsters.
  *
- * ── Clean custom-entity architecture ────────────────────────────────────────
+ * â”€â”€ Clean custom-entity architecture â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  * We no longer "wrap" or reskin a vanilla mob (no giant bats, no modified
  * Withers/Blazes standing in for custom monsters). Instead every custom
  * monster is composed of TWO paired entities:
  *
- *  1. §7Base carrier§r — a completely §finvisible, silent§r vanilla entity
+ *  1. Â§7Base carrierÂ§r â€” a completely Â§finvisible, silentÂ§r vanilla entity
  *     (e.g. ZOMBIE) used ONLY for hitbox, physics, pathfinding AI, and
- *     damage/death handling. The client never sees its model — it is
+ *     damage/death handling. The client never sees its model â€” it is
  *     invisible and its nameplate is suppressed.
  *
- *  2. §7Visual display§r — an {@link ItemDisplay} entity that renders our
+ *  2. Â§7Visual displayÂ§r â€” an {@link ItemDisplay} entity that renders our
  *     actual custom look (a textured/model-data item), billboarded to
  *     always face the viewer. This display is what players actually see,
  *     and it is what carries the monster's name tag.
@@ -49,12 +49,12 @@ import java.util.*;
  * the display every tick, so the "packet-driven" visual tracks the
  * invisible hitbox precisely without any vanilla model rendering underneath.
  *
- * ── Config file: plugins/DifficultyEngine/monsters.yml ──────────────────
+ * â”€â”€ Config file: plugins/DifficultyEngine/monsters.yml â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  *
  * monsters:
  *   ghost_boss:
  *     base_mob:     SKELETON        # invisible physics/hitbox carrier
- *     name:         "§5The Ghost"
+ *     name:         "Â§5The Ghost"
  *     health:       500
  *     damage:       15
  *     speed:        1.4
@@ -67,10 +67,10 @@ import java.util.*;
  *     effects:
  *       - LEACHED_AURA
  *
- * ── Spawn command ─────────────────────────────────────────────────────────
+ * â”€â”€ Spawn command â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  *  Admin: /spawnmob <monster_id>
  *
- * ── PDC tagging ──────────────────────────────────────────────────────────
+ * â”€â”€ PDC tagging â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  *  Every custom monster's carrier entity is tagged with PDC key
  *  "de_custom_mob" = monster_id. This allows BossEffectListener and
  *  GoldDropListener to identify them.
@@ -86,10 +86,10 @@ public class CustomMonsterManager implements Listener {
     private final NamespacedKey displayLinkKey;
     private final NamespacedKey displayTagKey;
 
-    /** Monster ID → definition. */
+    /** Monster ID â†’ definition. */
     private final Map<String, CustomMonsterDef> definitions = new LinkedHashMap<>();
 
-    /** Carrier UUID → paired visual display UUID. Drives the per-tick sync task. */
+    /** Carrier UUID â†’ paired visual display UUID. Drives the per-tick sync task. */
     private final Map<UUID, UUID> carrierToDisplay = new HashMap<>();
 
     private BukkitRunnable syncTask;
@@ -105,17 +105,17 @@ public class CustomMonsterManager implements Listener {
         startSyncTask();
     }
 
-    // ── Config management ─────────────────────────────────────────────────────
+    // â”€â”€ Config management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private void saveDefaultConfig() {
         if (configFile.exists()) return;
         String defaultContent =
-            "# DifficultyEngine — Custom Monster Definitions\n" +
+            "# DifficultyEngine â€” Custom Monster Definitions\n" +
             "# \n" +
             "# monsters:\n" +
             "#   <monster_id>:\n" +
             "#     base_mob:  <ENTITY_TYPE>   # invisible physics/hitbox carrier only\n" +
-            "#     name:      \"<display name>\" # supports §colour codes\n" +
+            "#     name:      \"<display name>\" # supports Â§colour codes\n" +
             "#     health:    <number>\n" +
             "#     damage:    <number>\n" +
             "#     speed:     <number>\n" +
@@ -130,7 +130,7 @@ public class CustomMonsterManager implements Listener {
             "monsters:\n" +
             "  ghost_boss:\n" +
             "    base_mob: SKELETON\n" +
-            "    name: \"§5The Ghost\"\n" +
+            "    name: \"Â§5The Ghost\"\n" +
             "    health: 500\n" +
             "    damage: 15\n" +
             "    speed: 1.4\n" +
@@ -145,7 +145,7 @@ public class CustomMonsterManager implements Listener {
             "\n" +
             "  lava_titan:\n" +
             "    base_mob: ZOMBIE\n" +
-            "    name: \"§c§lLava Titan\"\n" +
+            "    name: \"Â§cÂ§lLava Titan\"\n" +
             "    health: 800\n" +
             "    damage: 22\n" +
             "    speed: 0.9\n" +
@@ -161,7 +161,7 @@ public class CustomMonsterManager implements Listener {
             "\n" +
             "  wind_wraith:\n" +
             "    base_mob: PHANTOM\n" +
-            "    name: \"§f§lWind Wraith\"\n" +
+            "    name: \"Â§fÂ§lWind Wraith\"\n" +
             "    health: 300\n" +
             "    damage: 12\n" +
             "    speed: 1.8\n" +
@@ -198,7 +198,7 @@ public class CustomMonsterManager implements Listener {
             try {
                 EntityType type = EntityType.valueOf(
                         mob.getString("base_mob", "ZOMBIE").toUpperCase());
-                String  name   = mob.getString("name", "§cCustom Mob");
+                String  name   = mob.getString("name", "Â§cCustom Mob");
                 double  health = mob.getDouble("health", 20);
                 double  damage = mob.getDouble("damage", 3);
                 double  speed  = mob.getDouble("speed", 1.0);
@@ -226,7 +226,7 @@ public class CustomMonsterManager implements Listener {
         plugin.getLogger().info("[Monsters] Loaded " + definitions.size() + " custom monster definitions.");
     }
 
-    // ── Spawning ──────────────────────────────────────────────────────────────
+    // â”€â”€ Spawning â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * Spawns a custom monster at the given location.
@@ -245,43 +245,43 @@ public class CustomMonsterManager implements Listener {
     }
 
     private LivingEntity spawnDef(CustomMonsterDef def, Location location) {
-        // ── 1. Spawn the invisible/silent physics + hitbox carrier ──────────
+        // â”€â”€ 1. Spawn the invisible/silent physics + hitbox carrier â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         Entity entity = location.getWorld().spawnEntity(location, def.baseEntityType());
         if (!(entity instanceof LivingEntity mob)) {
             entity.remove();
             return null;
         }
 
-        // Never rendered — purely a physics/hitbox/AI carrier.
+        // Never rendered â€” purely a physics/hitbox/AI carrier.
         mob.setInvisible(true);
         mob.setSilent(true);
         mob.setCustomNameVisible(false); // name lives on the display entity instead
 
-        // ── HP ────────────────────────────────────────────────────────────
-        AttributeInstance maxHp = mob.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        // â”€â”€ HP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        AttributeInstance maxHp = mob.getAttribute(Attribute.MAX_HEALTH);
         if (maxHp != null) {
             maxHp.setBaseValue(def.health());
             mob.setHealth(def.health());
         }
 
-        // ── Damage ────────────────────────────────────────────────────────
-        AttributeInstance atk = mob.getAttribute(Attribute.GENERIC_ATTACK_DAMAGE);
+        // â”€â”€ Damage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        AttributeInstance atk = mob.getAttribute(Attribute.ATTACK_DAMAGE);
         if (atk != null) atk.setBaseValue(def.damage());
 
-        // ── Speed ─────────────────────────────────────────────────────────
-        AttributeInstance spd = mob.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED);
+        // â”€â”€ Speed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        AttributeInstance spd = mob.getAttribute(Attribute.MOVEMENT_SPEED);
         if (spd != null) spd.setBaseValue(def.speed() * 0.25); // normalize
 
-        // ── PDC tag ───────────────────────────────────────────────────────
+        // â”€â”€ PDC tag â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         mob.getPersistentDataContainer()
                 .set(customMobKey, PersistentDataType.STRING, def.id());
 
-        // ── Effects ───────────────────────────────────────────────────────
+        // â”€â”€ Effects â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         for (String effect : def.effects()) {
             applyEffect(mob, effect.toUpperCase());
         }
 
-        // ── 2. Spawn the visual display (billboarded, no vanilla model) ─────
+        // â”€â”€ 2. Spawn the visual display (billboarded, no vanilla model) â”€â”€â”€â”€â”€
         ItemDisplay display = spawnVisualDisplay(mob, def);
 
         carrierToDisplay.put(mob.getUniqueId(), display.getUniqueId());
@@ -305,7 +305,7 @@ public class CustomMonsterManager implements Listener {
 
         ItemDisplay display = carrier.getWorld().spawn(displayLoc, ItemDisplay.class, d -> {
             d.setItemStack(visualItem);
-            d.setBillboard(Display.Billboard.CENTER); // always faces the viewer — no rigging needed
+            d.setBillboard(Display.Billboard.CENTER); // always faces the viewer â€” no rigging needed
             d.setPersistent(false);
             d.setCustomName(def.name());
             d.setCustomNameVisible(true);
@@ -374,7 +374,7 @@ public class CustomMonsterManager implements Listener {
         }
     }
 
-    // ── Cleanup on death ───────────────────────────────────────────────────────
+    // â”€â”€ Cleanup on death â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /** Immediately removes the paired visual display when the carrier dies. */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -386,7 +386,7 @@ public class CustomMonsterManager implements Listener {
         if (display != null && !display.isDead()) display.remove();
     }
 
-    // ── Getters ───────────────────────────────────────────────────────────────
+    // â”€â”€ Getters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public Map<String, CustomMonsterDef> getDefinitions() {
         return Collections.unmodifiableMap(definitions);

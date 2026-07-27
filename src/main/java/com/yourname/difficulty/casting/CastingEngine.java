@@ -116,12 +116,19 @@ public class CastingEngine implements Listener {
 
 
     /**
-     * Per-player "armed" Support Blessing Potion effect — set by
-     * {@code SupportPotionListener} when a potion is successfully armed
+     * Per-player "armed" Support Blessing Potion effects — set by
+     * {@code SupportPotionListener} whenever a potion is successfully armed
      * (Support Book + matching Support Page + Support Rune all present).
+     * NO CAP: multiple drunk potions all stack up in this list and are ALL
+     * discharged together on the next Support Staff right-click (per user
+     * request: "lets not cap the potions a support can drink and cast").
      * Consumed/read by {@link #onSupportStaffUse} for the ranged splash cast.
      */
-    private final Map<UUID, ArmedSupportEffect> armedEffects = new HashMap<>();
+    private final Map<UUID, List<ArmedSupportEffect>> armedEffects = new HashMap<>();
+
+    /** Standardized splash/discharge radius (blocks) for all Support Staff casts. */
+    private static final double SUPPORT_SPLASH_RADIUS = 6.0;
+
 
 
     // ── Support Staff combo gate ──────────────────────────────────────────────
@@ -157,36 +164,54 @@ public class CastingEngine implements Listener {
     /**
      * Called by {@code SupportPotionListener} when a Support Blessing Potion is
      * successfully armed (Support Book + matching Support Page + Support Rune
-     * all present). Non-stacking: if the player already has an unexpired armed
-     * effect, this call is a no-op (caller is responsible for checking first
-     * via {@link #getArmedEffect(UUID)} and wasting the new potion instead).
+     * all present). NO CAP — every successfully-drunk potion is appended to
+     * the player's armed-effects list, and ALL of them are discharged together
+     * on the next Support Staff right-click (see {@link #onSupportStaffUse}).
      */
     public void armEffect(Player player, List<PotionEffect> effects, String potionId) {
         long expiry = System.currentTimeMillis() + 60_000L; // 60s arming window — tune as needed
-        armedEffects.put(player.getUniqueId(), new ArmedSupportEffect(effects, potionId, expiry));
+        armedEffects.computeIfAbsent(player.getUniqueId(), k -> new ArrayList<>())
+                .add(new ArmedSupportEffect(effects, potionId, expiry));
     }
 
-    /** Returns the player's currently armed Support effect, or {@code null} if none/expired. */
+    /**
+     * Returns the player's list of currently armed (unexpired) Support
+     * effects, pruning any expired entries as a side effect. Returns an
+     * empty list (never null) if the player has none armed.
+     */
+    public List<ArmedSupportEffect> getArmedEffects(UUID playerUuid) {
+        List<ArmedSupportEffect> list = armedEffects.get(playerUuid);
+        if (list == null || list.isEmpty()) return List.of();
+        list.removeIf(ArmedSupportEffect::isExpired);
+        if (list.isEmpty()) { armedEffects.remove(playerUuid); return List.of(); }
+        return list;
+    }
+
+    /**
+     * @deprecated retained for compatibility — returns the FIRST armed effect
+     * (or null), but callers should migrate to {@link #getArmedEffects(UUID)}
+     * since multiple potions may now be armed simultaneously (no cap).
+     */
+    @Deprecated
     public ArmedSupportEffect getArmedEffect(UUID playerUuid) {
-        ArmedSupportEffect eff = armedEffects.get(playerUuid);
-        if (eff == null) return null;
-        if (eff.isExpired()) { armedEffects.remove(playerUuid); return null; }
-        return eff;
+        List<ArmedSupportEffect> list = getArmedEffects(playerUuid);
+        return list.isEmpty() ? null : list.get(0);
     }
 
-    /** Clears a player's armed effect (e.g. after successful discharge). */
+    /** Clears ALL of a player's armed effects (e.g. after successful discharge). */
     public void clearArmedEffect(UUID playerUuid) {
         armedEffects.remove(playerUuid);
     }
 
     /**
-     * Discharges the player's armed Support effect as a ranged AoE splash cast
-     * at the given target location. Applies all armed potion effects to each
-     * LivingEntity within {@code radius} blocks, EXCEPT entities that already
-     * have that specific PotionEffectType active (non-stacking per-target —
-     * the rune/cast is still consumed regardless of skips).
+     * Discharges ALL of the player's armed Support effects as a single ranged
+     * AoE splash cast at the given target location. Applies every armed
+     * potion's effects to each LivingEntity within {@code radius} blocks,
+     * EXCEPT entities that already have that specific PotionEffectType active
+     * (non-stacking per-target — the rune/cast is still consumed regardless
+     * of skips).
      */
-    private void dischargeArmedEffectAt(Player caster, Location loc, ArmedSupportEffect armed, double radius) {
+    private void dischargeArmedEffectsAt(Player caster, Location loc, List<ArmedSupportEffect> armedList, double radius) {
         loc.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, loc, 50, 2.5, 1.5, 2.5, 0.05);
         loc.getWorld().spawnParticle(Particle.END_ROD, loc, 20, 2.0, 1.0, 2.0, 0.05);
         loc.getWorld().playSound(loc, Sound.ENTITY_SPLASH_POTION_BREAK, 1.2f, 1.2f);
@@ -195,22 +220,25 @@ public class CastingEngine implements Listener {
         for (Entity e : loc.getWorld().getNearbyEntities(loc, radius, radius, radius)) {
             if (!(e instanceof LivingEntity target)) continue;
             boolean appliedAny = false;
-            for (PotionEffect effect : armed.effects()) {
-                if (target.hasPotionEffect(effect.getType())) continue; // non-stacking per target
-                target.addPotionEffect(effect);
-                appliedAny = true;
+            for (ArmedSupportEffect armed : armedList) {
+                for (PotionEffect effect : armed.effects()) {
+                    if (target.hasPotionEffect(effect.getType())) continue; // non-stacking per target
+                    target.addPotionEffect(effect);
+                    appliedAny = true;
+                }
             }
             if (appliedAny) {
                 hitCount++;
                 target.getWorld().spawnParticle(Particle.HAPPY_VILLAGER,
                         target.getLocation().add(0, 1, 0), 15, 0.4, 0.4, 0.4, 0.05);
                 if (target instanceof Player tp) {
-                    tp.sendMessage("§5✦ §7Blessed by §b" + caster.getName() + "§7's armed Support Blessing!");
+                    tp.sendMessage("§5✦ §7Blessed by §b" + caster.getName() + "§7's armed Support Blessing(s)!");
                 }
             }
         }
-        caster.sendActionBar("§5✦ §7Armed Blessing discharged! §8(" + hitCount + " targets buffed)");
+        caster.sendActionBar("§5✦ §7" + armedList.size() + " armed Blessing(s) discharged! §8(" + hitCount + " targets buffed)");
     }
+
 
 
     // ── Build SupportStaff item ───────────────────────────────────────────────
@@ -347,12 +375,13 @@ public class CastingEngine implements Listener {
         UUID casterId = player.getUniqueId();
 
         // ── Armed Blessing Potion discharge (takes priority) ──────────────────
-        // If the player has an unexpired armed Support effect (from drinking a
-        // Blessing Potion while it was fully "armed" per SupportPotionListener),
-        // right-clicking the Support Staff fires a ranged AoE splash cast of
-        // that armed effect instead of the old combo/splash logic below.
-        ArmedSupportEffect armed = getArmedEffect(casterId);
-        if (armed != null) {
+        // If the player has unexpired armed Support effects (from drinking
+        // Blessing Potions while fully "armed" per SupportPotionListener —
+        // NO CAP, multiple potions can be armed at once), right-clicking the
+        // Support Staff fires a single ranged AoE splash cast that discharges
+        // ALL of them together, instead of the old combo/splash logic below.
+        List<ArmedSupportEffect> armed = getArmedEffects(casterId);
+        if (!armed.isEmpty()) {
             // Consume exactly 1 Support Rune per cast (regardless of hits/skips)
             if (!consumeSupportRune(player)) {
                 player.sendActionBar("§c✗ §7No §dSupport Rune§7! §8Craft from §5Phantom Membrane×4§7.");
@@ -364,10 +393,11 @@ public class CastingEngine implements Listener {
             Location castAt = (ray != null && ray.getHitBlock() != null)
                 ? ray.getHitBlock().getLocation().add(0.5, 1.0, 0.5)
                 : player.getEyeLocation().add(player.getLocation().getDirection().multiply(10));
-            dischargeArmedEffectAt(player, castAt, armed, 5.0);
+            dischargeArmedEffectsAt(player, castAt, armed, SUPPORT_SPLASH_RADIUS);
             clearArmedEffect(casterId);
             return;
         }
+
 
         UUID targetId = lastPartyHitTarget.get(casterId);
         Long hitTime = lastPartyHitTime.get(casterId);
@@ -680,7 +710,10 @@ public class CastingEngine implements Listener {
         int healed = 0;
         int damaged = 0;
 
-        for (Entity e : caster.getWorld().getNearbyEntities(caster.getLocation(), 8, 4, 8)) {
+        // Standardized to SUPPORT_SPLASH_RADIUS (6 blocks) — was previously 8.0.
+        for (Entity e : caster.getWorld().getNearbyEntities(caster.getLocation(),
+                SUPPORT_SPLASH_RADIUS, SUPPORT_SPLASH_RADIUS / 2.0, SUPPORT_SPLASH_RADIUS)) {
+
             if (e.equals(caster)) continue;
 
             if (e instanceof Player target) {
@@ -998,8 +1031,26 @@ public class CastingEngine implements Listener {
                 return true;
             }
         }
+
+        // ── Fall back to the Magic Bag as an extended inventory ────────────────
+        // Fixes "make sure it's being used as an extended inventory — it says I
+        // don't have runes but there are runes in the magic bag."
+        if (magicBagManager != null) {
+            ItemStack[] bag = magicBagManager.getBag(player.getUniqueId());
+            if (bag != null) {
+                for (int i = 0; i < bag.length; i++) {
+                    ItemStack s = bag[i];
+                    if (s == null || !itemFactory.isRune(s, el)) continue;
+                    if (s.getAmount() > 1) s.setAmount(s.getAmount() - 1);
+                    else bag[i] = null;
+                    magicBagManager.saveAsync(player.getUniqueId());
+                    return true;
+                }
+            }
+        }
         return false;
     }
+
 
     private void launchSupportSoloBlueLightning(Player player) {
         Snowball snowball = player.launchProjectile(Snowball.class);

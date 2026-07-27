@@ -141,6 +141,29 @@ public class NpcQuestSpawner implements Listener, CommandExecutor, TabCompleter 
         save();
     }
 
+    /**
+     * Removes EVERY quest NPC entity currently spawned in the world and wipes
+     * the entire tracked position registry (npc_positions.yml), so
+     * {@link #restoreMissingNpcs()} won't bring any of them back on the next
+     * WorldLoadEvent or server restart. Used by {@code /npcwipe}.
+     *
+     * @return the number of position records that were cleared.
+     */
+    public int wipeAllPositions() {
+        int count = npcEntityMap.size();
+
+        for (UUID entityUuid : new ArrayList<>(npcEntityMap.values())) {
+            var entity = plugin.getServer().getEntity(entityUuid);
+            if (entity != null) entity.remove();
+        }
+        npcEntityMap.clear();
+
+        posData.set("npcs", null);
+        save();
+
+        return count;
+    }
+
     // ── Persistence ───────────────────────────────────────────────────────────
 
     private void savePosition(NpcQuestDef def, Location loc, UUID entityUuid) {

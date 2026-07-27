@@ -116,7 +116,9 @@ public class CrimsonBossManager implements Listener {
     private final JavaPlugin         plugin;
     private final ItemFactory        itemFactory;
     private final BossEffectListener bossEffectListener;
+    private final BossSpawnerRegistry spawnerRegistry;
     private final Random             random = new Random();
+
 
 
     /** Base visual scale divisor applied to the old vanilla scale-factor to size the custom crimson_boss display. */
@@ -170,11 +172,20 @@ public class CrimsonBossManager implements Listener {
     public CrimsonBossManager(JavaPlugin plugin,
                                ItemFactory itemFactory,
                                BossEffectListener bossEffectListener) {
+        this(plugin, itemFactory, bossEffectListener, null);
+    }
+
+    public CrimsonBossManager(JavaPlugin plugin,
+                               ItemFactory itemFactory,
+                               BossEffectListener bossEffectListener,
+                               BossSpawnerRegistry spawnerRegistry) {
 
         this.plugin             = plugin;
         this.itemFactory        = itemFactory;
         this.bossEffectListener = bossEffectListener;
+        this.spawnerRegistry    = spawnerRegistry;
         this.displayTagKey      = new NamespacedKey(plugin, "de_crimson_display");
+
 
         // Read the global fiend cap from config.yml (crimson.maxAliveFiends),
         // falling back to GLOBAL_MAX_FIENDS_DEFAULT if missing/invalid.

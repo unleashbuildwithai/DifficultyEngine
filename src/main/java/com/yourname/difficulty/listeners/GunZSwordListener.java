@@ -187,16 +187,17 @@ public class GunZSwordListener implements Listener {
                 if (isPressedNow && !wasPressedBefore) {
                     // Rising edge (Press)
                     KeyState state = states.computeIfAbsent(d, k -> new KeyState());
-                    
-                    long inactiveDuration = now - state.lastReleaseTime;
+
                     long totalGap = now - state.lastPressTime;
 
-                    // 2-Tick Inactive Rule:
-                    // inactiveDuration must be >= 80ms (at least 2 server ticks) to prove a real human release,
-                    // which perfectly filters out 50ms (1-tick) landing-lag/obstacle jitters.
-                    // totalGap must be <= 380ms to ensure a fast, valid double-tap sequence.
-                    if (state.lastPressTime > 0 && state.lastReleaseTime > state.lastPressTime 
-                            && inactiveDuration >= 80L && totalGap <= 380L) {
+                    // Any second press of the same direction counts as a double-tap,
+                    // as long as there was a real release in between and the total
+                    // gap between the two presses doesn't exceed MAX_TAP_RELEASE_GAP_MS.
+                    // No minimum timing is enforced — instant (0.01s) re-taps and
+                    // slower (~0.5s) re-taps both trigger the dash equally, so the
+                    // player never has to "perfectly time" the two presses.
+                    if (state.lastPressTime > 0 && state.lastReleaseTime > state.lastPressTime
+                            && totalGap <= MAX_TAP_RELEASE_GAP_MS) {
                         // Double-tap detected — consume immediately and trigger dash
                         state.lastPressTime = 0L;
                         state.lastReleaseTime = 0L;
@@ -205,6 +206,7 @@ public class GunZSwordListener implements Listener {
                         state.lastPressTime = now;
                     }
                 } else if (!isPressedNow && wasPressedBefore) {
+
                     // Falling edge (Release)
                     KeyState state = states.computeIfAbsent(d, k -> new KeyState());
                     state.lastReleaseTime = now;
@@ -284,9 +286,11 @@ public class GunZSwordListener implements Listener {
 
     /**
      * Left-clicking while holding the GunZ Sword within SLASH_WINDOW_MS of
-     * a dash will redirect the player's velocity in their current facing
-     * direction — this is the "animation cancel" that lets you change direction
-     * mid-dash by slashing.
+     * a dash CANCELS the residual dash momentum (zeroes it out) instead of
+     * auto-steering the player in their current look direction. This gives
+     * the player full manual control over where they go next — a subsequent
+     * WASD input or another double-tap dash decides the new direction, the
+     * slash itself never picks a direction for them.
      */
     @EventHandler(priority = EventPriority.NORMAL)
     public void onSlashCancel(PlayerInteractEvent event) {
@@ -302,30 +306,25 @@ public class GunZSwordListener implements Listener {
         Long lastDash = lastDashTime.get(uid);
         if (lastDash == null || now - lastDash > SLASH_WINDOW_MS) return;
 
-        // ── Redirect dash in current facing direction ─────────────────────────
-        Vector facing = player.getLocation().getDirection().setY(0);
-        if (facing.lengthSquared() < 0.001) return;
-        facing.normalize();
-
-        // Preserve the existing horizontal speed (so we don't slow down)
+        // ── Cancel the dash's residual momentum ───────────────────────────────
+        // Zero out horizontal velocity (keep a touch of vertical so they don't
+        // instantly slam into the ground) — the player then decides their own
+        // next direction with WASD instead of the slash forcing one for them.
         Vector current = player.getVelocity();
-        double horizSpeed = Math.sqrt(current.getX() * current.getX() + current.getZ() * current.getZ());
-        double redirectSpeed = Math.max(horizSpeed, 1.0); // at least full dash speed
+        player.setVelocity(new Vector(0, Math.min(current.getY(), 0.0), 0));
 
-        Vector redirected = facing.multiply(redirectSpeed).setY(Math.max(current.getY(), 0.15));
-        player.setVelocity(redirected);
-
-        // Visual feedback for the slash redirect
+        // Visual feedback for the slash cancel
         Location loc = player.getLocation().add(0, 1, 0);
         player.getWorld().spawnParticle(Particle.CRIT, loc, 12, 0.3, 0.3, 0.3, 0.25);
         player.getWorld().spawnParticle(Particle.ENCHANTED_HIT, loc, 6, 0.2, 0.2, 0.2, 0.15);
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_PLAYER_ATTACK_SWEEP, 1.0f, 1.6f);
 
-        player.sendActionBar("§f⚔ §c§lSLASH REDIRECT! §7Direction changed!");
+        player.sendActionBar("§f⚔ §c§lSLASH CANCEL! §7Dash momentum stopped!");
 
-        // Consume the slash window so it only redirects once per dash
+        // Consume the slash window so it only cancels once per dash
         lastDashTime.put(uid, 0L);
     }
+
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
