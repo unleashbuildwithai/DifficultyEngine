@@ -1,0 +1,14 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "minecraft:item/ice"
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "custom_model_data": 3002
+      },
+      "model": "difficultyengine:item/water_rune"
+    }
+  ]
+}

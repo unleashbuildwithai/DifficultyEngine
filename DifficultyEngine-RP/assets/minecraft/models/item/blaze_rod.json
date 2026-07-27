@@ -5,8 +5,16 @@
   },
   "overrides": [
     {
-      "predicate": { "custom_model_data": 3001 },
+      "predicate": {
+        "custom_model_data": 3001
+      },
       "model": "bbbosses:item/crimson_boss"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 2001
+      },
+      "model": "difficultyengine:item/fire_staff"
     }
   ]
 }
