@@ -334,6 +334,15 @@ public class Main extends JavaPlugin {
         // Wire FavoritesManager into MagicStaffListener (must be wired after both created)
         magicStaffListener.setFavoritesManager(comboFavoritesManager);
 
+        // ── Elemental Proc system — real dice-roll passive procs on basic hits,
+        // gated by Arcane Tome proc-page unlock + Magic level requirement.
+        com.yourname.difficulty.magic.ElementalProcManager elementalProcManager =
+                new com.yourname.difficulty.magic.ElementalProcManager(this, spellBookManager, comboFavoritesManager, skillManager);
+        elementalProcManager.setItemFactory(itemFactory);
+        magicStaffListener.setElementalProcManager(elementalProcManager);
+
+
+
         this.questManager = new QuestManager(this, goldManager, skillManager, itemFactory);
         this.questGUI     = new QuestGUI(questManager);
         getServer().getPluginManager().registerEvents(questGUI, this);
@@ -349,6 +358,9 @@ public class Main extends JavaPlugin {
             questNpcCmd.setExecutor(npcQuestSpawner);
             questNpcCmd.setTabCompleter(npcQuestSpawner);
         }
+
+        // ── /npcwipe — full NPC reset (quest NPCs + VIP keeper) ────────────────
+        registerCmd("npcwipe", new com.yourname.difficulty.quests.NpcWipeCommand(this, npcQuestSpawner));
 
         getServer().getPluginManager().registerEvents(
                 new QuestKillListener(questManager, npcQuestManager), this);
@@ -383,7 +395,8 @@ public class Main extends JavaPlugin {
                 new MagicBagChestInterceptListener(magicBagManager, this), this);
         // Death-proof: bag is removed from drops on death and restored on respawn
         getServer().getPluginManager().registerEvents(
-                new MagicBagDeathListener(magicBagManager, this), this);
+                new MagicBagDeathListener(magicBagManager, itemFactory, this), this);
+
 
         // ── Night spawn boost + Nightmare party ×10 ───────────────────────────
         getServer().getPluginManager().registerEvents(
@@ -658,7 +671,10 @@ public class Main extends JavaPlugin {
             rebuildVoidPluginCmd.setTabCompleter(bossSpawnerCmd);
         }
 
+        registerCmd("cryingdome", new com.yourname.difficulty.boss.CryingDomeParticleCommand(this));
+
         registerCmd("hardcore", (sender, cmd, label, args) -> {
+
             if (!(sender instanceof Player player)) {
                 sender.sendMessage("§cOnly players can use /hardcore."); return true;
             }

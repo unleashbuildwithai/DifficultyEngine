@@ -102,6 +102,11 @@ commands:
     usage: /questnpc <spawn|remove|list|info> [id]
     aliases: [qnpc]
 
+  npcwipe:
+    description: Remove every plugin-spawned NPC on the server for a full reset (Admin).
+    usage: /npcwipe
+    aliases: [killallnpc]
+
   inventory:
     description: Open your Gold Vault (separate gold coin storage).
     usage: /inventory
@@ -124,8 +129,29 @@ commands:
 
   spawnboss:
     description: Spawn a dungeon boss at its arena location (Admin).
-    usage: /spawnboss <tempest|crimson>
+    usage: /spawnboss <tempest|crimson|void|gilded|rebuildvoid>
     aliases: [bossspawn, dungeonboss]
+
+  tpboss:
+    description: Teleport to a boss arena location (Admin).
+    usage: /tpboss <tempest|crimson|void|gilded>
+    aliases: [bosstp]
+
+  rebuildvoid:
+    description: Reload the Void Realm schematic and respawn the Void Wither (Admin).
+    usage: /rebuildvoid
+    aliases: [voidrebuild]
+
+  bring:
+    description: Toggle whether your party is auto-brought with you through the Ancient Debris portal (Admin).
+    usage: /bring [on|off]
+
+  cryingdome:
+    description: Paste the crying dome particle emitters (purple/blue/green drips) at your current location (Admin).
+    usage: /cryingdome
+    aliases: [cryingdomeparticles, pastedomeparticles]
+
+
 
   share:
     description: Register profile names that can share this Minecraft login (separate difficulty/skills/gold/inventory per name).
