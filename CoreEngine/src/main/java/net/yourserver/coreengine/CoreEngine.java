@@ -44,6 +44,8 @@ import net.yourserver.coreengine.market.MarketManager;
 import net.yourserver.coreengine.rank.RankManager;
 import net.yourserver.coreengine.settings.PlayerSettingsManager;
 import net.yourserver.coreengine.teleport.TeleportManager;
+import net.yourserver.coreengine.teleport.TeleportRequestManager;
+
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 

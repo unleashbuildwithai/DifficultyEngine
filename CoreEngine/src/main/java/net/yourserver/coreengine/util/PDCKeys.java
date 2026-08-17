@@ -63,4 +63,14 @@ public final class PDCKeys {
     public static NamespacedKey settingsPage() {
         return key("settings_page");
     }
+
+    /** Marks the admin Market NPC spawn egg (stored as BYTE/BOOLEAN). */
+    public static NamespacedKey marketNpcEgg() {
+        return key("market_npc_egg");
+    }
+
+    /** Marks a spawned Market NPC (stored as BYTE/BOOLEAN). */
+    public static NamespacedKey marketNpc() {
+        return key("market_npc");
+    }
 }

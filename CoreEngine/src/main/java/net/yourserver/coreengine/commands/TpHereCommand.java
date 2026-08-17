@@ -1,7 +1,12 @@
 package net.yourserver.coreengine.commands;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import net.yourserver.coreengine.CoreEngine;
 import net.yourserver.coreengine.settings.PlayerSettingsManager;
+import net.yourserver.coreengine.teleport.TeleportRequestManager;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -10,9 +15,8 @@ import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * {@code /tphere <player>} - teleport a player to you. If the target has
- * {@code /tpauto} enabled, it happens immediately; otherwise a request is
- * sent (the target can enable /tpauto to auto-accept).
+ * {@code /tphere <player>} - request that another player teleport to you.
+ * Auto-accepts instantly when they have /tpauto on.
  */
 public class TpHereCommand implements CommandExecutor {
 
@@ -39,7 +43,12 @@ public class TpHereCommand implements CommandExecutor {
             return true;
         }
         if (target.equals(player)) {
-            player.sendMessage("§cThat's you.");
+            player.sendMessage("§cThat is you.");
+            return true;
+        }
+        TeleportRequestManager mgr = plugin.getTeleportRequestManager();
+        if (mgr.isInCombat(player.getUniqueId()) || mgr.isInCombat(target.getUniqueId())) {
+            player.sendMessage("§cYou cannot teleport someone while you or they are in combat.");
             return true;
         }
         PlayerSettingsManager.PlayerSettings targetSettings =
@@ -48,11 +57,16 @@ public class TpHereCommand implements CommandExecutor {
             target.teleport(player);
             player.sendMessage("§aTeleported §e" + target.getName() + "§a to you (auto).");
             target.sendMessage("§e" + player.getName() + "§a teleported you to them.");
-        } else {
-            target.sendMessage("§e" + player.getName() + "§a wants to teleport you to them. "
-                    + "Enable §e/tpauto§a to allow it.");
-            player.sendMessage("§aSent a teleport request to §e" + target.getName() + "§a.");
+            return true;
         }
+        mgr.request(player, target, TeleportRequestManager.RequestType.TPHERE);
+        player.sendMessage("§aSending tphere request to §e" + target.getName() + "§a.");
+        target.sendMessage("§e" + player.getName() + "§a wants to teleport you to them.");
+        target.sendMessage(Component.text("   ▶ Yes ").color(NamedTextColor.GREEN).decorate(TextDecoration.BOLD)
+                .clickEvent(ClickEvent.runCommand("/tpaccept"))
+                .append(Component.text("▶ No").color(NamedTextColor.RED).decorate(TextDecoration.BOLD)
+                        .clickEvent(ClickEvent.runCommand("/tpdeny")))
+                .append(Component.text("   §7(chat Yes/No, or /tpaccept)").color(NamedTextColor.GRAY)));
         return true;
     }
 }

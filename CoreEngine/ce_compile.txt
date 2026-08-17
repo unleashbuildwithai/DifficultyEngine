@@ -1,0 +1,154 @@
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\SettingsCommand.java:1: error: illegal character: '\ufeff'
+?package net.yourserver.coreengine.commands;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\SettingsCommand.java:1: error: class, interface, annotation type, enum, record, method or field expected
+?package net.yourserver.coreengine.commands;
+         ^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\SettingsCommand.java:3: error: class, interface, annotation type, enum, record, method or field expected
+import net.yourserver.coreengine.CoreEngine;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\SettingsCommand.java:4: error: class, interface, annotation type, enum, record, method or field expected
+import net.yourserver.coreengine.gui.SettingsForm;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\SettingsCommand.java:5: error: class, interface, annotation type, enum, record, method or field expected
+import net.yourserver.coreengine.settings.PlayerSettingsManager.Setting;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\SettingsCommand.java:6: error: class, interface, annotation type, enum, record, method or field expected
+import net.yourserver.coreengine.util.PlatformUtil;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\SettingsCommand.java:7: error: class, interface, annotation type, enum, record, method or field expected
+import org.bukkit.command.Command;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\SettingsCommand.java:8: error: class, interface, annotation type, enum, record, method or field expected
+import org.bukkit.command.CommandExecutor;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\SettingsCommand.java:9: error: class, interface, annotation type, enum, record, method or field expected
+import org.bukkit.command.CommandSender;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\SettingsCommand.java:10: error: class, interface, annotation type, enum, record, method or field expected
+import org.bukkit.entity.Player;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\SettingsCommand.java:11: error: class, interface, annotation type, enum, record, method or field expected
+import org.bukkit.potion.PotionEffect;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\SettingsCommand.java:12: error: class, interface, annotation type, enum, record, method or field expected
+import org.bukkit.potion.PotionEffectType;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\SettingsCommand.java:13: error: class, interface, annotation type, enum, record, method or field expected
+import org.jetbrains.annotations.NotNull;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpCommand.java:1: error: illegal character: '\ufeff'
+?package net.yourserver.coreengine.commands;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpCommand.java:1: error: class, interface, annotation type, enum, record, method or field expected
+?package net.yourserver.coreengine.commands;
+         ^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpCommand.java:3: error: class, interface, annotation type, enum, record, method or field expected
+import net.kyori.adventure.text.Component;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpCommand.java:4: error: class, interface, annotation type, enum, record, method or field expected
+import net.kyori.adventure.text.event.ClickEvent;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpCommand.java:5: error: class, interface, annotation type, enum, record, method or field expected
+import net.kyori.adventure.text.format.NamedTextColor;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpCommand.java:6: error: class, interface, annotation type, enum, record, method or field expected
+import net.kyori.adventure.text.format.TextDecoration;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpCommand.java:7: error: class, interface, annotation type, enum, record, method or field expected
+import net.yourserver.coreengine.CoreEngine;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpCommand.java:8: error: class, interface, annotation type, enum, record, method or field expected
+import net.yourserver.coreengine.settings.PlayerSettingsManager;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpCommand.java:9: error: class, interface, annotation type, enum, record, method or field expected
+import net.yourserver.coreengine.teleport.TeleportRequestManager;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpCommand.java:10: error: class, interface, annotation type, enum, record, method or field expected
+import org.bukkit.Bukkit;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpCommand.java:11: error: class, interface, annotation type, enum, record, method or field expected
+import org.bukkit.command.Command;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpCommand.java:12: error: class, interface, annotation type, enum, record, method or field expected
+import org.bukkit.command.CommandExecutor;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpCommand.java:13: error: class, interface, annotation type, enum, record, method or field expected
+import org.bukkit.command.CommandSender;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpCommand.java:14: error: class, interface, annotation type, enum, record, method or field expected
+import org.bukkit.entity.Player;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpCommand.java:15: error: class, interface, annotation type, enum, record, method or field expected
+import org.jetbrains.annotations.NotNull;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpHereCommand.java:1: error: illegal character: '\ufeff'
+?package net.yourserver.coreengine.commands;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpHereCommand.java:1: error: class, interface, annotation type, enum, record, method or field expected
+?package net.yourserver.coreengine.commands;
+         ^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpHereCommand.java:3: error: class, interface, annotation type, enum, record, method or field expected
+import net.kyori.adventure.text.Component;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpHereCommand.java:4: error: class, interface, annotation type, enum, record, method or field expected
+import net.kyori.adventure.text.event.ClickEvent;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpHereCommand.java:5: error: class, interface, annotation type, enum, record, method or field expected
+import net.kyori.adventure.text.format.NamedTextColor;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpHereCommand.java:6: error: class, interface, annotation type, enum, record, method or field expected
+import net.kyori.adventure.text.format.TextDecoration;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpHereCommand.java:7: error: class, interface, annotation type, enum, record, method or field expected
+import net.yourserver.coreengine.CoreEngine;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpHereCommand.java:8: error: class, interface, annotation type, enum, record, method or field expected
+import net.yourserver.coreengine.settings.PlayerSettingsManager;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpHereCommand.java:9: error: class, interface, annotation type, enum, record, method or field expected
+import net.yourserver.coreengine.teleport.TeleportRequestManager;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpHereCommand.java:10: error: class, interface, annotation type, enum, record, method or field expected
+import org.bukkit.Bukkit;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpHereCommand.java:11: error: class, interface, annotation type, enum, record, method or field expected
+import org.bukkit.command.Command;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpHereCommand.java:12: error: class, interface, annotation type, enum, record, method or field expected
+import org.bukkit.command.CommandExecutor;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpHereCommand.java:13: error: class, interface, annotation type, enum, record, method or field expected
+import org.bukkit.command.CommandSender;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpHereCommand.java:14: error: class, interface, annotation type, enum, record, method or field expected
+import org.bukkit.entity.Player;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\commands\TpHereCommand.java:15: error: class, interface, annotation type, enum, record, method or field expected
+import org.jetbrains.annotations.NotNull;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\settings\PlayerSettingsManager.java:1: error: illegal character: '\ufeff'
+?package net.yourserver.coreengine.settings;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\settings\PlayerSettingsManager.java:1: error: class, interface, annotation type, enum, record, method or field expected
+?package net.yourserver.coreengine.settings;
+         ^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\settings\PlayerSettingsManager.java:3: error: class, interface, annotation type, enum, record, method or field expected
+import java.util.LinkedHashMap;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\settings\PlayerSettingsManager.java:4: error: class, interface, annotation type, enum, record, method or field expected
+import java.util.Map;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\settings\PlayerSettingsManager.java:5: error: class, interface, annotation type, enum, record, method or field expected
+import java.util.UUID;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\settings\PlayerSettingsManager.java:6: error: class, interface, annotation type, enum, record, method or field expected
+import java.util.concurrent.ConcurrentHashMap;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\settings\PlayerSettingsManager.java:7: error: class, interface, annotation type, enum, record, method or field expected
+import java.util.function.Function;
+^
+C:\Users\Owner\Desktop\123\CoreEngine\src\main\java\net\yourserver\coreengine\settings\PlayerSettingsManager.java:8: error: class, interface, annotation type, enum, record, method or field expected
+import java.util.function.BiConsumer;
+^
+51 errors

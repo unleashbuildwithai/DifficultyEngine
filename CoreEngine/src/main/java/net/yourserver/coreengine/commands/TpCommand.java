@@ -1,4 +1,4 @@
-﻿package net.yourserver.coreengine.commands;
+package net.yourserver.coreengine.commands;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;

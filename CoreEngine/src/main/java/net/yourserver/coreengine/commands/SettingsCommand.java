@@ -1,4 +1,4 @@
-﻿package net.yourserver.coreengine.commands;
+package net.yourserver.coreengine.commands;
 
 import net.yourserver.coreengine.CoreEngine;
 import net.yourserver.coreengine.gui.SettingsForm;

@@ -1,4 +1,4 @@
-﻿package net.yourserver.coreengine.settings;
+package net.yourserver.coreengine.settings;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
