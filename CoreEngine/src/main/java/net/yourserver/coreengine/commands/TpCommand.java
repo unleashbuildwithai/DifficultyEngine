@@ -1,6 +1,12 @@
-package net.yourserver.coreengine.commands;
+﻿package net.yourserver.coreengine.commands;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import net.yourserver.coreengine.CoreEngine;
+import net.yourserver.coreengine.settings.PlayerSettingsManager;
+import net.yourserver.coreengine.teleport.TeleportRequestManager;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -8,7 +14,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
-/** {@code /tp <player>} - teleport to another player (respects their TP privacy). */
+/** {@code /tp <player>} - request to teleport to another player (request-based). */
 public class TpCommand implements CommandExecutor {
 
     private final CoreEngine plugin;
@@ -41,8 +47,27 @@ public class TpCommand implements CommandExecutor {
             player.sendMessage("§c" + target.getName() + " has teleports disabled for you.");
             return true;
         }
-        player.teleport(target);
-        player.sendMessage("§aTeleported to §e" + target.getName() + "§a.");
+        TeleportRequestManager mgr = plugin.getTeleportRequestManager();
+        if (mgr.isInCombat(player.getUniqueId()) || mgr.isInCombat(target.getUniqueId())) {
+            player.sendMessage("§cYou cannot teleport while you or the target are in combat.");
+            return true;
+        }
+        PlayerSettingsManager.PlayerSettings targetSettings =
+                plugin.getPlayerSettingsManager().get(target.getUniqueId());
+        if (targetSettings.tpAuto) {
+            player.teleport(target);
+            player.sendMessage("§aTeleported to §e" + target.getName() + "§a (auto).");
+            target.sendMessage("§e" + player.getName() + "§a teleported to you.");
+            return true;
+        }
+        mgr.request(player, target, TeleportRequestManager.RequestType.TP);
+        player.sendMessage("§aSending teleport request to §e" + target.getName() + "§a.");
+        target.sendMessage("§e" + player.getName() + "§a wants to teleport to you.");
+        target.sendMessage(Component.text("   ▶ Yes ").color(NamedTextColor.GREEN).decorate(TextDecoration.BOLD)
+                .clickEvent(ClickEvent.runCommand("/tpaccept"))
+                .append(Component.text("▶ No").color(NamedTextColor.RED).decorate(TextDecoration.BOLD)
+                        .clickEvent(ClickEvent.runCommand("/tpdeny")))
+                .append(Component.text("   §7(chat Yes/No, or /tpaccept)").color(NamedTextColor.GRAY)));
         return true;
     }
 }

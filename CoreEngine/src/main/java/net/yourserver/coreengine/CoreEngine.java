@@ -29,6 +29,8 @@ import net.yourserver.coreengine.economy.EconomyManager;
 import net.yourserver.coreengine.gui.GUIListener;
 import net.yourserver.coreengine.gui.MarketGUIManager;
 import net.yourserver.coreengine.gui.SettingsGUIManager;
+import net.yourserver.coreengine.gui.SettingsUI;
+
 import net.yourserver.coreengine.hud.StatsHudTask;
 import net.yourserver.coreengine.listeners.MarketChatListener;
 import net.yourserver.coreengine.listeners.MonsterSpawnListener;
@@ -63,6 +65,8 @@ public class CoreEngine extends JavaPlugin {
     private RankManager rankManager;
     private MarketManager marketManager;
     private MarketGUIManager marketGuiManager;
+    private SettingsUI settingsUI;
+
     private SettingsGUIManager settingsGuiManager;
     private PlayerSettingsManager playerSettingsManager;
     private TeleportManager teleportManager;
@@ -93,6 +97,8 @@ public class CoreEngine extends JavaPlugin {
         this.regionManager.load();
         this.settingsGuiManager = new SettingsGUIManager(this, marketGuiManager, homeDao,
                 playerSettingsManager, economyManager);
+        this.settingsUI = new SettingsUI(this, playerSettingsManager);
+
 
         this.expirationTask = new MarketExpirationTask(this, configManager, marketDao, marketManager);
         this.expirationTask.start();
@@ -174,6 +180,8 @@ public class CoreEngine extends JavaPlugin {
     public MarketManager getMarketManager() { return marketManager; }
     public MarketGUIManager getMarketGuiManager() { return marketGuiManager; }
     public SettingsGUIManager getSettingsGuiManager() { return settingsGuiManager; }
+    public SettingsUI getSettingsUI() { return settingsUI; }
+
     public PlayerSettingsManager getPlayerSettingsManager() { return playerSettingsManager; }
     public TeleportManager getTeleportManager() { return teleportManager; }
     public RegionManager getRegionManager() { return regionManager; }

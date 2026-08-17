@@ -22,6 +22,8 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.World;
 import org.bukkit.Bukkit;
 import net.yourserver.coreengine.settings.PlayerSettingsManager;
+import net.yourserver.coreengine.settings.PlayerSettingsManager.Setting;
+
 import net.yourserver.coreengine.database.dao.HomeDao.HomeEntry;
 import java.util.Optional;
 
@@ -53,6 +55,7 @@ public class GUIListener implements Listener {
             case "CREATE_A_VILLE_SETTINGS" -> handleSettingsClick(player, event);
             case "SPAWNER_MENU" -> handleSpawnerClick(player, event.getRawSlot());
             case "HOMES_MENU" -> handleHomesClick(player, event);
+            case "SETTINGS_TOGGLES" -> handleSettingsToggleClick(player, event);
         }
     }
 
@@ -369,6 +372,43 @@ public class GUIListener implements Listener {
             }
         }
     }
+
+    /** Toggle handler for the DonutSMP-style /settings paginated GUI. */
+    private void handleSettingsToggleClick(Player player, InventoryClickEvent event) {
+        ItemStack item = event.getCurrentItem();
+        if (item == null || item.getType() == Material.AIR || item.getItemMeta() == null) return;
+        var pdc = item.getItemMeta().getPersistentDataContainer();
+        Integer page = pdc.get(PDCKeys.settingsPage(), PersistentDataType.INTEGER);
+        if (page != null) {
+            plugin.getSettingsUI().open(player, page);
+            return;
+        }
+        String name = pdc.get(PDCKeys.settingKey(), PersistentDataType.STRING);
+        if (name == null) return;
+        Setting setting;
+        try {
+            setting = Setting.valueOf(name);
+        } catch (IllegalArgumentException e) {
+            return;
+        }
+        boolean on = plugin.getPlayerSettingsManager().toggleSetting(player.getUniqueId(), setting);
+        applySettingEffect(player, setting, on);
+        player.sendMessage((on ? "§a● ENABLED: §f" : "§c○ DISABLED: §f") + setting.label());
+        plugin.getSettingsUI().open(player, plugin.getSettingsUI().currentPage(player.getUniqueId()));
+    }
+
+    /** Applies immediate, safe side effects for a freshly toggled setting. */
+    private void applySettingEffect(Player player, Setting setting, boolean on) {
+        if (setting == Setting.NIGHT_VISION) {
+            if (on) {
+                player.addPotionEffect(new PotionEffect(PotionEffectType.NIGHT_VISION,
+                        Integer.MAX_VALUE, 0, false, false, false));
+            } else {
+                player.removePotionEffect(PotionEffectType.NIGHT_VISION);
+            }
+        }
+    }
+
 
     private void teleportToHome(Player player, int slot) {
         Optional<HomeEntry> home = plugin.getHomeDao().getHome(player.getUniqueId(), slot);

@@ -16,6 +16,9 @@ import org.bukkit.persistence.PersistentDataType;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * DonutSMP-style /settings menu: a flat, paginated list of toggles rendered as
@@ -32,10 +35,16 @@ public class SettingsUI {
 
     private final CoreEngine plugin;
     private final PlayerSettingsManager settings;
+    private final Map<UUID, Integer> lastPage = new ConcurrentHashMap<>();
 
     public SettingsUI(CoreEngine plugin, PlayerSettingsManager settings) {
         this.plugin = plugin;
         this.settings = settings;
+    }
+
+    /** The page this player last had open (for re-opening after a toggle). */
+    public int currentPage(UUID uuid) {
+        return lastPage.getOrDefault(uuid, 0);
     }
 
     public int pageCount() {
@@ -47,6 +56,7 @@ public class SettingsUI {
         Setting[] all = Setting.values();
         int pages = pageCount();
         int index = Math.max(0, Math.min(page, pages - 1));
+        lastPage.put(player.getUniqueId(), index);
 
         Inventory inv = Bukkit.createInventory(
                 new CustomGUIHolder(GUI_TYPE), 54,
