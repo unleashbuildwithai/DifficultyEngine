@@ -101,3 +101,4 @@ c:\Users\Owner\Desktop\123\libraries\org\spongepowered\configurate-core\4.2.0\co
 c:\Users\Owner\Desktop\123\libraries\org\spongepowered\configurate-yaml\4.2.0\configurate-yaml-4.2.0.jar
 c:\Users\Owner\Desktop\123\libraries\org\xerial\sqlite-jdbc\3.49.1.0\sqlite-jdbc-3.49.1.0.jar
 c:\Users\Owner\Desktop\123\libraries\org\yaml\snakeyaml\2.6\snakeyaml-2.6.jar
+c:\Users\Owner\Desktop\minecraft server\server\plugins\Vault.jar

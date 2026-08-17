@@ -88,11 +88,12 @@ public class QuestGUI implements Listener {
         } else if (permaDone) {
             lore.add("§7[DONE] Quest completed permanently.");
         } else {
-            // Progress bar
-            int pct    = q.targetCount > 0 ? Math.min(progress, q.targetCount) : 0;
-            int filled = (int)((pct / (double) q.targetCount) * 14);
-            String bar = "§a" + "|".repeat(filled) + "§8" + "|".repeat(14 - filled);
-            lore.add("§7Progress: " + bar + " §e" + pct + "§8/§e" + q.targetCount);
+            // Progress bar (uses the difficulty-scaled target for repeatables)
+            int target    = questManager.getTarget(uuid, q);
+            int pct       = target > 0 ? Math.min(progress, target) : 0;
+            int filled    = (int)((pct / (double) target) * 14);
+            String bar    = "§a" + "|".repeat(filled) + "§8" + "|".repeat(14 - filled);
+            lore.add("§7Progress: " + bar + " §e" + pct + "§8/§e" + target);
         }
 
         if (completions > 0 && q.repeatable) {

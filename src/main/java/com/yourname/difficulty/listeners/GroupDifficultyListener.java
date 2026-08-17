@@ -19,22 +19,22 @@ import org.bukkit.scheduler.BukkitRunnable;
 import java.util.*;
 
 /**
- * GroupDifficultyListener â€” Group Nightmare mechanic.
+ * GroupDifficultyListener — Group Nightmare mechanic.
  *
  * When 4 or more NIGHTMARE players are within 50 blocks of each other:
- *   â€¢ Mobs that spawn near them receive Ã—10 stats on top of base NIGHTMARE scaling.
- *   â€¢ Mobs that die near them give Ã—10 drops and Ã—10 XP ("super-buffed rewards").
- *   â€¢ Players receive an action-bar notification every 2 seconds.
+ *   • Mobs that spawn near them receive ×10 stats on top of base NIGHTMARE scaling.
+ *   • Mobs that die near them give ×10 drops and ×10 XP ("super-buffed rewards").
+ *   • Players receive an action-bar notification every 2 seconds.
  *
  * Group detection runs every 2 seconds (40 ticks). Each pass clears and rebuilds
  * the group-member set so it automatically disbands when players move apart.
  *
  * Priority = HIGH so this fires AFTER DifficultyEngine's NORMAL-priority spawn
- * handler â€” the 10Ã— multiplier therefore stacks on top of existing Nightmare scaling.
+ * handler — the 10× multiplier therefore stacks on top of existing Nightmare scaling.
  */
 public class GroupDifficultyListener implements Listener {
 
-    // â”€â”€ Config constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Config constants ──────────────────────────────────────────────────────
     private static final double GROUP_RADIUS         = 50.0;
     private static final double GROUP_RADIUS_SQ      = GROUP_RADIUS * GROUP_RADIUS;
     private static final int    GROUP_MIN_SIZE       = 4;
@@ -54,7 +54,7 @@ public class GroupDifficultyListener implements Listener {
         startGroupScan();
     }
 
-    // â”€â”€ Periodic group detection (every 2 s) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Periodic group detection (every 2 s) ──────────────────────────────────
 
     private void startGroupScan() {
         new BukkitRunnable() {
@@ -81,8 +81,8 @@ public class GroupDifficultyListener implements Listener {
                         // Action-bar pulse for every member
                         for (Player member : cluster) {
                             member.sendActionBar(
-                                "Â§4â˜  Â§cÂ§lGROUP NIGHTMARE Â§4[" + cluster.size() + " players]Â§c"
-                                + " Â§7â€” Â§cx10 difficulty Â§8| Â§ax10 rewards"
+                                "§4☠ §c§lGROUP NIGHTMARE §4[" + cluster.size() + " players]§c"
+                                + " §7— §cx10 difficulty §8| §ax10 rewards"
                             );
                         }
                     }
@@ -94,9 +94,9 @@ public class GroupDifficultyListener implements Listener {
         }.runTaskTimer(plugin, 40L, 40L);
     }
 
-    // â”€â”€ Spawn scaling (Ã—10 health & damage for group nightmare mobs) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Spawn scaling (×10 health & damage for group nightmare mobs) ──────────
     // Priority HIGH ensures this fires after DifficultyEngine (NORMAL priority)
-    // so the Ã—10 stacks on the existing nightmare multiplier.
+    // so the ×10 stacks on the existing nightmare multiplier.
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onCreatureSpawn(CreatureSpawnEvent event) {
@@ -117,7 +117,7 @@ public class GroupDifficultyListener implements Listener {
         }
     }
 
-    // â”€â”€ Buffed loot (Ã—10 drops & XP for group nightmare kills) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Buffed loot (×10 drops & XP for group nightmare kills) ───────────────
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onEntityDeath(EntityDeathEvent event) {
@@ -136,10 +136,10 @@ public class GroupDifficultyListener implements Listener {
         }
         event.setDroppedExp(event.getDroppedExp() * GROUP_LOOT_MULT);
 
-        killer.sendActionBar("Â§6â˜… Â§eGroup Nightmare Bonus! Â§8(Â§ax" + GROUP_LOOT_MULT + " loot & XPÂ§8)");
+        killer.sendActionBar("§6★ §eGroup Nightmare Bonus! §8(§ax" + GROUP_LOOT_MULT + " loot & XP§8)");
     }
 
-    // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private boolean hasGroupNightmarePlayerNearby(Monster mob) {
         for (Entity nearby : mob.getNearbyEntities(GROUP_RADIUS, GROUP_RADIUS, GROUP_RADIUS)) {

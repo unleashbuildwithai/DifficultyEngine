@@ -21,8 +21,8 @@ import org.bukkit.util.Vector;
 import java.util.*;
 
 /**
- * CrimsonBossAttacks â€” handles all the devastating spells, passive scorch, particles, and projectile events
- * of Â§cðŸ”¥ The Infernal BlazefiendÂ§r.
+ * CrimsonBossAttacks — handles all the devastating spells, passive scorch, particles, and projectile events
+ * of §c🔥 The Infernal Blazefiend§r.
  */
 public class CrimsonBossAttacks implements Listener {
 
@@ -41,7 +41,7 @@ public class CrimsonBossAttacks implements Listener {
         this.bossManager = bossManager;
     }
 
-    // â•â• Attack Triggers (called from CrimsonBossManager AI task) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ══ Attack Triggers (called from CrimsonBossManager AI task) ════════════════
 
     public void attackHomingHellfire(Blaze boss, List<Player> players) {
         int targeted = 0;
@@ -59,7 +59,7 @@ public class CrimsonBossAttacks implements Listener {
             fb.setDirection(dir.multiply(1.2));
             fb.setYield(1.2f);
             fb.setIsIncendiary(true);
-            target.sendActionBar("Â§cðŸ”¥ Â§7Homing Hellfire incoming! Dodge!");
+            target.sendActionBar("§c🔥 §7Homing Hellfire incoming! Dodge!");
 
             for (int i = 1; i <= 2; i++) {
                 plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
@@ -85,8 +85,8 @@ public class CrimsonBossAttacks implements Listener {
 
     public void attackMoltenBarrage(Blaze boss, List<Player> players) {
         for (Player p : players) {
-            p.sendMessage("Â§câ˜  Â§4MOLTEN BARRAGE! Â§7Use Â§bWater Â§7or Â§aEarth Â§7magic to resist!");
-            p.sendTitle("Â§cðŸŒ‹", "Â§4Lava eruption incoming!", 3, 20, 5);
+            p.sendMessage("§c☠ §4MOLTEN BARRAGE! §7Use §bWater §7or §aEarth §7magic to resist!");
+            p.sendTitle("§c🌋", "§4Lava eruption incoming!", 3, 20, 5);
         }
         plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
             if (!bossManager.isBossAlive()) return;
@@ -114,15 +114,15 @@ public class CrimsonBossAttacks implements Listener {
                     MagicElement el = itemFactory.getStaffElement(held);
                     if (el == MagicElement.WATER) {
                         victim.setFireTicks(0);
-                        victim.sendActionBar("Â§bðŸ’§ Â§7Water magic shields you from the lava!");
+                        victim.sendActionBar("§b💧 §7Water magic shields you from the lava!");
                     } else if (el == MagicElement.EARTH) {
                         victim.setFireTicks(0);
                         victim.damage(2.0, boss2);
-                        victim.sendActionBar("Â§2ðŸŒ¿ Â§7Earth deflects the lava! (reduced damage)");
+                        victim.sendActionBar("§2🌿 §7Earth deflects the lava! (reduced damage)");
                     } else {
                         victim.setFireTicks(120);
                         victim.damage(6.0, boss2);
-                        victim.sendActionBar("Â§cðŸ”¥ Â§7Burning! Use Â§bWater Â§cmagic!");
+                        victim.sendActionBar("§c🔥 §7Burning! Use §bWater §cmagic!");
                     }
                 }
             }
@@ -131,7 +131,7 @@ public class CrimsonBossAttacks implements Listener {
 
     public void attackVoidPearls(Blaze boss, List<Player> players) {
         for (Player p : players)
-            p.sendMessage("Â§5â˜  Â§dÂ§lVOID PEARLS! Â§7If they hit you, you'll be banished to spawn!");
+            p.sendMessage("§5☠ §d§lVOID PEARLS! §7If they hit you, you'll be banished to spawn!");
         int thrown = 0;
         for (Player target : players) {
             if (thrown >= 3) break;
@@ -144,7 +144,7 @@ public class CrimsonBossAttacks implements Listener {
             pearl.setShooter(boss);
             pearl.setVelocity(dir.multiply(1.6));
             bossManager.getBossEnderPearls().add(pearl.getUniqueId());
-            target.sendActionBar("Â§5âš  Â§dVoid Pearl incoming! DODGE!");
+            target.sendActionBar("§5⚠ §dVoid Pearl incoming! DODGE!");
         }
     }
 
@@ -156,11 +156,11 @@ public class CrimsonBossAttacks implements Listener {
                     (random.nextDouble() - 0.5) * 10);
             MagmaCube cube = (MagmaCube) boss.getWorld().spawnEntity(sp, EntityType.MAGMA_CUBE);
             cube.setSize(2 + random.nextInt(2));
-            cube.setCustomName("Â§cðŸ”¥ Fire Blob");
+            cube.setCustomName("§c🔥 Fire Blob");
             cube.setCustomNameVisible(true);
             cube.setFireTicks(Integer.MAX_VALUE);
         }
-        for (Player p : players) p.sendMessage("Â§cðŸ”¥ Â§7Fire Blobs erupt from the rock!");
+        for (Player p : players) p.sendMessage("§c🔥 §7Fire Blobs erupt from the rock!");
     }
 
     public void attackSummonMinions(Blaze boss, List<Player> players) {
@@ -169,7 +169,7 @@ public class CrimsonBossAttacks implements Listener {
             double angle = i * Math.PI * 2.0 / count;
             Location sp = boss.getLocation().add(Math.cos(angle) * 5, 0, Math.sin(angle) * 5);
             Blaze minion = (Blaze) boss.getWorld().spawnEntity(sp, EntityType.BLAZE);
-            minion.setCustomName("Â§cðŸ”¥ Flame Slime");
+            minion.setCustomName("§c🔥 Flame Slime");
             minion.setCustomNameVisible(true);
             minion.setFireTicks(Integer.MAX_VALUE);
             minion.setRemoveWhenFarAway(true);
@@ -183,7 +183,7 @@ public class CrimsonBossAttacks implements Listener {
             minion.addPotionEffect(new PotionEffect(
                     PotionEffectType.SPEED, 99999, 1, false, false, false));
         }
-        for (Player p : players) p.sendMessage("Â§cðŸ”¥ Â§7Flame Slimes claw out of the rock!");
+        for (Player p : players) p.sendMessage("§c🔥 §7Flame Slimes claw out of the rock!");
     }
 
     public void attackScorch(Blaze boss, List<Player> players) {
@@ -193,22 +193,22 @@ public class CrimsonBossAttacks implements Listener {
             MagicElement el = itemFactory.getStaffElement(held);
             if (el == MagicElement.WATER) {
                 p.setFireTicks(0);
-                p.sendActionBar("Â§bðŸ’§ Â§7Water magic protects you from the infernal heat!");
+                p.sendActionBar("§b💧 §7Water magic protects you from the infernal heat!");
             } else if (el == MagicElement.EARTH) {
                 if (p.getFireTicks() <= 0) {
                     p.setFireTicks(20);
-                    p.sendActionBar("Â§2ðŸŒ¿ Â§7Earth dampens the heat somewhat.");
+                    p.sendActionBar("§2🌿 §7Earth dampens the heat somewhat.");
                 }
             } else {
                 if (p.getFireTicks() <= 10) {
                     p.setFireTicks(60);
-                    p.sendActionBar("Â§cðŸ”¥ Â§7Infernal heat! Use Â§bWater Â§cmagic!");
+                    p.sendActionBar("§c🔥 §7Infernal heat! Use §bWater §cmagic!");
                 }
             }
         }
     }
 
-    // â•â• Particle FX helpers â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ══ Particle FX helpers ════════════════════════════════════════════════════
 
     public void spawnFlameSpiral(Location center) {
         double time = (System.currentTimeMillis() % 10_000) / 500.0;
@@ -241,7 +241,7 @@ public class CrimsonBossAttacks implements Listener {
                 center.clone().add(0, 2.4, 0), 3, 0.3, 0.1, 0.3, 0.015);
     }
 
-    // â•â• Event Handlers â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ══ Event Handlers ═════════════════════════════════════════════════════════
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onBossDamagePlayer(EntityDamageByEntityEvent event) {
@@ -268,10 +268,10 @@ public class CrimsonBossAttacks implements Listener {
         player.teleport(spawn);
         player.playSound(spawn, Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 0.5f);
         player.sendMessage("");
-        player.sendMessage("Â§5â˜  Â§dÂ§lVOID PEARL STRUCK! Â§7You have been banished to world spawn!");
-        player.sendMessage("Â§7Â§oThe Blazefiend cackles as your soul is cast aside...");
+        player.sendMessage("§5☠ §d§lVOID PEARL STRUCK! §7You have been banished to world spawn!");
+        player.sendMessage("§7§oThe Blazefiend cackles as your soul is cast aside...");
         player.sendMessage("");
-        player.sendTitle("Â§5â˜  BANISHED!", "Â§7Hurry back â€” the boss is regenerating!", 10, 70, 20);
+        player.sendTitle("§5☠ BANISHED!", "§7Hurry back — the boss is regenerating!", 10, 70, 20);
 
         for (UUID uuid : bossManager.getActiveBossUuids()) {
             Entity be = plugin.getServer().getEntity(uuid);
@@ -283,16 +283,16 @@ public class CrimsonBossAttacks implements Listener {
                         le.getLocation().add(0, 2.5, 0), 12, 1.2, 0.5, 1.2, 0);
                 le.getWorld().playSound(le.getLocation(), Sound.ENTITY_BLAZE_AMBIENT, 1.0f, 0.5f);
                 for (Player p : nearbyPlayers(le.getLocation(), ENGAGE_RADIUS)) {
-                    p.sendMessage("Â§cðŸ”¥ Â§4" + player.getName()
-                            + " Â§cwas banished! Â§4The Blazefiend regenerates Â§c+"
-                            + (int) PEARL_REGEN + " HPÂ§4!");
-                    p.sendActionBar("Â§cÂ§lâš  Boss regenerating!");
+                    p.sendMessage("§c🔥 §4" + player.getName()
+                            + " §cwas banished! §4The Blazefiend regenerates §c+"
+                            + (int) PEARL_REGEN + " HP§4!");
+                    p.sendActionBar("§c§l⚠ Boss regenerating!");
                 }
             }
         }
     }
 
-    // â•â• Utility Methods â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ══ Utility Methods ════════════════════════════════════════════════════════
 
     private List<Player> nearbyPlayers(Location loc, double radius) {
         List<Player> result = new ArrayList<>();

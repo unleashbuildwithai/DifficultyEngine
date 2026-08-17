@@ -13,6 +13,7 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
 
@@ -24,31 +25,31 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * GunZSwordListener — GunZ: The Duel double-tap dashing for the GunZ Sword.
+ * GunZSwordListener â€” GunZ: The Duel double-tap dashing for the GunZ Sword.
  *
- * ── Algorithm (Ring-Buffer Keystroke Detection) ──────────────────────────────
+ * â”€â”€ Algorithm (Ring-Buffer Keystroke Detection) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  * A per-tick sampler (every 1 tick / 50 ms) reads the player's movement delta
  * and projects it into player-local (WASD) space.
  *
  * Each direction (W/A/S/D) tracks the last TWO press timestamps in a ring
  * buffer.  A "press" is registered the INSTANT a direction transitions from
- * absent → present (inactive→active).  This means every keystroke creates a
- * fresh entry — there is no hysteresis delay.
+ * absent â†’ present (inactiveâ†’active).  This means every keystroke creates a
+ * fresh entry â€” there is no hysteresis delay.
  *
  * Double-tap trigger:
  *   buf[0] = timestamp of press-before-last
  *   buf[1] = timestamp of most recent press
- *   If (buf[1] - buf[0]) ≤ DOUBLE_TAP_WINDOW_MS → DASH fires immediately.
+ *   If (buf[1] - buf[0]) â‰¤ DOUBLE_TAP_WINDOW_MS â†’ DASH fires immediately.
  *
  * This approach gives 100% reliable detection for WW / AA / SS / DD because
  * every new key-press is registered independently on the tick it first appears.
  *
- * ── Slash Cancel (Animation Cancel) ─────────────────────────────────────────
+ * â”€â”€ Slash Cancel (Animation Cancel) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  * Left-clicking while holding the GunZ Sword within SLASH_WINDOW_MS of a
  * dash redirects the player's velocity in their current facing direction.
  * This lets players change direction mid-dash by slashing.
  *
- * ── Blended Strafe (W + A/S/D) ───────────────────────────────────────────────
+ * â”€â”€ Blended Strafe (W + A/S/D) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  * If W is actively held when a strafe double-tap fires, the dash blends a
  * forward component so the character slides sideways while continuing forward.
  */
@@ -93,12 +94,12 @@ public class GunZSwordListener implements Listener {
         long lastReleaseTime = 0L;
     }
 
-    // ── Per-player keystroke state tracker ───────────────────────────────────
+    // â”€â”€ Per-player keystroke state tracker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private final Map<UUID, EnumMap<Dir, KeyState>> keyStates = new HashMap<>();
 
     /**
      * Directions that were active (movement detected) on the PREVIOUS tick.
-     * Used to detect the rising edge (inactive → active) = new key press.
+     * Used to detect the rising edge (inactive â†’ active) = new key press.
      */
     private final Map<UUID, Set<Dir>>              prevActive    = new HashMap<>();
 
@@ -126,7 +127,7 @@ public class GunZSwordListener implements Listener {
         if (samplerTask != null) samplerTask.cancel();
     }
 
-    // ── Per-tick sampler ──────────────────────────────────────────────────────
+    // â”€â”€ Per-tick sampler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private void sample() {
         long now = System.currentTimeMillis();
@@ -149,7 +150,7 @@ public class GunZSwordListener implements Listener {
                 continue;
             }
 
-            // ── Compute horizontal movement delta ──────────────────────────────
+            // â”€â”€ Compute horizontal movement delta â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             // Since player.getVelocity() doesn't contain standard walking speed on the server,
             // we use the real position difference between tick samples.
             double vx = loc.getX() - lastLoc.getX();
@@ -168,7 +169,7 @@ public class GunZSwordListener implements Listener {
             // Adjust threshold for position delta (around 0.05 per tick for normal walking)
             double threshold = 0.05;
 
-            // ── Classify directions that are currently ACTIVE ─────────────────
+            // â”€â”€ Classify directions that are currently ACTIVE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             Set<Dir> current = new HashSet<>(4);
             if (fwd   >  threshold) current.add(Dir.W);
             if (fwd   < -threshold) current.add(Dir.S);
@@ -179,7 +180,7 @@ public class GunZSwordListener implements Listener {
             EnumMap<Dir, KeyState> states =
                     keyStates.computeIfAbsent(uid, k -> new EnumMap<>(Dir.class));
 
-            // ── Detect rising-edge (Press) and falling-edge (Release) ─────────
+            // â”€â”€ Detect rising-edge (Press) and falling-edge (Release) â”€â”€â”€â”€â”€â”€â”€â”€â”€
             for (Dir d : Dir.values()) {
                 boolean isPressedNow = current.contains(d);
                 boolean wasPressedBefore = prev.contains(d);
@@ -193,12 +194,12 @@ public class GunZSwordListener implements Listener {
                     // Any second press of the same direction counts as a double-tap,
                     // as long as there was a real release in between and the total
                     // gap between the two presses doesn't exceed MAX_TAP_RELEASE_GAP_MS.
-                    // No minimum timing is enforced — instant (0.01s) re-taps and
+                    // No minimum timing is enforced â€” instant (0.01s) re-taps and
                     // slower (~0.5s) re-taps both trigger the dash equally, so the
                     // player never has to "perfectly time" the two presses.
                     if (state.lastPressTime > 0 && state.lastReleaseTime > state.lastPressTime
                             && totalGap <= MAX_TAP_RELEASE_GAP_MS) {
-                        // Double-tap detected — consume immediately and trigger dash
+                        // Double-tap detected â€” consume immediately and trigger dash
                         state.lastPressTime = 0L;
                         state.lastReleaseTime = 0L;
                         triggerDash(player, d, current, now);
@@ -217,7 +218,7 @@ public class GunZSwordListener implements Listener {
         }
     }
 
-    // ── Dash execution ────────────────────────────────────────────────────────
+    // â”€â”€ Dash execution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private void triggerDash(Player player, Dir dir, Set<Dir> currentDirs, long now) {
         UUID uid = player.getUniqueId();
@@ -232,7 +233,7 @@ public class GunZSwordListener implements Listener {
         if (facing.lengthSquared() < 0.001) return;
         facing.normalize();
 
-        // Right vector: 90° clockwise of facing in XZ plane
+        // Right vector: 90Â° clockwise of facing in XZ plane
         Vector right = new Vector(facing.getZ(), 0, -facing.getX());
 
         // Is the player currently standing still (no active movement inputs, or just the dash key itself)?
@@ -262,11 +263,19 @@ public class GunZSwordListener implements Listener {
                 case D -> right.clone().multiply( speed);
             };
         }
-        dashVec.setY(0.22); // slight upward arc — GunZ style
+        // Slight upward arc - GunZ style. While the player is hovering
+        // (Levitation / Slow Falling) keep a touch of extra lift so the dash
+        // stays floaty when comboing mid-air / in a levitation state.
+        if (player.hasPotionEffect(PotionEffectType.LEVITATION)
+                || player.hasPotionEffect(PotionEffectType.SLOW_FALLING)) {
+            dashVec.setY(Math.max(dashVec.getY(), 0.40));
+        } else {
+            dashVec.setY(0.22);
+        }
 
         player.setVelocity(dashVec);
 
-        // ── Visuals & sound ───────────────────────────────────────────────────
+        // â”€â”€ Visuals & sound â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         Location loc = player.getLocation().add(0, 1, 0);
         player.getWorld().spawnParticle(Particle.CRIT,          loc, 20, 0.35, 0.35, 0.35, 0.28);
         player.getWorld().spawnParticle(Particle.ENCHANTED_HIT, loc,  9, 0.20, 0.20, 0.20, 0.18);
@@ -274,21 +283,21 @@ public class GunZSwordListener implements Listener {
         player.getWorld().playSound(player.getLocation(), Sound.ITEM_ARMOR_EQUIP_NETHERITE, 0.6f, 2.0f);
 
         String label = switch (dir) {
-            case W -> "▶▶ FORWARD";
-            case S -> movingForward ? "◀◀ BACK SLIDE" : "◀◀ BACK";
-            case A -> movingForward ? "◁ LEFT SLIDE"  : "◁ LEFT";
-            case D -> movingForward ? "RIGHT SLIDE ▷"  : "RIGHT ▷";
+            case W -> "â–¶â–¶ FORWARD";
+            case S -> movingForward ? "â—€â—€ BACK SLIDE" : "â—€â—€ BACK";
+            case A -> movingForward ? "â— LEFT SLIDE"  : "â— LEFT";
+            case D -> movingForward ? "RIGHT SLIDE â–·"  : "RIGHT â–·";
         };
-        player.sendActionBar("§7⚡ §f§lDASH §c" + label + " §8(slash to redirect!)");
+        player.sendActionBar("Â§7âš¡ Â§fÂ§lDASH Â§c" + label + " Â§8(slash to redirect!)");
     }
 
-    // ── Slash Cancel (Animation Cancel / Direction Redirect) ──────────────────
+    // â”€â”€ Slash Cancel (Animation Cancel / Direction Redirect) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * Left-clicking while holding the GunZ Sword within SLASH_WINDOW_MS of
      * a dash CANCELS the residual dash momentum (zeroes it out) instead of
      * auto-steering the player in their current look direction. This gives
-     * the player full manual control over where they go next — a subsequent
+     * the player full manual control over where they go next â€” a subsequent
      * WASD input or another double-tap dash decides the new direction, the
      * slash itself never picks a direction for them.
      */
@@ -306,9 +315,9 @@ public class GunZSwordListener implements Listener {
         Long lastDash = lastDashTime.get(uid);
         if (lastDash == null || now - lastDash > SLASH_WINDOW_MS) return;
 
-        // ── Cancel the dash's residual momentum ───────────────────────────────
+        // â”€â”€ Cancel the dash's residual momentum â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         // Zero out horizontal velocity (keep a touch of vertical so they don't
-        // instantly slam into the ground) — the player then decides their own
+        // instantly slam into the ground) â€” the player then decides their own
         // next direction with WASD instead of the slash forcing one for them.
         Vector current = player.getVelocity();
         player.setVelocity(new Vector(0, Math.min(current.getY(), 0.0), 0));
@@ -319,14 +328,14 @@ public class GunZSwordListener implements Listener {
         player.getWorld().spawnParticle(Particle.ENCHANTED_HIT, loc, 6, 0.2, 0.2, 0.2, 0.15);
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_PLAYER_ATTACK_SWEEP, 1.0f, 1.6f);
 
-        player.sendActionBar("§f⚔ §c§lSLASH CANCEL! §7Dash momentum stopped!");
+        player.sendActionBar("Â§fâš” Â§cÂ§lSLASH CANCEL! Â§7Dash momentum stopped!");
 
         // Consume the slash window so it only cancels once per dash
         lastDashTime.put(uid, 0L);
     }
 
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private boolean isHoldingGunZSword(Player player) {
         ItemStack hand = player.getInventory().getItemInMainHand();

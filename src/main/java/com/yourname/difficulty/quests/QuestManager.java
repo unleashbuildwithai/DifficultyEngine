@@ -1,5 +1,7 @@
 package com.yourname.difficulty.quests;
 
+import com.yourname.difficulty.DifficultyLevel;
+import com.yourname.difficulty.PlayerDifficultyManager;
 import com.yourname.difficulty.currency.GoldManager;
 import com.yourname.difficulty.items.ItemFactory;
 import com.yourname.difficulty.magic.MagicElement;
@@ -30,16 +32,17 @@ public class QuestManager {
     private final File                dataFile;
     private YamlConfiguration         data;
 
-    /** In-memory "claimable" flags (cleared after claiming) */
-    private final Set<String> claimable = new HashSet<>(); // "uuid:questName"
+    private final PlayerDifficultyManager difficultyManager;
 
     public QuestManager(JavaPlugin plugin, GoldManager goldManager,
-                        SkillManager skillManager, ItemFactory itemFactory) {
-        this.plugin       = plugin;
-        this.goldManager  = goldManager;
-        this.skillManager = skillManager;
-        this.itemFactory  = itemFactory;
-        this.dataFile     = new File(plugin.getDataFolder(), "questdata.yml");
+                        SkillManager skillManager, ItemFactory itemFactory,
+                        PlayerDifficultyManager difficultyManager) {
+        this.plugin             = plugin;
+        this.goldManager        = goldManager;
+        this.skillManager       = skillManager;
+        this.itemFactory        = itemFactory;
+        this.difficultyManager  = difficultyManager;
+        this.dataFile           = new File(plugin.getDataFolder(), "questdata.yml");
         load();
     }
 
@@ -66,12 +69,17 @@ public class QuestManager {
         return data.getInt(path(uuid, q, "completions"), 0);
     }
 
+    /** Returns the current kill target for this quest; repeatables grow with each claim. */
+    public int getTarget(UUID uuid, QuestType q) {
+        return data.getInt(path(uuid, q, "target"), q.targetCount);
+    }
+
     public boolean isPermaDone(UUID uuid, QuestType q) {
         return !q.repeatable && getCompletions(uuid, q) >= 1;
     }
 
     public boolean isClaimable(UUID uuid, QuestType q) {
-        return claimable.contains(uuid + ":" + q.name());
+        return data.getBoolean(path(uuid, q, "claimable"), false);
     }
 
     /**
@@ -85,11 +93,13 @@ public class QuestManager {
         if (isPermaDone(uuid, q)) return false;
         if (isClaimable(uuid, q)) return false;
 
+        int target = getTarget(uuid, q);
         int current = getProgress(uuid, q) + 1;
         data.set(path(uuid, q, "progress"), current);
 
-        if (current >= q.targetCount) {
-            claimable.add(uuid + ":" + q.name());
+        if (current >= target) {
+            data.set(path(uuid, q, "claimable"), true);
+            saveAll();
             player.sendMessage("");
             player.sendMessage("§6[Quest] §e" + q.displayName + " §7completed!");
             player.sendMessage("§7Open §e/questbook §7to claim your reward!");
@@ -100,9 +110,9 @@ public class QuestManager {
         }
 
         // Progress notification every 10 kills or at 50%
-        if (current % 10 == 0 || current == q.targetCount / 2) {
+        if (current % 10 == 0 || current == target / 2) {
             player.sendActionBar("§6[Quest] §e" + q.displayName
-                    + " §7- §a" + current + "/" + q.targetCount);
+                    + " §7- §a" + current + "/" + target);
         }
         return false;
     }
@@ -115,29 +125,56 @@ public class QuestManager {
         UUID uuid = player.getUniqueId();
         if (!isClaimable(uuid, q)) return;
 
-        claimable.remove(uuid + ":" + q.name());
+        data.set(path(uuid, q, "claimable"), false);
 
         // Increment completions
         int comp = getCompletions(uuid, q) + 1;
         data.set(path(uuid, q, "completions"), comp);
 
-        // Reset progress (repeatable = 0, permanent = target (locked))
-        data.set(path(uuid, q, "progress"), q.repeatable ? 0 : q.targetCount);
+        // Progressive scaling: repeatable quests get harder each claim (scaled by
+        // the player's difficulty +2..+7) and pay more as they get harder.
+        if (q.repeatable) {
+            int newTarget = getTarget(uuid, q) + difficultyIncrement(player);
+            data.set(path(uuid, q, "target"), newTarget);
+            data.set(path(uuid, q, "progress"), 0);
+        } else {
+            data.set(path(uuid, q, "progress"), getTarget(uuid, q));
+        }
 
-        // Parse and award rewards
+        // Parse and award rewards (scaled for repeatables)
         awardRewards(player, q);
+        saveAll();
 
         player.sendMessage("§6[Quest] §aReward claimed for §e" + q.displayName + "§a!");
     }
 
     // ── Reward parsing ────────────────────────────────────────────────────────
 
+    /**
+     * Difficulty-scaled target increment applied to repeatable quests on each claim.
+     * Peaceful +2, Easy +3, Medium +4, Hard +5, Nightmare +7 (peaceful→nightmare).
+     */
+    private int difficultyIncrement(Player player) {
+        DifficultyLevel d = difficultyManager != null
+                ? difficultyManager.getDifficulty(player.getUniqueId())
+                : DifficultyLevel.EASY;
+        return switch (d) {
+            case PEACEFUL  -> 2;
+            case EASY      -> 3;
+            case MEDIUM    -> 4;
+            case HARD      -> 5;
+            case NIGHTMARE -> 7;
+        };
+    }
+
     private void awardRewards(Player player, QuestType q) {
+        // Repeatable quests pay more as they get harder (rewards scale with target).
+        double ratio = q.repeatable ? (getTarget(player.getUniqueId(), q) / (double) q.targetCount) : 1.0;
         for (String token : q.rewardSpec.split(",")) {
             String[] parts = token.split(":");
             if (parts.length < 2) continue;
             String type = parts[0].trim();
-            int    val  = Integer.parseInt(parts[1].trim());
+            int    val  = Math.max(1, (int)(Integer.parseInt(parts[1].trim()) * ratio));
 
             switch (type) {
                 case "GOLD"        -> goldManager.award(player, val);
@@ -151,7 +188,8 @@ public class QuestManager {
         player.sendMessage("§7Rewards:");
         for (String token : q.rewardSpec.split(",")) {
             String[] p = token.split(":");
-            player.sendMessage("  §e+" + p[1] + " §6" + p[0]);
+            String scaled = String.valueOf(Math.max(1, (int)(Integer.parseInt(p[1].trim()) * ratio)));
+            player.sendMessage("  §e+" + scaled + " §6" + p[0]);
         }
     }
 

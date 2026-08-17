@@ -34,7 +34,7 @@ public class NoSpawnZoneListener implements Listener {
         if (!worldName.equals("starter") && !worldName.equals("starter_mv")) {
             player.sendMessage("§c✗ §7This block only functions in the §bstarter §7world — placed here, but it will have §cno effect§7.");
         } else {
-            player.sendMessage("§b✓ §7No-Spawn Zone active! Monsters will no longer spawn within §e500 blocks §7of this block.");
+            player.sendMessage("§b✓ §7No-Spawn Zone active! Monsters will no longer spawn within §e25k blocks §7of this block.");
         }
         monsterCapListener.registerNoSpawnZone(event.getBlockPlaced().getLocation());
     }

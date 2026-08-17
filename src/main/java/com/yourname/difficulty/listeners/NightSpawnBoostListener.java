@@ -21,43 +21,43 @@ import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * NightSpawnBoostListener â€” Two responsibilities:
+ * NightSpawnBoostListener — Two responsibilities:
  *
  * 1. NIGHT SPAWN BOOST: Raises the effective mob cap by 100 mobs at night
  *    (game time 12500-23000).  Implemented by tracking spawned-mob counts
  *    per world and only cancelling spawns once the boost threshold is passed.
  *
- * 2. NIGHTMARE PARTY 10Ã— SCALING: When a FULL Nightmare party of 4+ players
- *    is together, all mobs they interact with get Ã—10 on:
- *      â€¢ Max HP         (mob health Ã— 10)
- *      â€¢ Attack damage  (Ã— 10)
- *      â€¢ Follow range   (Ã— 10)
+ * 2. NIGHTMARE PARTY 10× SCALING: When a FULL Nightmare party of 4+ players
+ *    is together, all mobs they interact with get ×10 on:
+ *      • Max HP         (mob health × 10)
+ *      • Attack damage  (× 10)
+ *      • Follow range   (× 10)
  *    Gold drops and XP drops are handled separately in GoldDropListener and
  *    via the NIGHTMARE_PARTY PDC tag on the mob.
  *
- * â”€â”€ CRASH-FIX NOTES (v2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+ * ── CRASH-FIX NOTES (v2) ─────────────────────────────────────────────────
  *  The original "Nightmare Storm" periodic task spawned 3-5 mobs per
  *  Nightmare player EVERY 10 SECONDS with no population cap and no minimum
- *  party-size gate â€” a single SOLO Nightmare player left in a thunderstorm
+ *  party-size gate — a single SOLO Nightmare player left in a thunderstorm
  *  would accumulate thousands of mobs over a play session with nothing ever
  *  despawning them, eventually crashing the server. This has been completely
  *  redesigned:
  *
- *   â€¢ The intense "Storm" effect ONLY triggers when Â§e4 or moreÂ§r Nightmare
+ *   • The intense "Storm" effect ONLY triggers when §e4 or more§r Nightmare
  *     players are together in the same party (REQUIRED_NM_PARTY_SIZE).
  *     Anything less than that (including solo Nightmare players) is treated
- *     as normal difficulty â€” no bonus storm mobs at all.
+ *     as normal difficulty — no bonus storm mobs at all.
  *
- *   â€¢ A hard population CAP is enforced per party (STORM_MOB_CAP). Before
+ *   • A hard population CAP is enforced per party (STORM_MOB_CAP). Before
  *     spawning, we count nearby storm-tagged mobs within STORM_CAP_RADIUS of
  *     the party and never exceed the cap.
  *
- *   â€¢ Mobs are "topped up" toward the cap rather than always adding a fixed
- *     amount â€” so the swarm stays at a steady, bounded size instead of
+ *   • Mobs are "topped up" toward the cap rather than always adding a fixed
+ *     amount — so the swarm stays at a steady, bounded size instead of
  *     growing forever.
  *
- *   â€¢ When a storm mob dies, a replacement is summoned Â§binstantlyÂ§r via a
- *     lightning strike (see onEntityDeath) â€” keeping the swarm topped up in
+ *   • When a storm mob dies, a replacement is summoned §binstantly§r via a
+ *     lightning strike (see onEntityDeath) — keeping the swarm topped up in
  *     real time without waiting for the next periodic tick, while still
  *     respecting the same population cap.
  *
@@ -73,7 +73,7 @@ public class NightSpawnBoostListener implements Listener {
     /** Extra mobs allowed to spawn during night hours. */
     private static final int NIGHT_BONUS_CAP = 100;
 
-    /** Ã—10 multipliers for Nightmare party mobs. */
+    /** ×10 multipliers for Nightmare party mobs. */
     private static final double NM_HEALTH_MULT  = 10.0;
     private static final double NM_DAMAGE_MULT  = 10.0;
     private static final double NM_RANGE_MULT   = 10.0;
@@ -114,7 +114,7 @@ public class NightSpawnBoostListener implements Listener {
         this.partyManager      = partyManager;
         this.nmPartyKey        = new org.bukkit.NamespacedKey(plugin, NM_PARTY_MOB_KEY);
 
-        // Storm mob top-up â€” only runs for FULL Nightmare parties (4+), and only
+        // Storm mob top-up — only runs for FULL Nightmare parties (4+), and only
         // ever tops the population UP TO the cap. Solo/small-party Nightmare
         // players get no bonus storm at all.
         plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
@@ -140,10 +140,10 @@ public class NightSpawnBoostListener implements Listener {
                     if (mp != null && mp.isOnline() && !mp.isDead()) nmMembers.add(mp);
                 }
 
-                // â”€â”€ Gate: require a FULL Nightmare party of 4+ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                // ── Gate: require a FULL Nightmare party of 4+ ────────────────
                 if (nmMembers.size() < REQUIRED_NM_PARTY_SIZE) continue;
 
-                // Storm only active at night during a genuine THUNDERSTORM â€” plain
+                // Storm only active at night during a genuine THUNDERSTORM — plain
                 // (non-thundering) rain does NOT trigger this; see MonsterCapListener's
                 // isStormNight() for the same rule applied to spawn-cap scaling.
                 Player anchor = nmMembers.get(0);
@@ -154,7 +154,7 @@ public class NightSpawnBoostListener implements Listener {
                 if (!isNight || !isThunderStorm) continue;
 
 
-                // â”€â”€ Population cap check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                // ── Population cap check ──────────────────────────────────────
                 int existingStormMobs = countNearbyStormMobs(anchor.getLocation(), STORM_CAP_RADIUS);
                 int room = STORM_MOB_CAP - existingStormMobs;
                 if (room <= 0) continue;
@@ -168,13 +168,13 @@ public class NightSpawnBoostListener implements Listener {
                     spawnStormMob(target, pool, rand);
                 }
 
-                anchor.sendActionBar("Â§4â˜  Â§cThe Nightmare Storm intensifies... Mobs are swarming! Â§4â˜  Â§8(" 
+                anchor.sendActionBar("§4☠ §cThe Nightmare Storm intensifies... Mobs are swarming! §4☠ §8(" 
                         + (existingStormMobs + toSpawn) + "/" + STORM_MOB_CAP + ")");
                 for (Player mp : nmMembers) {
                     mp.playSound(mp.getLocation(), Sound.ENTITY_WARDEN_HEARTBEAT, 1.0f, 0.5f);
                 }
             }
-        }, 200L, 200L); // Every 10 seconds (200 ticks) â€” tops up toward the cap, never uncapped growth
+        }, 200L, 200L); // Every 10 seconds (200 ticks) — tops up toward the cap, never uncapped growth
     }
 
     /** Counts living storm-tagged mobs within radius of the given location. */
@@ -196,7 +196,7 @@ public class NightSpawnBoostListener implements Listener {
         org.bukkit.Location spawnLoc = p.getLocation().clone().add(dx, 0, dz);
         spawnLoc.setY(world.getHighestBlockYAt(spawnLoc) + 1.0);
 
-        // Strike visual lightning (plays thunder sound, flashes sky) â€” visual only, does NOT
+        // Strike visual lightning (plays thunder sound, flashes sky) — visual only, does NOT
         // fire LightningStrikeEvent, so this cannot recursively trigger more mob summons.
         world.strikeLightningEffect(spawnLoc);
 
@@ -223,7 +223,7 @@ public class NightSpawnBoostListener implements Listener {
         }
     }
 
-    // â”€â”€ CreatureSpawnEvent â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── CreatureSpawnEvent ────────────────────────────────────────────────────
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onCreatureSpawn(CreatureSpawnEvent event) {
@@ -236,7 +236,7 @@ public class NightSpawnBoostListener implements Listener {
         long time = world.getTime();
         boolean isNight = time >= NIGHT_START && time <= NIGHT_END;
 
-        // â”€â”€ Night spawn boost â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Night spawn boost ─────────────────────────────────────────────
         if (isNight) {
             String worldName = world.getName();
             long lastNight = nightStartTick.getOrDefault(worldName, -1L);
@@ -251,13 +251,13 @@ public class NightSpawnBoostListener implements Listener {
             if (bonusUsed < NIGHT_BONUS_CAP) {
                 // Allow this spawn as part of the night bonus
                 nightBonusCount.put(worldName, bonusUsed + 1);
-                // Don't cancel â€” let it spawn
+                // Don't cancel — let it spawn
             }
             // If bonus cap reached, this falls through to normal server cap logic
         }
 
-        // â”€â”€ Nightmare party scaling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        // Find nearby Nightmare players â€” check if 2+ are in the same party
+        // ── Nightmare party scaling ───────────────────────────────────────
+        // Find nearby Nightmare players — check if 2+ are in the same party
         Map<UUID, Integer> partyCounts = new HashMap<>();
 
         for (Entity e : mob.getNearbyEntities(64, 64, 64)) {
@@ -282,26 +282,26 @@ public class NightSpawnBoostListener implements Listener {
         if (hasFullParty) {
             applyNightmarePartyScaling(mob);
 
-            // â”€â”€ 5% chance: any Zombie spawned near a full Nightmare party â”€â”€â”€â”€â”€
+            // ── 5% chance: any Zombie spawned near a full Nightmare party ─────
             // becomes a Speed Zombie (Speed II, permanent).
             if (mob.getType() == EntityType.ZOMBIE && ThreadLocalRandom.current().nextDouble() < 0.05) {
                 mob.addPotionEffect(new org.bukkit.potion.PotionEffect(
                         org.bukkit.potion.PotionEffectType.SPEED, Integer.MAX_VALUE, 1, false, true, true));
                 String existingName = mob.getCustomName();
                 if (existingName == null || existingName.isEmpty()) {
-                    mob.setCustomName("Â§bâš¡ Â§fSpeed Zombie");
+                    mob.setCustomName("§b⚡ §fSpeed Zombie");
                 } else {
-                    mob.setCustomName("Â§bâš¡ " + existingName);
+                    mob.setCustomName("§b⚡ " + existingName);
                 }
                 mob.setCustomNameVisible(true);
             }
         }
     }
 
-    // â”€â”€ Apply Ã—10 nightmare party multipliers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Apply ×10 nightmare party multipliers ─────────────────────────────────
 
     private void applyNightmarePartyScaling(LivingEntity mob) {
-        // â”€â”€ HP Ã— 10 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── HP × 10 ───────────────────────────────────────────────────────
         AttributeInstance maxHp = mob.getAttribute(Attribute.MAX_HEALTH);
         if (maxHp != null) {
             double scaled = maxHp.getBaseValue() * NM_HEALTH_MULT;
@@ -309,33 +309,33 @@ public class NightSpawnBoostListener implements Listener {
             mob.setHealth(scaled);
         }
 
-        // â”€â”€ Damage Ã— 10 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Damage × 10 ───────────────────────────────────────────────────
         AttributeInstance atk = mob.getAttribute(Attribute.ATTACK_DAMAGE);
         if (atk != null) {
             atk.setBaseValue(atk.getBaseValue() * NM_DAMAGE_MULT);
         }
 
-        // â”€â”€ Follow range Ã— 10 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Follow range × 10 ─────────────────────────────────────────────
         AttributeInstance range = mob.getAttribute(Attribute.FOLLOW_RANGE);
         if (range != null) {
             range.setBaseValue(Math.min(range.getBaseValue() * NM_RANGE_MULT, 2048.0));
         }
 
-        // â”€â”€ Tag the mob with PDC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Tag the mob with PDC ─────────────────────────────────────────
         mob.getPersistentDataContainer()
                 .set(nmPartyKey, org.bukkit.persistence.PersistentDataType.BYTE, (byte) 1);
 
-        // â”€â”€ Custom name so players know it's harder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Custom name so players know it's harder ───────────────────────
         String existing = mob.getCustomName();
         if (existing == null || existing.isEmpty()) {
-            mob.setCustomName("Â§4âš¡ Â§c" + niceName(mob.getType()) + " Â§4[NMÃ—10]");
+            mob.setCustomName("§4⚡ §c" + niceName(mob.getType()) + " §4[NM×10]");
         } else {
-            mob.setCustomName(existing + " Â§4[NMÃ—10]");
+            mob.setCustomName(existing + " §4[NM×10]");
         }
         mob.setCustomNameVisible(true);
     }
 
-    // â”€â”€ EntityDeathEvent â€” XP Ã— 10 for nightmare party mobs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── EntityDeathEvent — XP × 10 for nightmare party mobs ─────────────────
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onEntityDeath(EntityDeathEvent event) {
@@ -344,17 +344,17 @@ public class NightSpawnBoostListener implements Listener {
         if (!entity.getPersistentDataContainer().has(nmPartyKey,
                 org.bukkit.persistence.PersistentDataType.BYTE)) return;
 
-        // Ã—10 XP
+        // ×10 XP
         event.setDroppedExp((int)(event.getDroppedExp() * NM_XP_MULT));
 
         // Visual death effect
         entity.getWorld().spawnParticle(Particle.EXPLOSION_EMITTER,
                 entity.getLocation(), 3, 0.5, 0.5, 0.5, 0);
 
-        // â”€â”€ Instant lightning-strike replacement (still capped!) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Instant lightning-strike replacement (still capped!) ────────────
         // When a storm mob dies, immediately summon a replacement via a
-        // lightning strike near the nearest Nightmare party member â€” keeping
-        // the swarm feeling relentless in real time â€” but ONLY if we're still
+        // lightning strike near the nearest Nightmare party member — keeping
+        // the swarm feeling relentless in real time — but ONLY if we're still
         // under the population cap. This does NOT run away unbounded: it is
         // a strict 1-for-1 top-up, gated by the exact same STORM_MOB_CAP used
         // by the periodic task above.
@@ -363,7 +363,7 @@ public class NightSpawnBoostListener implements Listener {
         if (world == null) return;
 
         int nearbyStormMobs = countNearbyStormMobs(deathLoc, STORM_CAP_RADIUS);
-        if (nearbyStormMobs >= STORM_MOB_CAP) return; // at cap â€” no replacement
+        if (nearbyStormMobs >= STORM_MOB_CAP) return; // at cap — no replacement
 
         // Find the nearest online Nightmare player to re-target the replacement at
         Player nearestNm = null;
@@ -385,7 +385,7 @@ public class NightSpawnBoostListener implements Listener {
         });
     }
 
-    // â”€â”€ Check if a mob is tagged as Nightmare Party â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Check if a mob is tagged as Nightmare Party ───────────────────────────
 
     /** Returns true if the mob was scaled by nightmare party rules. */
     public boolean isNightmarePartyMob(Entity entity) {
@@ -397,7 +397,7 @@ public class NightSpawnBoostListener implements Listener {
     /** Returns the nightmare party gold multiplier (used by GoldDropListener). */
     public static double getNightmarePartyGoldMult() { return NM_GOLD_MULT; }
 
-    // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static String niceName(EntityType type) {
         return type.name().replace('_', ' ').toLowerCase()

@@ -30,7 +30,7 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import com.yourname.difficulty.realm.AncientDebrisPortalListener;
+
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BookMeta;
 import org.bukkit.metadata.FixedMetadataValue;
@@ -45,6 +45,7 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
+import com.yourname.difficulty.input.ActionInputBuffer;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -103,6 +104,15 @@ public class MagicStaffListener implements Listener {
     private final Map<UUID, Map<MagicElement, Long>> cooldowns          = new HashMap<>();
     private final Map<UUID, BukkitTask>              fallenTasks        = new HashMap<>();
     private final Map<UUID, BukkitTask>              airHoverTasks      = new HashMap<>();
+
+    /** Air-staff right-click ring buffers (sub-tick dash detection). */
+    private final Map<UUID, ActionInputBuffer>        airDashBuffers     = new HashMap<>();
+    /** Double right-click window for the Air Staff dash (sub-tick input buffer). */
+    private static final long AIR_DASH_WINDOW_MS      = 380L;
+    /** Cooldown between Air Staff dashes. */
+    private static final long AIR_DASH_COOLDOWN_MS    = 800L;
+    /** Base horizontal dash speed (further scaled by mage-gear air power). */
+    private static final double AIR_DASH_BASE_SPEED   = 1.6;
     /** Projectile UUID → the EarthBlockTier thrown (null = old system / Lv1-9). */
     private final Map<UUID, EarthBlockTier>          earthBoltTiers     = new HashMap<>();
 
@@ -128,12 +138,13 @@ public class MagicStaffListener implements Listener {
     /** Optional CastingEngine — notified on every successful spell cast for combo tracking. */
     private       CastingEngine                      castingEngine      = null;
 
-    /** Optional portal listener — called when lightning hits Ancient Debris. */
-    private       AncientDebrisPortalListener        portalListener     = null;
+    
     /** Optional favorites manager — gates combo hints to starred chains only. */
     private       ComboFavoritesManager              favoritesManager   = null;
     /** Optional passive elemental proc manager — real dice-roll procs on any basic hit. */
     private       ElementalProcManager               elementalProcManager = null;
+    /** Optional EarthBookManager — tracks per-player unlocked Earth Book tiers. */
+    private       EarthBookManager                   earthBookManager    = null;
 
     /** Player UUID → repeating task that keeps them on fire after a lightning burn. */
     private final Map<UUID, BukkitTask>              lightningBurnTasks = new HashMap<>();
@@ -198,12 +209,6 @@ public class MagicStaffListener implements Listener {
      */
     public void setCastingEngine(CastingEngine ce) { this.castingEngine = ce; }
 
-    /**
-     * Wires in the AncientDebrisPortalListener so that a lightning strike
-     * aimed directly at an Ancient Debris block opens the Ancient Realm portal.
-     */
-    public void setPortalListener(AncientDebrisPortalListener pl) { this.portalListener = pl; }
-
     /** Wires in the ComboFavoritesManager so hints only show for starred chains. */
     public void setFavoritesManager(ComboFavoritesManager fm) { this.favoritesManager = fm; }
 
@@ -248,6 +253,11 @@ public class MagicStaffListener implements Listener {
      */
     public void setMagicBagManager(com.yourname.difficulty.bag.MagicBagManager mgr) {
         this.magicBagManager = mgr;
+    }
+
+    /** Wires in the EarthBookManager for Earth Book tier unlocks + casting checks. */
+    public void setEarthBookManager(EarthBookManager mgr) {
+        this.earthBookManager = mgr;
     }
 
     /**
@@ -314,20 +324,24 @@ public class MagicStaffListener implements Listener {
                 boolean isAdmin = player.hasPermission("difficultyengine.cape.admin") 
                     && lightningAdminCommand != null && lightningAdminCommand.hasFastCast(player.getUniqueId());
                 
-                if (!isAdmin) {
-                    long cooldownMs = 8000L; // 8 second cooldown for lightning
-                    if (!checkAndSetCooldown(player.getUniqueId(), MagicElement.FIRE, cooldownMs)) {
-                        long msLeft = msUntilReady(player.getUniqueId(), MagicElement.FIRE, cooldownMs);
-                        player.sendActionBar("§e⚡ §c[Lightning] §8Cooldown: §e"
-                                + String.format("%.1f", msLeft / 1000.0) + "s");
-                        return;
-                    }
-                    
-                    if (lightningChargeManager != null && !lightningChargeManager.consumeCharge(player)) {
-                        player.sendActionBar("§c✗ §7You need §bLightning Charges§7! §8(Drink a Charged Magic Bottle)");
-                        cooldowns.get(player.getUniqueId()).remove(MagicElement.FIRE);
-                        return;
-                    }
+                // Always enforce a minimum cooldown. Holding right-click fires
+                // onPlayerInteract every tick, so a true zero-cooldown fast-cast
+                // would spam castLightning (raytrace + particles + entity scan +
+                // strikeLightningEffect) ~20×/second and collapse server TPS.
+                // Fast-cast uses a short 250ms floor instead of the 8s normal.
+                long cooldownMs = isAdmin ? 250L : 8000L;
+                if (!checkAndSetCooldown(player.getUniqueId(), MagicElement.FIRE, cooldownMs)) {
+                    long msLeft = msUntilReady(player.getUniqueId(), MagicElement.FIRE, cooldownMs);
+                    player.sendActionBar("§e⚡ §c[Lightning] §8Cooldown: §e"
+                            + String.format("%.1f", msLeft / 1000.0) + "s");
+                    return;
+                }
+                
+                // Always consume a charge (fast-cast still costs Lightning Charges)
+                if (lightningChargeManager != null && !lightningChargeManager.consumeCharge(player)) {
+                    player.sendActionBar("§c✗ §7You need §bLightning Charges§7! §8(Drink a Charged Magic Bottle)");
+                    cooldowns.get(player.getUniqueId()).remove(MagicElement.FIRE);
+                    return;
                 }
                 awardMagicXp(player, MAGIC_XP_CAST);
                 castLightning(player, magicLevel);
@@ -439,20 +453,20 @@ public class MagicStaffListener implements Listener {
             }
 
 
-            // Left-Click (Basic): tiered block-throw. Requires Earth Book +
-            // matching Earth Page + the actual block in inventory — no fallback
-            // bolt. If any requirement is missing, do nothing but explain why.
+            // Left-Click (Basic): tiered block-throw. Requires Earth Book + an
+            // unlocked page + the actual block in inventory. Falls back from the
+            // highest unlocked tier down; if nothing matches, "no block to cast".
             if (!itemFactory.hasEarthBook(player, getBagContents(player))) {
                 player.sendActionBar("§c✗ §7Earth block-throw requires carrying §2The Earth Book§7!");
                 return;
             }
-            if (!hasAnyEarthPage(player)) {
-                player.sendActionBar("§c✗ §7You need an §2Earth Magic Page§7 to cast!");
+            if (earthBookManager != null && !earthBookManager.hasAnyTier(player.getUniqueId())) {
+                player.sendActionBar("§c✗ §7You have no unlocked Earth pages! §8(Find Earth Pages from mobs)");
                 return;
             }
             EarthBlockTier tier = findBestEarthTier(player, magicLevel);
             if (tier == null) {
-                player.sendActionBar("§c✗ §7You don't have the required block for any of your Earth Pages!");
+                player.sendMessage("§c✗ §7No block to cast — you need the matching block for an unlocked Earth page.");
                 return;
             }
 
@@ -476,8 +490,9 @@ public class MagicStaffListener implements Listener {
         // ── Air Staff ─────────────────────────────────────────────────────────
         if (element == MagicElement.AIR) {
             if (isRightClick) {
-                // Right-Click: Hover mechanics (slow fall / levitate)
-                activateAirHover(player, magicLevel);
+                // Right-Click: Hover (slow fall / levitate), or an AIR DASH
+                // when a second right-click lands inside the sub-tick window.
+                handleAirRightClick(player, magicLevel);
             } else {
                 // Left-Click: Quick wind gust for knockback
                 long cooldownMs = getCooldownMs(player, magicLevel);
@@ -573,7 +588,6 @@ public class MagicStaffListener implements Listener {
      * Casts a lightning strike at the point the player is looking (up to 40 blocks).
      *
      * NEW BEHAVIOURS:
-     *  • If the ray hits ANCIENT_DEBRIS → triggers the portal ritual instead.
      *  • 10% chance per strike to ignite a nearby dirt/grass block on fire (30 s).
      *  • Any PLAYER hit is set on fire PERMANENTLY (magic_lightning_burning) until
      *    they eat food or are hit by a Water bolt.  They will burn to death without aid.
@@ -585,19 +599,6 @@ public class MagicStaffListener implements Listener {
         RayTraceResult ray = player.getWorld().rayTraceBlocks(
             player.getEyeLocation(), player.getLocation().getDirection(), 40,
             FluidCollisionMode.NEVER, true);
-
-        // ── Ancient Debris portal check (ranged, via lightning) ───────────────
-        if (ray != null && ray.getHitBlock() != null
-                && ray.getHitBlock().getType() == Material.ANCIENT_DEBRIS
-                && portalListener != null) {
-            // Fire real lightning AT the block, then trigger portal
-            Location debrisLoc = ray.getHitBlock().getLocation().add(0.5, 0, 0.5);
-            player.getWorld().strikeLightningEffect(debrisLoc.clone().add(0, 1, 0));
-            player.getWorld().spawnParticle(Particle.ELECTRIC_SPARK, debrisLoc.clone().add(0, 1, 0), 40, 0.4, 1.0, 0.4, 0.1);
-            player.getWorld().playSound(debrisLoc, Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 1.5f, 0.8f);
-            portalListener.triggerViaLightning(player, ray.getHitBlock().getLocation());
-            return;
-        }
 
         Location strikeAt;
         if (ray != null && ray.getHitBlock() != null) {
@@ -1558,7 +1559,7 @@ public class MagicStaffListener implements Listener {
         for (EarthBlockTier tier : EarthBlockTier.values()) {
             if (magicLevel < tier.levelRequired) continue;
             if (!playerHasBlock(player, tier.material)) continue;
-            if (!itemFactory.hasEarthPage(player, tier)) continue;
+            if (earthBookManager == null || !earthBookManager.hasTier(player.getUniqueId(), tier)) continue;
             best = tier; // keep overwriting → highest valid tier wins
         }
         return best;
@@ -2796,6 +2797,75 @@ public class MagicStaffListener implements Listener {
         if (!guidedPlayers.add(player.getUniqueId())) return;
         player.getInventory().addItem(itemFactory.buildMageGearGuide());
         player.sendMessage("§5✦ §7You received a §5Mage Gear Guide§7! Check your inventory.");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  AIR DASH (sub-tick ring-buffer input)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Routes Air-staff right-clicks: two right-clicks inside
+     * {@link #AIR_DASH_WINDOW_MS} fire a forward dash (works mid-air and while
+     * levitating); a single right-click keeps the normal hover behaviour.
+     */
+    private void handleAirRightClick(Player player, int magicLevel) {
+        UUID uid = player.getUniqueId();
+        long now = System.currentTimeMillis();
+
+        ActionInputBuffer buf = airDashBuffers.computeIfAbsent(uid,
+                k -> new ActionInputBuffer(3, AIR_DASH_WINDOW_MS));
+        boolean doubleTap = buf.recordAndCheck(now);
+
+        if (!doubleTap) {
+            activateAirHover(player, magicLevel);
+            return;
+        }
+
+        // Dash cooldown gates the burst itself.
+        if (player.hasMetadata("air_dash_cd")) {
+            long cd = player.getMetadata("air_dash_cd").get(0).asLong();
+            if (now < cd) {
+                player.sendActionBar("§c☁ §7Air Dash on cooldown! §e("
+                        + String.format("%.1f", (cd - now) / 1000.0) + "s)");
+                return;
+            }
+        }
+        player.setMetadata("air_dash_cd", new FixedMetadataValue(plugin, now + AIR_DASH_COOLDOWN_MS));
+        buf.clear();
+        airDash(player);
+    }
+
+    /**
+     * Dashes the player in their look direction with a slight upward arc.
+     * While hovering (Levitation/Slow Falling active) the vertical component is
+     * preserved so the dash feels weightless; on the ground it gives a small
+     * hop so the same action works from a standstill.
+     */
+    private void airDash(Player player) {
+        Vector dir = player.getLocation().getDirection().clone();
+        dir.setY(0);
+        if (dir.lengthSquared() < 0.01) {
+            dir = new Vector(0, 0, -1); // near-vertical look — fall back to forward
+        }
+        dir.normalize();
+
+        double speed = AIR_DASH_BASE_SPEED * getAirGearMultiplier(player);
+        double vertical;
+        if (player.hasPotionEffect(PotionEffectType.LEVITATION)
+                || player.hasPotionEffect(PotionEffectType.SLOW_FALLING)) {
+            vertical = 0.35; // weightless glide — keep the air
+        } else {
+            vertical = player.isOnGround() ? 0.30 : 0.15;
+        }
+
+        player.setVelocity(dir.multiply(speed).setY(vertical));
+        player.setFallDistance(0f);
+
+        Location fx = player.getLocation().add(0, 1, 0);
+        player.getWorld().spawnParticle(Particle.CLOUD, fx, 30, 0.4, 0.2, 0.4, 0.08);
+        player.getWorld().spawnParticle(Particle.END_ROD, fx, 14, 0.3, 0.2, 0.3, 0.05);
+        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_PHANTOM_FLAP, 1.0f, 1.6f);
+        player.sendActionBar("§7☁ §fAIR DASH! §8(double right-click)");
     }
 
     private void cancelHoverTask(UUID uid) {

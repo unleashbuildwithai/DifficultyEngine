@@ -21,17 +21,17 @@ import org.bukkit.persistence.PersistentDataType;
 import java.util.Random;
 
 /**
- * DifficultyEngine â€” Core game-mechanics listener.
+ * DifficultyEngine — Core game-mechanics listener.
  *
  * Four responsibilities:
- *  1. onCreatureSpawn  â€” Scale mob stats based on the highest difficulty
+ *  1. onCreatureSpawn  — Scale mob stats based on the highest difficulty
  *                        player within 64 blocks.
- *  2. onEntityTarget   â€” Redirect mob aggro toward Nightmare players (35%
+ *  2. onEntityTarget   — Redirect mob aggro toward Nightmare players (35%
  *                        chance) and protect Peaceful players from targeting.
- *  3. onEntityDeath    â€” Clean up display state on death to prevent the Paper
+ *  3. onEntityDeath    — Clean up display state on death to prevent the Paper
  *                        1.21 "ghost health bar floating at death location" bug.
- *  4. onEntityDamage   â€” When a player has /hpbar ON, update the mob's custom
- *                        name to show live HP (â¤ current / max) after each hit.
+ *  4. onEntityDamage   — When a player has /hpbar ON, update the mob's custom
+ *                        name to show live HP (❤ current / max) after each hit.
  *
  * Moved to com.yourname.difficulty.listeners as part of the modularisation.
  * Party threat-aggregation for NIGHTMARE players lives in NightmareAggroListener.
@@ -76,7 +76,7 @@ public class DifficultyEngine implements Listener {
 
     /**
      * Scales the spawned mob's stats based on the difficulty of the NEAREST
-     * player within {@code SPAWN_CHECK_RADIUS} blocks â€” not the highest one.
+     * player within {@code SPAWN_CHECK_RADIUS} blocks — not the highest one.
      *
      * <p><b>Anti-grief design:</b> Using "nearest" instead of "highest nearby"
      * means a Nightmare player wandering 35 blocks away from a peaceful area
@@ -91,7 +91,7 @@ public class DifficultyEngine implements Listener {
         // Use the NEAREST player's difficulty, not the highest in range
         DifficultyLevel level = getNearestPlayerDifficulty(mob, SPAWN_CHECK_RADIUS);
 
-        // EASY is vanilla â€” no changes. PEACEFUL doesn't buff mobs either.
+        // EASY is vanilla — no changes. PEACEFUL doesn't buff mobs either.
         if (level.getTier() <= DifficultyLevel.EASY.getTier()) return;
 
         applyStats(mob, level);
@@ -126,7 +126,7 @@ public class DifficultyEngine implements Listener {
             follow.setBaseValue(level.getFollowRange());
         }
 
-        // â”€â”€ Tag this mob so onEntityDeath can clean it up â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Tag this mob so onEntityDeath can clean it up ─────────────────────
         // Paper 1.21 leaves a ghost health bar floating at the death location
         // for any mob whose GENERIC_MAX_HEALTH base value was modified. We tag
         // scaled mobs here so we can wipe their display state on death.
@@ -134,7 +134,7 @@ public class DifficultyEngine implements Listener {
     }
 
     // -------------------------------------------------------------------------
-    // Live HP display  â€”  /hpbar feature
+    // Live HP display  —  /hpbar feature
     // -------------------------------------------------------------------------
 
     /**
@@ -142,13 +142,13 @@ public class DifficultyEngine implements Listener {
      * delayed task so the damage has already been applied, then write the
      * real post-hit health as the mob's custom name:
      *
-     *   Â§câ¤ Â§f18 Â§7/ Â§f25
+     *   §c❤ §f18 §7/ §f25
      *
      * The name is cleared automatically in onEntityDeath (see below).
      */
     @EventHandler
     public void onEntityDamage(EntityDamageByEntityEvent event) {
-        // Only care about player â†’ mob hits
+        // Only care about player → mob hits
         if (!(event.getDamager() instanceof Player attacker)) return;
         if (!(event.getEntity() instanceof LivingEntity mob))  return;
         if (mob instanceof Player) return;
@@ -166,8 +166,8 @@ public class DifficultyEngine implements Listener {
             double maxHp = maxHpAttr != null ? maxHpAttr.getValue() : mob.getHealth();
             double curHp = mob.getHealth();
 
-            // Format as whole numbers â€” keeps the tag short and readable
-            String tag = String.format("Â§câ¤ Â§f%d Â§7/ Â§f%d",
+            // Format as whole numbers — keeps the tag short and readable
+            String tag = String.format("§c❤ §f%d §7/ §f%d",
                     (int) Math.ceil(curHp), (int) Math.round(maxHp));
 
             mob.setCustomName(tag);
@@ -176,7 +176,7 @@ public class DifficultyEngine implements Listener {
     }
 
     // -------------------------------------------------------------------------
-    // Death cleanup  â€”  fixes the floating / ghost health-bar bug
+    // Death cleanup  —  fixes the floating / ghost health-bar bug
     // -------------------------------------------------------------------------
 
     /**
@@ -196,7 +196,7 @@ public class DifficultyEngine implements Listener {
         LivingEntity entity = event.getEntity();
         if (entity instanceof Player) return;
 
-        // Wipe name/display state â€” dismisses ghost bars AND HP tags
+        // Wipe name/display state — dismisses ghost bars AND HP tags
         entity.setCustomName(null);
         entity.setCustomNameVisible(false);
 
@@ -218,7 +218,7 @@ public class DifficultyEngine implements Listener {
         DifficultyLevel targetDiff    = manager.getDifficulty(target.getUniqueId());
         DifficultyLevel highestNearby = getHighestNearbyDifficulty(mob, AGGRO_CHECK_RADIUS);
 
-        // â”€â”€ Peaceful protection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Peaceful protection ──────────────────────────────────────────────
         // A peaceful player won't be targeted UNLESS there is a Nightmare player
         // nearby (Nightmare players absorb all aggro in mixed groups).
         if (targetDiff == DifficultyLevel.PEACEFUL
@@ -227,7 +227,7 @@ public class DifficultyEngine implements Listener {
             return;
         }
 
-        // â”€â”€ Nightmare aggro preference â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Nightmare aggro preference ────────────────────────────────────────
         // If the current target is NOT already a Nightmare player, there is a
         // 35% chance the mob will re-lock onto the nearest Nightmare player.
         if (targetDiff != DifficultyLevel.NIGHTMARE
@@ -248,7 +248,7 @@ public class DifficultyEngine implements Listener {
      * within {@code radius} blocks.  Falls back to {@code EASY} if no player
      * is found.
      *
-     * <p>Used for mob <em>spawn</em> scaling â€” mobs are tuned to the player
+     * <p>Used for mob <em>spawn</em> scaling — mobs are tuned to the player
      * most likely to encounter them, not the strongest player in the area.
      */
     private DifficultyLevel getNearestPlayerDifficulty(LivingEntity mob, double radius) {

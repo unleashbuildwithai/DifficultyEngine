@@ -18,3 +18,11 @@ Thumbs.db
 
 # Log files
 *.log
+
+# Local build scratch (javac output + error/cp artifacts)
+out_check/
+out_check2/
+/compile_check*.txt
+/compile_err*.txt
+/javac*.args
+/_build2.bat

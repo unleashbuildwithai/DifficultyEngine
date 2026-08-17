@@ -1,6 +1,5 @@
 package com.yourname.difficulty.listeners;
 
-import com.yourname.difficulty.items.EarthBlockTier;
 import com.yourname.difficulty.items.ItemFactory;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
@@ -8,11 +7,9 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityPickupItemEvent;
-import org.bukkit.event.inventory.CraftItemEvent;
 import org.bukkit.event.inventory.PrepareItemCraftEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.ShapelessRecipe;
-import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -61,66 +58,22 @@ public class CustomItemCraftListener implements Listener {
 
             case "empty_magic_bottle_recipe" ->
                 event.getInventory().setResult(itemFactory.buildEmptyMagicBottle());
-
-            default -> {
-                // Check Earth Magic Page recipes (one per EarthBlockTier)
-                for (EarthBlockTier tier : EarthBlockTier.values()) {
-                    if (key.equals("de_earth_page_recipe_" + tier.name().toLowerCase())) {
-                        event.getInventory().setResult(itemFactory.buildEarthMagicPage(tier));
-                        return;
-                    }
-                }
-            }
         }
     }
 
-    // ── Earth Page discovery: unlock recipe on first pickup ───────────────────
-
     /**
-     * When a player picks up an Earth Magic Page item, discover the crafting
-     * recipe for that page tier in their recipe book.
-     *
-     * Earth Magic Page recipes are intentionally NOT auto-discovered on join —
-     * players must first find/receive a page before they can see how to craft more.
+     * When a player picks up a Dragon Armour Page, unlock all 4 Dragon Armour
+     * piece recipes in their crafting book (they are NOT auto-discovered on join).
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onPickupEarthPage(EntityPickupItemEvent event) {
+    public void onPickupDragonArmourPage(EntityPickupItemEvent event) {
         if (!(event.getEntity() instanceof Player player)) return;
         ItemStack item = event.getItem().getItemStack();
-        if (item == null || !item.hasItemMeta()) return;
+        if (item == null || !itemFactory.isDragonArmourPage(item)) return;
 
-        var pdc = item.getItemMeta().getPersistentDataContainer();
-        for (EarthBlockTier tier : EarthBlockTier.values()) {
-            NamespacedKey pageKey = itemFactory.getEarthPageKey(tier);
-            if (pageKey != null && pdc.has(pageKey, PersistentDataType.BYTE)) {
-                // Unlock the crafting recipe for this tier
-                NamespacedKey recipeKey = new NamespacedKey(plugin,
-                        "de_earth_page_recipe_" + tier.name().toLowerCase());
-                player.discoverRecipe(recipeKey);
-                break;
-            }
+        for (String piece : new String[]{"helmet", "chestplate", "leggings", "boots"}) {
+            player.discoverRecipe(new NamespacedKey(plugin, "dragon_armour_" + piece));
         }
-    }
-
-    /**
-     * Also discover the recipe when a player crafts an Earth Magic Page
-     * (so they can immediately see the recipe for next time).
-     */
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onCraftEarthPage(CraftItemEvent event) {
-        if (!(event.getWhoClicked() instanceof Player player)) return;
-        ItemStack result = event.getCurrentItem();
-        if (result == null || !result.hasItemMeta()) return;
-
-        var pdc = result.getItemMeta().getPersistentDataContainer();
-        for (EarthBlockTier tier : EarthBlockTier.values()) {
-            NamespacedKey pageKey = itemFactory.getEarthPageKey(tier);
-            if (pageKey != null && pdc.has(pageKey, PersistentDataType.BYTE)) {
-                NamespacedKey recipeKey = new NamespacedKey(plugin,
-                        "de_earth_page_recipe_" + tier.name().toLowerCase());
-                player.discoverRecipe(recipeKey);
-                break;
-            }
-        }
+        player.sendMessage("§6✦ §7The §e§lDragon Armour §7recipes have been unlocked in your crafting book!");
     }
 }

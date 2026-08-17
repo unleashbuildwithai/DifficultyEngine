@@ -28,42 +28,42 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * SoulfurPotionListener â€” Escalating sip-counter system for the Soulfur Potion.
+ * SoulfurPotionListener — Escalating sip-counter system for the Soulfur Potion.
  *
- * â”€â”€ Sip counter â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+ * ── Sip counter ───────────────────────────────────────────────────────────────
  * Every consumption adds 1 to the player's sip counter. A decay task fires
  * every 60 seconds and decrements the counter by 1. When it reaches 0 all
  * visual/damage effects stop ("effects slowly negate").
  *
- * â”€â”€ Darkness progression (refreshed every second by main task) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
- *  1â€“4   sips â†’ DARKNESS amplitude 0  (mild dimming)
- *  5â€“9   sips â†’ DARKNESS amplitude 1
- *  10â€“14 sips â†’ DARKNESS amplitude 2
- *  15+   sips â†’ BLINDNESS â€” pitch black
+ * ── Darkness progression (refreshed every second by main task) ────────────────
+ *  1–4   sips → DARKNESS amplitude 0  (mild dimming)
+ *  5–9   sips → DARKNESS amplitude 1
+ *  10–14 sips → DARKNESS amplitude 2
+ *  15+   sips → BLINDNESS — pitch black
  *
- * â”€â”€ Damage progression â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
- *  25â€“34 sips â†’ 1 HP (Â½ heart)   every 30 seconds
- *  35â€“49 sips â†’ 2 HP (1 heart)   every 60 seconds
- *  50+   sips â†’ 6 HP (3 hearts)  every second (lethal)
+ * ── Damage progression ────────────────────────────────────────────────────────
+ *  25–34 sips → 1 HP (½ heart)   every 30 seconds
+ *  35–49 sips → 2 HP (1 heart)   every 60 seconds
+ *  50+   sips → 6 HP (3 hearts)  every second (lethal)
  *
- * â”€â”€ Drunken Sway â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
- * Repeating task (every 20 ticks) that rotates yaw Â±5â€“15Â°.
+ * ── Drunken Sway ─────────────────────────────────────────────────────────────
+ * Repeating task (every 20 ticks) that rotates yaw ±5–15°.
  * Cleansed by: entering WATER block or entering a bed.
  *
- * â”€â”€ 50-sip death curse â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+ * ── 50-sip death curse ────────────────────────────────────────────────────────
  * If a player dies with 50+ sips they receive a 24-hour Soulfur Curse on respawn:
- *   â€¢ SLOWNESS amplifier 1 (permanent until curse expires)
- *   â€¢ Sunlight deals Â½ heart per second while exposed
- * Curse timestamp is persisted in PlayerDifficultyManager â†’ player_data.yml.
+ *   • SLOWNESS amplifier 1 (permanent until curse expires)
+ *   • Sunlight deals ½ heart per second while exposed
+ * Curse timestamp is persisted in PlayerDifficultyManager → player_data.yml.
  */
 public class SoulfurPotionListener implements Listener {
 
-    // â”€â”€ Dependencies â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Dependencies ──────────────────────────────────────────────────────────
     private final JavaPlugin              plugin;
     private final ItemFactory             itemFactory;
     private final PlayerDifficultyManager manager;
 
-    // â”€â”€ Per-player state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Per-player state ──────────────────────────────────────────────────────
     /** Total sips consumed (current session, decays over time). */
     private final Map<UUID, Integer>    sipCount            = new HashMap<>();
     /** Active drunken-sway BukkitTasks. */
@@ -79,12 +79,12 @@ public class SoulfurPotionListener implements Listener {
     private final Map<UUID, Long>       nextDamageTime      = new HashMap<>();
     /** Epoch-ms timestamp for when next sunlight-curse damage fires. */
     private final Map<UUID, Long>       nextSunlightDmgTime = new HashMap<>();
-    /** Players who died with 50+ sips â€” awaiting PlayerRespawnEvent. */
+    /** Players who died with 50+ sips — awaiting PlayerRespawnEvent. */
     private final Set<UUID>             pendingCurse        = new HashSet<>();
 
     private final Random random = new Random();
 
-    // â”€â”€ Constructor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Constructor ───────────────────────────────────────────────────────────
 
     public SoulfurPotionListener(JavaPlugin plugin,
                                   ItemFactory itemFactory,
@@ -95,10 +95,10 @@ public class SoulfurPotionListener implements Listener {
         startTasks();
     }
 
-    // â”€â”€ Scheduled tasks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Scheduled tasks ───────────────────────────────────────────────────────
 
     private void startTasks() {
-        // Main task â€” every 20 ticks (1 second): darkness, damage, curse
+        // Main task — every 20 ticks (1 second): darkness, damage, curse
         new BukkitRunnable() {
             @Override public void run() {
                 tickSipEffects();
@@ -106,13 +106,13 @@ public class SoulfurPotionListener implements Listener {
             }
         }.runTaskTimer(plugin, 20L, 20L);
 
-        // Decay task â€” every 1200 ticks (60 seconds): decrement sip counter
+        // Decay task — every 1200 ticks (60 seconds): decrement sip counter
         new BukkitRunnable() {
             @Override public void run() { tickDecay(); }
         }.runTaskTimer(plugin, 1200L, 1200L);
     }
 
-    // â”€â”€ Consumption â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Consumption ───────────────────────────────────────────────────────────
 
     @EventHandler(priority = EventPriority.NORMAL)
     public void onPlayerConsume(PlayerItemConsumeEvent event) {
@@ -132,19 +132,19 @@ public class SoulfurPotionListener implements Listener {
 
         // Milestone messages
         String msg = switch (sips) {
-            case 1  -> "Â§5â˜  Â§7Your vision warps. The world tilts around you...";
-            case 5  -> "Â§5â˜  Â§7The shadows grow deeper...";
-            case 10 -> "Â§4â˜  Â§cYou can barely see.";
-            case 15 -> "Â§4â˜  Â§4The world goes dark. Â§cYou are blind.";
-            case 25 -> "Â§4â˜  Â§cYour body begins to fail. The poison damages you.";
-            case 35 -> "Â§4â˜  Â§4The rot accelerates. Â§cDeath draws near.";
-            case 50 -> "Â§4â˜  Â§4â˜  Â§4You have consumed too much. Death will mark you. Â§4â˜  Â§4â˜ ";
-            default -> "Â§5â˜  Â§7The madness deepens... Â§8(" + sips + " sips)";
+            case 1  -> "§5☠ §7Your vision warps. The world tilts around you...";
+            case 5  -> "§5☠ §7The shadows grow deeper...";
+            case 10 -> "§4☠ §cYou can barely see.";
+            case 15 -> "§4☠ §4The world goes dark. §cYou are blind.";
+            case 25 -> "§4☠ §cYour body begins to fail. The poison damages you.";
+            case 35 -> "§4☠ §4The rot accelerates. §cDeath draws near.";
+            case 50 -> "§4☠ §4☠ §4You have consumed too much. Death will mark you. §4☠ §4☠";
+            default -> "§5☠ §7The madness deepens... §8(" + sips + " sips)";
         };
         player.sendMessage(msg);
     }
 
-    // â”€â”€ Main-task effects â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Main-task effects ─────────────────────────────────────────────────────
 
     private void tickSipEffects() {
         long now = System.currentTimeMillis();
@@ -154,9 +154,9 @@ public class SoulfurPotionListener implements Listener {
             Integer sips = sipCount.get(uuid);
             if (sips == null || sips <= 0 || player.isDead()) continue;
 
-            // â”€â”€ Darkness (refreshed every second, 2-second duration) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ── Darkness (refreshed every second, 2-second duration) ────────────
             if (sips >= 15) {
-                // Pitch black â€” BLINDNESS
+                // Pitch black — BLINDNESS
                 player.addPotionEffect(
                     new PotionEffect(PotionEffectType.BLINDNESS, 40, 0, false, false, false), true);
             } else if (sips >= 10) {
@@ -167,9 +167,9 @@ public class SoulfurPotionListener implements Listener {
                 applyDarkness(player, 0);
             }
 
-            // â”€â”€ Damage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ── Damage ────────────────────────────────────────────────────────
             if (sips >= 50) {
-                // 3 hearts per second â€” lethal
+                // 3 hearts per second — lethal
                 player.damage(6.0);
             } else if (sips >= 35) {
                 Long next = nextDamageTime.get(uuid);
@@ -201,7 +201,7 @@ public class SoulfurPotionListener implements Listener {
         }
     }
 
-    // â”€â”€ Decay task â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Decay task ────────────────────────────────────────────────────────────
 
     private void tickDecay() {
         sipCount.entrySet().removeIf(entry -> {
@@ -209,13 +209,13 @@ public class SoulfurPotionListener implements Listener {
             int newSips = entry.getValue() - 1;
 
             if (newSips <= 0) {
-                // Counter hit zero â€” clear all effects
+                // Counter hit zero — clear all effects
                 Player p = plugin.getServer().getPlayer(uuid);
                 if (p != null) {
                     p.removePotionEffect(PotionEffectType.BLINDNESS);
                     p.removePotionEffect(PotionEffectType.DARKNESS);
                     cancelSway(uuid);
-                    p.sendMessage("Â§7â˜ Â§7The fog of the Soulfur slowly lifts...");
+                    p.sendMessage("§7☁ §7The fog of the Soulfur slowly lifts...");
                 }
                 nextDamageTime.remove(uuid);
                 return true; // remove from sipCount map
@@ -226,7 +226,7 @@ public class SoulfurPotionListener implements Listener {
         });
     }
 
-    // â”€â”€ Curse tick â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Curse tick ────────────────────────────────────────────────────────────
 
     private void tickCurseEffects() {
         long now = System.currentTimeMillis();
@@ -239,7 +239,7 @@ public class SoulfurPotionListener implements Listener {
             player.addPotionEffect(
                 new PotionEffect(PotionEffectType.SLOWNESS, 40, 1, false, false, true), true);
 
-            // Sunlight burn: Â½ heart per second
+            // Sunlight burn: ½ heart per second
             if (isInSunlight(player)) {
                 Long next = nextSunlightDmgTime.get(uuid);
                 if (next == null || now >= next) {
@@ -250,7 +250,7 @@ public class SoulfurPotionListener implements Listener {
         }
     }
 
-    // â”€â”€ 50-sip death â†’ respawn curse â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── 50-sip death → respawn curse ──────────────────────────────────────────
 
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
@@ -270,7 +270,7 @@ public class SoulfurPotionListener implements Listener {
         Player player = event.getPlayer();
         UUID   uuid   = player.getUniqueId();
 
-        // â”€â”€ 1HP Respawn Bug Fix â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── 1HP Respawn Bug Fix ────────────────────────────────────────────────
         // When a player respawns, immediately strip any inflated max-health modifiers
         // (like the Defence HP bonus) before the server recalculates their health.
         // This ensures they spawn with the standard full 20 HP instead of 1 HP out of 40.
@@ -289,13 +289,13 @@ public class SoulfurPotionListener implements Listener {
             if (!player.isOnline()) return;
             player.addPotionEffect(
                 new PotionEffect(PotionEffectType.SLOWNESS, Integer.MAX_VALUE, 1, false, false, true));
-            player.sendMessage("Â§4â˜  Â§cYou are cursed by the Soulfur.");
-            player.sendMessage("Â§8  Sunlight burns your skin. Your speed is halved.");
-            player.sendMessage("Â§8  The curse expires in Â§f24 hoursÂ§8.");
+            player.sendMessage("§4☠ §cYou are cursed by the Soulfur.");
+            player.sendMessage("§8  Sunlight burns your skin. Your speed is halved.");
+            player.sendMessage("§8  The curse expires in §f24 hours§8.");
         }, 5L);
     }
 
-    // â”€â”€ Cleansing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Cleansing ─────────────────────────────────────────────────────────────
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlayerMove(PlayerMoveEvent event) {
@@ -303,7 +303,7 @@ public class SoulfurPotionListener implements Listener {
         if (!activeSways.containsKey(player.getUniqueId())) return;
         if (player.getLocation().getBlock().getType() == Material.WATER) {
             cleanse(player);
-            player.sendMessage("Â§bâœ¦ Â§7The cool water washes the madness from your mind.");
+            player.sendMessage("§b✦ §7The cool water washes the madness from your mind.");
         }
     }
 
@@ -312,7 +312,7 @@ public class SoulfurPotionListener implements Listener {
         Player player = event.getPlayer();
         if (!activeSways.containsKey(player.getUniqueId())) return;
         cleanse(player);
-        player.sendMessage("Â§eâœ¦ Â§7Rest soothes your troubled mind. The sway fades.");
+        player.sendMessage("§e✦ §7Rest soothes your troubled mind. The sway fades.");
     }
 
     @EventHandler
@@ -322,7 +322,7 @@ public class SoulfurPotionListener implements Listener {
         nextSunlightDmgTime.remove(uuid);
     }
 
-    // â”€â”€ Drunken Sway â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Drunken Sway ─────────────────────────────────────────────────────────
 
     private void startDrunkenSway(Player player) {
         cancelSway(player.getUniqueId());
@@ -337,7 +337,7 @@ public class SoulfurPotionListener implements Listener {
                     cancelSway(player.getUniqueId());
                     return;
                 }
-                int   magnitude = 5 + random.nextInt(11); // 5â€“15
+                int   magnitude = 5 + random.nextInt(11); // 5–15
                 float offset    = random.nextBoolean() ? magnitude : -magnitude;
                 player.setRotation(
                     player.getLocation().getYaw() + offset,
@@ -350,7 +350,7 @@ public class SoulfurPotionListener implements Listener {
 
     /**
      * Full cleanse: removes NAUSEA, BLINDNESS, DARKNESS, cancels sway,
-     * and â€” critically â€” CLEARS the sip counter so tickSipEffects() stops
+     * and — critically — CLEARS the sip counter so tickSipEffects() stops
      * re-applying blindness after the player goes in water or sleeps.
      */
     private void cleanse(Player player) {
@@ -374,7 +374,7 @@ public class SoulfurPotionListener implements Listener {
         if (task != null) task.cancel();
     }
 
-    // â”€â”€ Sunlight check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Sunlight check ────────────────────────────────────────────────────────
 
     private boolean isInSunlight(Player player) {
         long time = player.getWorld().getTime();

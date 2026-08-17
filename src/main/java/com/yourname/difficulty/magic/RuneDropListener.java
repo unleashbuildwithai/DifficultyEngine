@@ -1,6 +1,8 @@
 package com.yourname.difficulty.magic;
 
+import com.yourname.difficulty.items.EarthBlockTier;
 import com.yourname.difficulty.items.ItemFactory;
+import org.bukkit.World;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Slime;
 import org.bukkit.event.EventHandler;
@@ -9,6 +11,8 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.inventory.ItemStack;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 /**
@@ -65,6 +69,12 @@ public class RuneDropListener implements Listener {
                         itemFactory.buildRuneDust(result.element, count));
                 }
             }
+        }
+
+        // ── Earth Page drops (dimension-gated) ────────────────────────────────
+        EarthBlockTier pageTier = getEarthPageDrop(mob);
+        if (pageTier != null) {
+            mob.getWorld().dropItemNaturally(mob.getLocation(), itemFactory.buildEarthMagicPage(pageTier));
         }
 
         // ── Spell Combo Book: 8% if killed by a magic staff projectile ────────
@@ -168,6 +178,39 @@ public class RuneDropListener implements Listener {
         if (size >= 4) return drop(MagicElement.FIRE, 0.30, 2, 4);
         if (size >= 2) return drop(MagicElement.FIRE, 0.20, 1, 2);
         return           drop(MagicElement.FIRE, 0.10, 1, 1);
+    }
+
+    /**
+     * Returns a random Earth Page tier matching the mob's dimension, or null.
+     * Pages are gated by dimension (Overworld → low tiers, Nether → mid tiers,
+     * End → top tiers) and weighted so lower tiers drop more often.
+     */
+    private EarthBlockTier getEarthPageDrop(LivingEntity mob) {
+        World.Environment env = mob.getWorld().getEnvironment();
+        List<EarthBlockTier> tiers = new ArrayList<>();
+        for (EarthBlockTier t : EarthBlockTier.values()) {
+            if (t.dimension == env) tiers.add(t);
+        }
+        if (tiers.isEmpty()) return null;
+
+        // Base drop chance by dimension (higher dimensions = rarer pages)
+        double chance = switch (env) {
+            case NORMAL  -> 0.02;
+            case NETHER  -> 0.03;
+            case THE_END -> 0.04;
+            default      -> 0.0;
+        };
+        if (rand.nextDouble() >= chance) return null;
+
+        // Weight lower tiers more common (index 0 = lowest = most common)
+        int total = tiers.size() * (tiers.size() + 1) / 2;
+        int roll = rand.nextInt(total);
+        int cumulative = 0;
+        for (int i = 0; i < tiers.size(); i++) {
+            cumulative += (tiers.size() - i);
+            if (roll < cumulative) return tiers.get(i);
+        }
+        return tiers.get(tiers.size() - 1);
     }
 
     private static DropResult drop(MagicElement el, double chance, int min, int max) {

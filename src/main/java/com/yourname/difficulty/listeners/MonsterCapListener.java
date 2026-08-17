@@ -21,45 +21,45 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * MonsterCapListener â€” Per-player difficulty-aware monster population cap.
+ * MonsterCapListener — Per-player difficulty-aware monster population cap.
  *
  * Every online player is effectively "registered" with a live monster budget
  * based on their current {@link DifficultyLevel}:
  *
- *   PEACEFUL  â†’  10 concurrent hostile mobs allowed nearby
- *   EASY      â†’  20
- *   MEDIUM    â†’  30
- *   HARD      â†’  40
- *   NIGHTMARE â†’  80   (double HARD's budget)
+ *   PEACEFUL  →  10 concurrent hostile mobs allowed nearby
+ *   EASY      →  20
+ *   MEDIUM    →  30
+ *   HARD      →  40
+ *   NIGHTMARE →  80   (double HARD's budget)
  *
  * (See {@link DifficultyLevel#getMonsterCap()}.)
  *
- * â”€â”€ Party stacking â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+ * ── Party stacking ──────────────────────────────────────────────────────────
  * When the nearest player to a spawn is in a party, every online party member
  * within {@link #GROUP_RADIUS} blocks of them contributes their OWN monster
- * cap to a shared pool â€” so a full party of 4 Hard players can support 160
+ * cap to a shared pool — so a full party of 4 Hard players can support 160
  * concurrent mobs between them instead of just 40. This lets monster swarms
  * scale naturally with group size instead of choking on a single player's
  * budget.
  *
- * â”€â”€ Storm-night Nightmare bonus â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+ * ── Storm-night Nightmare bonus ─────────────────────────────────────────────
  * If it's currently night AND the world is thundering (a genuine "storm
- * night" â€” as opposed to plain daytime/non-thundering rain), every NIGHTMARE
+ * night" — as opposed to plain daytime/non-thundering rain), every NIGHTMARE
  * player's contribution to the shared cap is multiplied by
- * {@link #STORM_NIGHT_NIGHTMARE_MULT} (4Ã—). This is what gives Nightmare
- * players (solo or partied) roughly 4Ã— the normal monster spawns during a
+ * {@link #STORM_NIGHT_NIGHTMARE_MULT} (4×). This is what gives Nightmare
+ * players (solo or partied) roughly 4× the normal monster spawns during a
  * thunderstorm night, while regular daytime/non-thunder rain gets no bonus
- * at all â€” the two weather states are treated completely differently.
+ * at all — the two weather states are treated completely differently.
  *
- * â”€â”€ Party storm strength/speed bonus â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+ * ── Party storm strength/speed bonus ────────────────────────────────────────
  * On top of the population math, if 2+ NIGHTMARE party members are together
- * during a storm night, newly spawned mobs near them get a random Ã—5â€“Ã—10
+ * during a storm night, newly spawned mobs near them get a random ×5–×10
  * bonus to attack damage and movement speed (stacking on top of the normal
  * Nightmare stat multipliers applied by {@link DifficultyEngine}). This is
  * intentionally randomised per-mob so a swarm feels chaotic rather than
  * uniformly scaled.
  *
- * â”€â”€ Spawn-reason scope â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+ * ── Spawn-reason scope ──────────────────────────────────────────────────────
  * Only {@code SpawnReason.NATURAL} and {@code SpawnReason.REINFORCEMENTS} are
  * capped. Spawner-based farms, custom monster commands, quest NPCs, and boss
  * spawns are explicitly NOT touched by this listener so player-built
@@ -70,11 +70,11 @@ public class MonsterCapListener implements Listener {
     /** Radius used both to gather nearby party members and to count existing mobs. */
     private static final double GROUP_RADIUS = 64.0;
 
-    /** Night start/end in world ticks â€” matches NightSpawnBoostListener. */
+    /** Night start/end in world ticks — matches NightSpawnBoostListener. */
     private static final long NIGHT_START = 12_500L;
     private static final long NIGHT_END   = 23_000L;
 
-    /** Nightmare players contribute 4Ã— their normal cap during a storm night. */
+    /** Nightmare players contribute 4× their normal cap during a storm night. */
     private static final double STORM_NIGHT_NIGHTMARE_MULT = 4.0;
 
     /** Min/max random strength+speed multiplier applied to party storm mobs. */
@@ -92,14 +92,16 @@ public class MonsterCapListener implements Listener {
         this.plugin            = plugin;
         this.difficultyManager = difficultyManager;
         this.partyManager      = partyManager;
+        // Periodically despawn monsters lured into a No-Spawn Zone (crossing the boundary).
+        plugin.getServer().getScheduler().runTaskTimer(plugin, this::despawnNoSpawnZoneMonsters, 40L, 40L);
     }
 
-    // â”€â”€ Population cap enforcement â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Population cap enforcement ────────────────────────────────────────────
     // Runs at LOW priority so it gates spawns before DifficultyEngine (NORMAL)
     // and other stat-scaling listeners run.
 
     /** Radius (blocks) within which a No-Spawn Zone Block prevents all monster spawns. */
-    private static final double NO_SPAWN_ZONE_RADIUS = 500.0;
+    private static final double NO_SPAWN_ZONE_RADIUS = 25000.0;
     /** No-Spawn Zone Blocks only function in this world (case-insensitive). */
     private static final java.util.Set<String> NO_SPAWN_ZONE_WORLDS = java.util.Set.of("starter", "starter_mv");
 
@@ -135,6 +137,21 @@ public class MonsterCapListener implements Listener {
         return false;
     }
 
+    /** Removes any monster that has been lured across the No-Spawn Zone boundary. */
+    private void despawnNoSpawnZoneMonsters() {
+        if (noSpawnZones.isEmpty()) return;
+        for (String worldName : noSpawnZones.keySet()) {
+            World world = plugin.getServer().getWorld(worldName);
+            if (world == null) continue;
+            for (Monster mob : world.getEntitiesByClass(Monster.class)) {
+                if (mob.isDead()) continue;
+                if (isInNoSpawnZone(mob.getLocation())) {
+                    mob.remove();
+                }
+            }
+        }
+    }
+
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     public void onNoSpawnZoneCheck(CreatureSpawnEvent event) {
         if (!(event.getEntity() instanceof Monster)) return;
@@ -154,7 +171,7 @@ public class MonsterCapListener implements Listener {
 
 
         Player nearest = findNearestPlayer(loc, GROUP_RADIUS);
-        if (nearest == null) return; // no player nearby â€” let vanilla/server caps handle it
+        if (nearest == null) return; // no player nearby — let vanilla/server caps handle it
 
         boolean stormNight = isStormNight(world);
 
@@ -180,7 +197,7 @@ public class MonsterCapListener implements Listener {
         }
     }
 
-    // â”€â”€ Party storm strength/speed bonus â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Party storm strength/speed bonus ────────────────────────────────────────
     // Runs at HIGH priority so it stacks on top of DifficultyEngine's (NORMAL)
     // and NightSpawnBoostListener's (NORMAL) scaling, which run first.
 
@@ -218,14 +235,14 @@ public class MonsterCapListener implements Listener {
         }
 
         String existingName = mob.getCustomName();
-        String tag = "Â§4âš¡ Â§c[Storm x" + String.format("%.1f", mult) + "]";
+        String tag = "§4⚡ §c[Storm x" + String.format("%.1f", mult) + "]";
         mob.setCustomName(existingName == null || existingName.isEmpty() ? tag : existingName + " " + tag);
         mob.setCustomNameVisible(true);
     }
 
-    // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
-    /** True only during a genuine thunderstorm at night â€” plain rain/day gets no bonus. */
+    /** True only during a genuine thunderstorm at night — plain rain/day gets no bonus. */
     private boolean isStormNight(World world) {
         long time = world.getTime();
         boolean night = time >= NIGHT_START && time <= NIGHT_END;

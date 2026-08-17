@@ -103,6 +103,19 @@ public class NpcQuestSpawner implements Listener, CommandExecutor, TabCompleter 
 
     // ── Spawn / remove ────────────────────────────────────────────────────────
 
+    /**
+     * Public wrapper for external callers (e.g. QuestEggListener) to spawn a quest
+     * NPC by id at an arbitrary location. If an NPC for that quest already exists,
+     * does nothing and returns {@code false}.
+     */
+    public boolean spawnNpcById(int questId, Location loc) {
+        NpcQuestDef def = NpcQuestRegistry.byId(questId);
+        if (def == null) return false;
+        if (npcEntityMap.containsKey(questId)) return false;
+        spawnNpc(def, loc, false);
+        return true;
+    }
+
     private Villager spawnNpc(NpcQuestDef def, Location loc, boolean silent) {
         Villager v = (Villager) loc.getWorld().spawnEntity(loc, EntityType.VILLAGER);
         v.setCustomName(colourName(def));

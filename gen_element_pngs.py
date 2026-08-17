@@ -37,7 +37,12 @@ logic (this script re-zips itself at the end, recomputing SHA1).
                                               file)
     WATER -> ICE                  CMD 3002
     EARTH -> CLAY_BALL            CMD 3003
-    AIR   -> PAPER                CMD 3004
+    AIR   -> SUGAR                CMD 3004   (was PAPER; changed because the Nexo
+                                              plugin also assigns custom PAPER-based
+                                              furniture models, which silently shadowed
+                                              our paper.json override and made the Air
+                                              Rune render as a door. SUGAR is not used
+                                              by Nexo's defaults, so it's collision-safe.)
 """
 
 import os, json, zlib, struct, zipfile, hashlib
@@ -64,7 +69,7 @@ RUNE_TARGETS = {
     "fire":  ("nether_brick", 3001),
     "water": ("ice",          3002),
     "earth": ("clay_ball",    3003),
-    "air":   ("paper",        3004),
+    "air":   ("sugar",        3004),
 }
 
 # ── 16x16 STAFF pixel template (diagonal rod with glowing orb tip) ──────────

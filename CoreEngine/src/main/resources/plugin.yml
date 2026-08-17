@@ -1,0 +1,107 @@
+name: CoreEngine
+version: 1.0.0
+main: net.yourserver.coreengine.CoreEngine
+api-version: '1.21'
+softdepend: [Vault]
+author: YourServerTeam
+description: Custom SMP Core Engine handling Market, Spawners, Homes, Shards, and Create a Ville settings.
+
+commands:
+  market:
+    description: Opens the market or teleports to Market NPC.
+    usage: /market
+    permission: coreengine.use
+  sell:
+    description: Sell held item stack on the market.
+    usage: /sell <price> | /sell worth <price>
+    permission: coreengine.use
+  buy:
+    description: Create a market buy order.
+    usage: /buy <item_type> <amount> <price_per_item>
+    permission: coreengine.use
+  givemember:
+    description: Admin command to grant rank tiers (1, 2, 3).
+    usage: /givemember <player> <1|2|3>
+    permission: coreengine.admin
+  home:
+    description: Open homes GUI or teleport to saved slot.
+    permission: coreengine.use
+  sethome:
+    description: Save a home at your current location.
+    usage: /sethome <slot>
+    permission: coreengine.use
+  delhome:
+    description: Delete a saved home.
+    usage: /delhome <slot>
+    permission: coreengine.use
+  tp:
+    description: Teleport to another player.
+    usage: /tp <player>
+    permission: coreengine.use
+  tphere:
+    description: Teleport a player to you.
+    usage: /tphere <player>
+    permission: coreengine.use
+  tpauto:
+    description: Toggle auto-accept of teleport requests.
+    usage: /tpauto
+    permission: coreengine.use
+  pay:
+    description: Pay money to another player.
+    usage: /pay <player> <amount>
+    permission: coreengine.use
+  bal:
+    description: Check your balance.
+    usage: /bal
+    permission: coreengine.use
+  rtp:
+    description: Teleport to a random location in the world.
+    usage: /rtp
+    permission: coreengine.use
+  mod:
+    description: Toggle spectator mode to watch players.
+    usage: /mod [player]
+    permission: coreengine.admin
+  ban:
+    description: Ban a player.
+    usage: /ban <player> [reason]
+    permission: coreengine.admin
+  kick:
+    description: Kick a player.
+    usage: /kick <player> [reason]
+    permission: coreengine.admin
+  region:
+    description: Create/delete protected regions from your selection.
+    usage: /region <create|delete|list> [name]
+    permission: coreengine.admin
+  markon:
+    description: Spawn safe-zone selection stick.
+    permission: coreengine.admin
+  markoff:
+    description: Despawn safe-zone selection stick and clear grid.
+    permission: coreengine.admin
+  wandsecure:
+    description: Secure/unsecure an area (owner-only).
+    usage: /wandsecure [on|off]
+    permission: coreengine.admin
+  monstergrid:
+    description: Manage the Market safe-zone monster-exclusion grid.
+    usage: /monstergrid [on|off|radius <n>|reload]
+    permission: coreengine.admin
+  shards:
+    description: Open the AFK Shard Shop.
+    permission: coreengine.use
+  settings:
+    description: Open Create a Ville settings GUI.
+    permission: coreengine.use
+  toggle:
+    description: Toggle HUD and chat settings.
+    permission: coreengine.use
+
+permissions:
+  coreengine.use:
+    description: Allows players to use standard CoreEngine features (market, sell, buy, home, shards, settings, toggle).
+    default: true
+  coreengine.admin:
+    description: Allows use of admin-only CoreEngine commands (givemember, markon, markoff).
+    default: op

@@ -100,22 +100,32 @@ public class LightningChargeManager implements Listener {
         if (itemFactory.isChargedMagicBottle(item)) {
             event.setCancelled(true);
             Player player = event.getPlayer();
-            
-            // Consume the item
-            if (item.getAmount() > 1) {
-                item.setAmount(item.getAmount() - 1);
+
+            // Consume one from the ACTUAL held stack. getItem() returns a CLONE
+            // and setItem() does NOT write back when the event is cancelled, so
+            // we must decrement the real inventory slot directly (otherwise a
+            // stack of 2+ never decrements -> infinite-bottle glitch).
+            EquipmentSlot hand = event.getHand();
+            ItemStack held = (hand == EquipmentSlot.HAND)
+                    ? player.getInventory().getItemInMainHand()
+                    : player.getInventory().getItemInOffHand();
+            if (held != null && held.getAmount() > 1) {
+                held.setAmount(held.getAmount() - 1);
             } else {
-                player.getInventory().setItem(event.getHand() == EquipmentSlot.HAND ? 
-                    player.getInventory().getHeldItemSlot() : 40, new ItemStack(Material.AIR));
+                if (hand == EquipmentSlot.HAND) {
+                    player.getInventory().setItemInMainHand(new ItemStack(Material.AIR));
+                } else {
+                    player.getInventory().setItemInOffHand(new ItemStack(Material.AIR));
+                }
             }
-            
+
             // Give empty bottle back
             player.getInventory().addItem(itemFactory.buildEmptyMagicBottle()).values().forEach(
                 dropped -> player.getWorld().dropItemNaturally(player.getLocation(), dropped)
             );
-            
+
             int magicLevel = skillManager.getLevel(player.getUniqueId(), SkillType.MAGIC);
-            
+
             if (magicLevel >= 99) {
                 // Add 4 charges for Lightning Strike (capped at MAX_CHARGES)
                 int added = addCharges(player, 4);

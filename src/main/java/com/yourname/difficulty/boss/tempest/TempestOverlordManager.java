@@ -23,21 +23,21 @@ import org.bukkit.util.Vector;
 import java.util.*;
 
 /**
- * TempestOverlordManager â€” manages the colossal Â§5âš¡ Tempest OverlordÂ§r boss.
+ * TempestOverlordManager — manages the colossal §5⚡ Tempest Overlord§r boss.
  *
- * â”€â”€ Clean custom-entity architecture â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+ * ── Clean custom-entity architecture ────────────────────────────────────────
  * The Overlord is composed of TWO paired entities:
  *
- *  1. Â§7Flight carrierÂ§r â€” a completely Â§finvisible, silentÂ§r {@link Phantom}
+ *  1. §7Flight carrier§r — a completely §finvisible, silent§r {@link Phantom}
  *     used ONLY for its native flight AI/pathing, hitbox, and damage/death
  *     handling. Its vanilla bat-like model is never rendered to the client.
  *
- *  2. Â§7Visual displayÂ§r â€” a single fixed-orientation {@link ItemDisplay}
+ *  2. §7Visual display§r — a single fixed-orientation {@link ItemDisplay}
  *     showing the custom Blockbench {@code tempest_boss} cloud/tornado
  *     model, slowly rotating in place, with orbiting GUST wind particles
  *     around it for atmosphere.
  *
- * â”€â”€ "Walks through walls" (v2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+ * ── "Walks through walls" (v2) ──────────────────────────────────────────────
  * The Overlord shatters ANY non-indestructible solid block in its immediate
  * flight path (not just "cave" materials), so it can truly plow straight
  * through walls/structures without ever slowing down.
@@ -60,14 +60,14 @@ public class TempestOverlordManager implements Listener {
     private final BossEffectListener bossEffectListener;
     private final CrimsonBossManager crimsonBossManager;
     private final Random random = new Random();
-    /** UUIDs of currently-alive Tempest Overlord carriers â€” used to gate the death drop. */
+    /** UUIDs of currently-alive Tempest Overlord carriers — used to gate the death drop. */
     private final Set<UUID> activeTempestUuids = new HashSet<>();
-    /** Carrier UUID â†’ paired tempest_boss display UUID (position-synced every tick). */
+    /** Carrier UUID → paired tempest_boss display UUID (position-synced every tick). */
     private final Map<UUID, UUID> carrierToDisplay = new HashMap<>();
-    /** Carrier UUID â†’ current spin angle (radians), advanced each sync tick. */
+    /** Carrier UUID → current spin angle (radians), advanced each sync tick. */
     private final Map<UUID, Double> spinAngles = new HashMap<>();
 
-    /** Optional ItemFactory â€” wired in via setter to avoid constructor churn elsewhere. */
+    /** Optional ItemFactory — wired in via setter to avoid constructor churn elsewhere. */
     private ItemFactory itemFactory = null;
 
     private final NamespacedKey displayTagKey;
@@ -136,10 +136,10 @@ public class TempestOverlordManager implements Listener {
         // Rebuild Tempest Sanctum before spawning to repair any block breaks
         crimsonBossManager.rebuildArena(null, loc);
 
-        // â”€â”€ 1. Invisible flight carrier (physics/AI/hitbox only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── 1. Invisible flight carrier (physics/AI/hitbox only) ─────────────
         Phantom phantom = (Phantom) loc.getWorld().spawnEntity(loc, EntityType.PHANTOM);
         phantom.setCustomNameVisible(false); // name lives on the display instead
-        phantom.setSize(4); // small hitbox â€” visual size comes entirely from the display
+        phantom.setSize(4); // small hitbox — visual size comes entirely from the display
         phantom.setRemoveWhenFarAway(false);
         phantom.setInvisible(true);
         phantom.setSilent(true);
@@ -159,7 +159,7 @@ public class TempestOverlordManager implements Listener {
         bossEffectListener.registerBoss(phantom);
         bossEffectListener.spawnShriek(phantom);
 
-        // â”€â”€ 2. Custom tempest_boss cloud/tornado visual â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── 2. Custom tempest_boss cloud/tornado visual ──────────────────────
         ItemDisplay display = spawnOverlordDisplay(phantom);
         carrierToDisplay.put(phantom.getUniqueId(), display.getUniqueId());
         spinAngles.put(phantom.getUniqueId(), 0.0);
@@ -183,7 +183,7 @@ public class TempestOverlordManager implements Listener {
 
                 aiTick++;
 
-                // â”€â”€ 1. Target Tracking & Aggressive Dive AI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                // ── 1. Target Tracking & Aggressive Dive AI ──────────────────
                 Player target = null;
                 double closestDist = 80.0;
                 for (Player p : phantom.getWorld().getPlayers()) {
@@ -213,7 +213,7 @@ public class TempestOverlordManager implements Listener {
                         phantom.setVelocity(blended);
                     }
 
-                    // â”€â”€ 2. Attack 1: Fire-Spitting (every 50 ticks / 2.5 seconds) â”€â”€
+                    // ── 2. Attack 1: Fire-Spitting (every 50 ticks / 2.5 seconds) ──
                     if (aiTick % 50 == 0) {
                         Location origin = phantom.getLocation().add(0, 1.0, 0);
                         Vector spitDir = pLoc.toVector().subtract(origin.toVector()).normalize();
@@ -228,10 +228,10 @@ public class TempestOverlordManager implements Listener {
 
                         phantom.getWorld().playSound(phantom.getLocation(), Sound.ENTITY_PHANTOM_BITE, 2.0f, 0.5f);
                         phantom.getWorld().playSound(phantom.getLocation(), Sound.ENTITY_BLAZE_SHOOT, 1.5f, 0.8f);
-                        target.sendActionBar("Â§5âš¡ Â§cThe Tempest Overlord spits Hellfire! Dodge!");
+                        target.sendActionBar("§5⚡ §cThe Tempest Overlord spits Hellfire! Dodge!");
                     }
 
-                    // â”€â”€ 3. Attack 2: Thunderstorm Strikes (every 80 ticks / 4 seconds) â”€â”€
+                    // ── 3. Attack 2: Thunderstorm Strikes (every 80 ticks / 4 seconds) ──
                     if (aiTick % 80 == 0) {
                         Location targetLoc = target.getLocation();
                         phantom.getWorld().strikeLightningEffect(targetLoc);
@@ -241,12 +241,12 @@ public class TempestOverlordManager implements Listener {
                         target.setFireTicks(60);
 
                         phantom.getWorld().spawnParticle(Particle.EXPLOSION_EMITTER, targetLoc, 2, 0.5, 0.5, 0.5, 0);
-                        target.sendMessage("Â§5âš¡ Â§dLightning strikes from the Tempest! Â§cUse Earth magic or dodge!");
+                        target.sendMessage("§5⚡ §dLightning strikes from the Tempest! §cUse Earth magic or dodge!");
                         target.playSound(targetLoc, Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 1.5f, 0.8f);
                     }
                 }
 
-                // â”€â”€ 4. "Walks through walls" â€” shatter ANY solid block in its path â”€â”€
+                // ── 4. "Walks through walls" — shatter ANY solid block in its path ──
                 if (aiTick % 5 == 0) {
                     Location center = phantom.getLocation();
                     World world = phantom.getWorld();
@@ -258,7 +258,7 @@ public class TempestOverlordManager implements Listener {
                     }
                 }
 
-                // â”€â”€ 5. Ambient Tornado Wind â€” dimmed core particles + more gust â”€â”€
+                // ── 5. Ambient Tornado Wind — dimmed core particles + more gust ──
                 if (aiTick % 4 == 0) {
                     phantom.getWorld().spawnParticle(Particle.CLOUD, phantom.getLocation().add(0, 1.0, 0), 6, 1.6, 1.0, 1.6, 0.04);
                 }
@@ -280,12 +280,12 @@ public class TempestOverlordManager implements Listener {
         for (Player p : loc.getWorld().getPlayers()) {
             if (p.getLocation().distance(loc) > 120) continue;
             p.sendMessage("");
-            p.sendMessage("Â§5âš¡ Â§bÂ§lâ›ˆ THE TEMPEST OVERLORD HAS AWAKENED! â›ˆ Â§5âš¡");
-            p.sendMessage("Â§7The Tempest Sanctum Â§5cracklesÂ§7 with deadly storm energy!");
-            p.sendMessage("Â§6âš  Â§eBring Â§7Air Â§eand Â§7Water Â§emagic â€” lightning is everywhere!");
-            p.sendMessage("Â§5âš  Â§dDestroy its Â§5Shriek Â§5âš¡ Â§dwith an Â§bAir Staff Â§dto expose its weakness!");
+            p.sendMessage("§5⚡ §b§l⛈ THE TEMPEST OVERLORD HAS AWAKENED! ⛈ §5⚡");
+            p.sendMessage("§7The Tempest Sanctum §5crackles§7 with deadly storm energy!");
+            p.sendMessage("§6⚠ §eBring §7Air §eand §7Water §emagic — lightning is everywhere!");
+            p.sendMessage("§5⚠ §dDestroy its §5Shriek §5⚡ §dwith an §bAir Staff §dto expose its weakness!");
             p.sendMessage("");
-            p.sendTitle("Â§5Â§lâš¡ BOSS AWAKENS!", "Â§7Â§oThe Tempest Overlord roars...", 10, 70, 20);
+            p.sendTitle("§5§l⚡ BOSS AWAKENS!", "§7§oThe Tempest Overlord roars...", 10, 70, 20);
             p.playSound(p.getLocation(), Sound.ENTITY_WITHER_SPAWN, 1.0f, 1.0f);
         }
 
@@ -316,7 +316,7 @@ public class TempestOverlordManager implements Listener {
     }
 
     /**
-     * Builds the Tempest Overlord's custom Blockbench cloud/tornado visual â€”
+     * Builds the Tempest Overlord's custom Blockbench cloud/tornado visual —
      * a fixed-orientation ItemDisplay showing the tempest_boss model,
      * entirely independent from the invisible Phantom carrier underneath.
      * Slowly rotates in place each tick to feel alive.
@@ -325,12 +325,12 @@ public class TempestOverlordManager implements Listener {
         return com.yourname.difficulty.boss.BossDisplayUtil.spawnDisplay(
                 carrier, 0.0, Material.BREEZE_ROD, 3002, OVERLORD_DISPLAY_SCALE,
                 9, 9,
-                "Â§5âš¡ Â§lÂ§dThe Tempest Overlord",
+                "§5⚡ §l§dThe Tempest Overlord",
                 displayTagKey,
                 Display.Billboard.FIXED);
     }
 
-    // â”€â”€ Death drop: 0.2% Sandstorm Book (Tempest Overlord ONLY) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Death drop: 0.2% Sandstorm Book (Tempest Overlord ONLY) ────────────────
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onTempestDeath(EntityDeathEvent event) {
         UUID uuid = event.getEntity().getUniqueId();
@@ -351,7 +351,7 @@ public class TempestOverlordManager implements Listener {
             loc.getWorld().dropItemNaturally(loc, itemFactory.buildSandstormBook());
             for (Player p : loc.getWorld().getPlayers()) {
                 if (p.getLocation().distanceSquared(loc) <= 10000.0) {
-                    p.sendMessage("Â§6âœ¦ Â§eÂ§lTHE SANDSTORM BOOK Â§7dropped from the Â§5Tempest OverlordÂ§7!");
+                    p.sendMessage("§6✦ §e§lTHE SANDSTORM BOOK §7dropped from the §5Tempest Overlord§7!");
                 }
             }
         }

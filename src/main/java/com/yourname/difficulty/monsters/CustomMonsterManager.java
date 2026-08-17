@@ -110,12 +110,12 @@ public class CustomMonsterManager implements Listener {
     private void saveDefaultConfig() {
         if (configFile.exists()) return;
         String defaultContent =
-            "# DifficultyEngine â€” Custom Monster Definitions\n" +
+            "# DifficultyEngine - Custom Monster Definitions\n" +
             "# \n" +
             "# monsters:\n" +
             "#   <monster_id>:\n" +
             "#     base_mob:  <ENTITY_TYPE>   # invisible physics/hitbox carrier only\n" +
-            "#     name:      \"<display name>\" # supports Â§colour codes\n" +
+            "#     name:      \"<display name>\" # supports §colour codes\n" +
             "#     health:    <number>\n" +
             "#     damage:    <number>\n" +
             "#     speed:     <number>\n" +
@@ -130,7 +130,7 @@ public class CustomMonsterManager implements Listener {
             "monsters:\n" +
             "  ghost_boss:\n" +
             "    base_mob: SKELETON\n" +
-            "    name: \"Â§5The Ghost\"\n" +
+            "    name: \"§5The Ghost\"\n" +
             "    health: 500\n" +
             "    damage: 15\n" +
             "    speed: 1.4\n" +
@@ -145,7 +145,7 @@ public class CustomMonsterManager implements Listener {
             "\n" +
             "  lava_titan:\n" +
             "    base_mob: ZOMBIE\n" +
-            "    name: \"Â§cÂ§lLava Titan\"\n" +
+            "    name: \"§c§lLava Titan\"\n" +
             "    health: 800\n" +
             "    damage: 22\n" +
             "    speed: 0.9\n" +
@@ -161,7 +161,7 @@ public class CustomMonsterManager implements Listener {
             "\n" +
             "  wind_wraith:\n" +
             "    base_mob: PHANTOM\n" +
-            "    name: \"Â§fÂ§lWind Wraith\"\n" +
+            "    name: \"§f§lWind Wraith\"\n" +
             "    health: 300\n" +
             "    damage: 12\n" +
             "    speed: 1.8\n" +
@@ -172,7 +172,22 @@ public class CustomMonsterManager implements Listener {
             "      - PHANTOM_MEMBRANE:4\n" +
             "      - FEATHER:16\n" +
             "    effects:\n" +
-            "      - SHRIEK_AURA\n";
+            "      - SHRIEK_AURA\n" +
+            "\n" +
+            "  giant_zombie:\n" +
+            "    base_mob: ZOMBIE\n" +
+            "    name: \"§2§lGiant Flesh Brute\"\n" +
+            "    health: 1600\n" +
+            "    damage: 30\n" +
+            "    speed: 0.85\n" +
+            "    display_item: ZOMBIE_HEAD\n" +
+            "    display_model_data: 0\n" +
+            "    display_scale: 2.8\n" +
+            "    drops:\n" +
+            "      - ROTTEN_FLESH:24\n" +
+            "      - BONE:12\n" +
+            "      - IRON_INGOT:3\n" +
+            "    effects: []\n";
 
         try {
             configFile.getParentFile().mkdirs();
@@ -413,6 +428,39 @@ public class CustomMonsterManager implements Listener {
 
     /** Reloads monster definitions from disk. */
     public void reload() { loadDefinitions(); }
+
+    /**
+     * Removes custom monster carrier entities (and their paired visual displays)
+     * from every loaded world.
+     *
+     * @param monsterId if non-null, only removes carriers of that specific monster
+     *                  id (case-insensitive); if null, removes ALL custom monsters.
+     * @return the number of carrier entities removed.
+     */
+    public int removeMonsters(String monsterId) {
+        int removed = 0;
+        String targetId = monsterId != null ? monsterId.toLowerCase() : null;
+
+        for (World world : plugin.getServer().getWorlds()) {
+            for (Entity entity : world.getEntities()) {
+                if (!(entity instanceof LivingEntity le)) continue;
+                String id = le.getPersistentDataContainer()
+                        .getOrDefault(customMobKey, PersistentDataType.STRING, null);
+                if (id == null) continue;
+                if (targetId != null && !id.equalsIgnoreCase(targetId)) continue;
+
+                UUID carrierUuid = le.getUniqueId();
+                UUID displayUuid = carrierToDisplay.remove(carrierUuid);
+                if (displayUuid != null) {
+                    Entity display = plugin.getServer().getEntity(displayUuid);
+                    if (display != null && !display.isDead()) display.remove();
+                }
+                le.remove();
+                removed++;
+            }
+        }
+        return removed;
+    }
 
     /** Sweeps all orphaned custom-monster displays and cancels the sync task (call on plugin disable). */
     public void cleanup() {

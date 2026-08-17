@@ -79,14 +79,14 @@ public class MeleeGearCraftListener implements Listener {
         if (recipeKey.equals("melee_netherite_boots"))
             return itemFactory.buildMeleeGearPiece(MeleeGearTier.NETHERITE, Material.NETHERITE_BOOTS,      "Boots");
 
-        // ── DRAGON ────────────────────────────────────────────────────────────
-        if (recipeKey.equals("melee_dragon_helmet"))
+        // ── DRAGON (gated behind Dragon Armour Page — see DragonArmourPageDropListener) ──
+        if (recipeKey.equals("dragon_armour_helmet"))
             return itemFactory.buildMeleeGearPiece(MeleeGearTier.DRAGON, Material.NETHERITE_HELMET,     "Helmet");
-        if (recipeKey.equals("melee_dragon_chestplate"))
+        if (recipeKey.equals("dragon_armour_chestplate"))
             return itemFactory.buildMeleeGearPiece(MeleeGearTier.DRAGON, Material.NETHERITE_CHESTPLATE, "Chestplate");
-        if (recipeKey.equals("melee_dragon_leggings"))
+        if (recipeKey.equals("dragon_armour_leggings"))
             return itemFactory.buildMeleeGearPiece(MeleeGearTier.DRAGON, Material.NETHERITE_LEGGINGS,   "Leggings");
-        if (recipeKey.equals("melee_dragon_boots"))
+        if (recipeKey.equals("dragon_armour_boots"))
             return itemFactory.buildMeleeGearPiece(MeleeGearTier.DRAGON, Material.NETHERITE_BOOTS,      "Boots");
 
         return null;

@@ -37,7 +37,7 @@ import java.util.List;
  */
 public class RegistryGUI {
 
-    public static final int    PAGE_COUNT     = 11;
+    public static final int    PAGE_COUNT     = 18;
     public static final int    ITEMS_PER_PAGE = 45;
     private static final int   SIZE           = 54;
     private static final int   SLOT_PREV      = 45;
@@ -58,7 +58,14 @@ public class RegistryGUI {
         "§dCapes & Cosmetics",   // 8
         "§5Support Staff",       // 9
         "§b⚡ Lightning Magic",  // 10
-        "§4Boss Spawners"        // 11
+        "§4Boss Spawners",       // 11
+        "§aQuest Eggs 1/7",      // 12
+        "§aQuest Eggs 2/7",      // 13
+        "§aQuest Eggs 3/7",      // 14
+        "§aQuest Eggs 4/7",      // 15
+        "§aQuest Eggs 5/7",      // 16
+        "§aQuest Eggs 6/7",      // 17
+        "§aQuest Eggs 7/7"       // 18
     };
 
     private final ItemFactory itemFactory;
@@ -203,6 +210,8 @@ public class RegistryGUI {
                 "§7Page §e8§8:  §dCapes & Cosmetics",
                 "§7Page §e9§8:  §5Support Staff",
                 "§7Page §e10§8: §b⚡ Lightning Magic",
+                "§7Page §e11§8: §4Boss Spawners",
+                "§7Page §e12-18§8: §aQuest NPC Eggs (all 306)",
                 "§8" + "─".repeat(24),
                 "§8Clicking any item gives you a copy.",
                 "§8[DifficultyEngine — Item Registry]"

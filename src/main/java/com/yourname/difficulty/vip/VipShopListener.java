@@ -373,6 +373,20 @@ public class VipShopListener implements Listener {
         return villager.getPersistentDataContainer().has(vipVillagerKey, PersistentDataType.BYTE);
     }
 
+    /** Removes every VIP Shop Keeper villager currently spawned in any loaded world. */
+    public int removeVipKeepers() {
+        int removed = 0;
+        for (org.bukkit.World world : plugin.getServer().getWorlds()) {
+            for (Entity entity : world.getEntities()) {
+                if (entity instanceof Villager v && isVipShopKeeper(v)) {
+                    v.remove();
+                    removed++;
+                }
+            }
+        }
+        return removed;
+    }
+
     /** Prevent VIP shop keepers from taking damage. */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onVipDamage(EntityDamageEvent event) {

@@ -21,7 +21,7 @@ import org.bukkit.Material;
  *   Air   Staff: Enchanted Shard + PHANTOM_MEMBRANE  + STICK
  *
  * Rune crafting (shapeless, 4 base material → 8 runes):
- *   Fire  Rune: 4× NETHER_BRICK       → 8× Fire Rune
+ *   Fire  Rune: 4× BLAZE_POWDER       → 8× Fire Rune
  *   Water Rune: 4× ICE                → 8× Water Rune
  *   Earth Rune: 4× CLAY_BALL          → 8× Earth Rune
  *   Air   Rune: 4× FEATHER            → 8× Air Rune
@@ -30,11 +30,12 @@ public enum MagicElement {
 
     FIRE (
         "fire_staff",  "fire_rune",
-        Material.BLAZE_ROD,         Material.NETHER_BRICK,
-        Material.BLAZE_ROD,         Material.NETHER_BRICK,
+        Material.BLAZE_ROD,         Material.BLAZE_POWDER,
+        Material.BLAZE_ROD,         Material.BLAZE_POWDER,
         "§c🔥 Fire Staff",           "§c🔥 Fire Rune",
         "§c", 2001, 3001
     ),
+
     WATER(
         "water_staff", "water_rune",
         Material.PRISMARINE_CRYSTALS, Material.PRISMARINE_SHARD,
@@ -51,7 +52,7 @@ public enum MagicElement {
     ),
     AIR  (
         "air_staff",   "air_rune",
-        Material.FEATHER,           Material.PAPER,
+        Material.FEATHER,           Material.SUGAR,
         Material.PHANTOM_MEMBRANE,  Material.FEATHER,
         "§f⚡ Air Staff",            "§f⚡ Air Rune",
         "§f", 2004, 3004

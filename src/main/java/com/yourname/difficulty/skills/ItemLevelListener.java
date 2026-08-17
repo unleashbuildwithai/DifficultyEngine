@@ -1,6 +1,7 @@
 package com.yourname.difficulty.skills;
 
 import com.yourname.difficulty.skills.ItemLevelRequirements.LevelRequirement;
+import com.yourname.difficulty.items.ItemFactory;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -45,9 +46,23 @@ public class ItemLevelListener implements Listener {
     private static final int HOTBAR_SIZE = 9;
 
     private final SkillManager skillManager;
+    private final ItemFactory itemFactory;
 
-    public ItemLevelListener(SkillManager skillManager) {
+    public ItemLevelListener(SkillManager skillManager, ItemFactory itemFactory) {
         this.skillManager = skillManager;
+        this.itemFactory = itemFactory;
+    }
+
+    /**
+     * Returns the correct level requirement for an item, checking custom
+     * PDC-tagged weapons first (their real requirement, not their base
+     * material's requirement — e.g. GunZ Sword is a Netherite sword but needs
+     * Melee 99, not 70).
+     */
+    private LevelRequirement getRequirement(ItemStack item) {
+        if (itemFactory.isGunZSword(item)) return new LevelRequirement(SkillType.MELEE, 99);
+        if (itemFactory.isDarkBow(item)) return new LevelRequirement(SkillType.RANGED, 70);
+        return ItemLevelRequirements.getRequirement(item);
     }
 
     // ── 1. Crafting block ─────────────────────────────────────────────────────
@@ -58,7 +73,7 @@ public class ItemLevelListener implements Listener {
         if (hasBypass(player)) return;
 
         ItemStack result = event.getRecipe().getResult();
-        LevelRequirement req = ItemLevelRequirements.getRequirement(result);
+        LevelRequirement req = getRequirement(result);
         if (req == null) return;
 
         int playerLevel = skillManager.getLevel(player.getUniqueId(), req.skill());
@@ -118,7 +133,7 @@ public class ItemLevelListener implements Listener {
             if (clicked != null && !clicked.getType().isAir()) {
                 // Only block shift-clicks from non-hotbar slots going TO hotbar
                 if (slot >= HOTBAR_SIZE) {
-                    LevelRequirement req = ItemLevelRequirements.getRequirement(clicked);
+                    LevelRequirement req = getRequirement(clicked);
                     if (req != null) return clicked; // will be blocked by caller
                 }
             }
@@ -138,35 +153,19 @@ public class ItemLevelListener implements Listener {
         ItemStack item = player.getInventory().getItem(event.getNewSlot());
         if (item == null || item.getType().isAir()) return;
 
-        LevelRequirement req = ItemLevelRequirements.getRequirement(item);
+        LevelRequirement req = getRequirement(item);
         if (req == null) return;
 
         UUID uuid = player.getUniqueId();
         int playerLevel = skillManager.getLevel(uuid, req.skill());
         if (playerLevel >= req.requiredLevel()) return;
 
-        // Player can't use this item — remove it from the hotbar slot
-        player.getInventory().setItem(event.getNewSlot(), null);
-
-        // Try to put it in a non-hotbar inventory slot
-        boolean added = false;
-        PlayerInventory inv = player.getInventory();
-        for (int slot = HOTBAR_SIZE; slot < inv.getSize(); slot++) {
-            ItemStack existing = inv.getItem(slot);
-            if (existing == null || existing.getType().isAir()) {
-                inv.setItem(slot, item);
-                added = true;
-                break;
-            }
-        }
-
-        if (!added) {
-            // Inventory full — drop on ground
-            player.getWorld().dropItemNaturally(player.getLocation(), item);
-        }
+        // Player can't use this item — revert the slot change so the item
+        // stays in their inventory, and just tell them why (no dropping).
+        player.getInventory().setHeldItemSlot(event.getPreviousSlot());
 
         player.sendMessage("§c✗ §7Requires " + req.formatRequirement()
-                + " §7— moved to inventory.");
+                + " §7to use this!");
         player.sendMessage("  §7Your level: §e" + playerLevel
                 + " §8/ §a" + req.requiredLevel());
     }

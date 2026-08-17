@@ -62,6 +62,12 @@ public class ItemFactory {
     public static final String RAINBOW_AXOLOTL_KEY   = "rainbow_axolotl";
     public static final String BLAZEFIEND_SPAWNER_KEY = "de_blazefiend_spawner";
 
+    // ── Dragon Armour crafting gate ─────────────────────────────────────────
+    /** 1% boss drop (Wither/Ender Dragon/Crimson/Void/Tempest) — unlocks + is consumed by the Dragon Armour recipes. */
+    public static final String DRAGON_ARMOUR_PAGE_KEY   = "de_dragon_armour_page";
+    /** PDC integer key holding the quest id on a Quest NPC Egg item. */
+    public static final String QUEST_EGG_ID_KEY         = "de_quest_egg_id";
+
     // ── Lightning Cosmetic Potions ──
     public static final String CLASSIC_LIGHTNING_POTION_KEY    = "classic_lightning_potion";
     public static final String FIRE_SPARK_LIGHTNING_POTION_KEY = "fire_spark_lightning_potion";
@@ -136,6 +142,8 @@ public class ItemFactory {
     private final NamespacedKey rangedGearKey;
     private final NamespacedKey rainbowAxolotlKey;
     private final NamespacedKey blazefiendSpawnerKey;
+    private final NamespacedKey dragonArmourPageKey;
+    private final NamespacedKey questEggIdKey;
 
     // ── Lightning Cosmetic Potions ──
     private final NamespacedKey classicLightningPotionKey;
@@ -233,6 +241,8 @@ public class ItemFactory {
         this.rangedGearKey      = new NamespacedKey(plugin, RANGED_GEAR_KEY);
         this.rainbowAxolotlKey      = new NamespacedKey(plugin, RAINBOW_AXOLOTL_KEY);
         this.blazefiendSpawnerKey   = new NamespacedKey(plugin, BLAZEFIEND_SPAWNER_KEY);
+        this.dragonArmourPageKey    = new NamespacedKey(plugin, DRAGON_ARMOUR_PAGE_KEY);
+        this.questEggIdKey          = new NamespacedKey(plugin, QUEST_EGG_ID_KEY);
 
         // ── Lightning Cosmetic Potions ──
         this.classicLightningPotionKey   = new NamespacedKey(plugin, CLASSIC_LIGHTNING_POTION_KEY);
@@ -556,11 +566,18 @@ public class ItemFactory {
         lore.add("§8" + "─".repeat(26));
         lore.add("§7Element: " + element.color + element.name());
         lore.add("§8" + "─".repeat(26));
+        lore.add("§7Requires: §aMagic Lv 1");
         lore.add(switch (element) {
-            case FIRE  -> "§7Right-click → §claunches a fireball§7.";
-            case WATER -> "§7Right-click on ground (+ bucket) → §b5-block river§7.";
-            case EARTH -> "§7Right-click → §2throws a block§7 (Lv10+: use blocks in inventory).";
-            case AIR   -> "§7On ground → §7air gust. In air → §7hover (slow fall)§7.";
+            case FIRE  -> "§8Left-click: §cFireball §7(projectile)";
+            case WATER -> "§8Left-click: §bWater bolt §7(projectile)";
+            case EARTH -> "§8Left-click: §2Throw block §7(Earth Book + block)";
+            case AIR   -> "§8Left-click: §fAir gust §7(knockback)";
+        });
+        lore.add(switch (element) {
+            case FIRE  -> "§8Right-click: §eLightning Strike §7(Lv 99)";
+            case WATER -> "§8Right-click: §bDownpour §7(Lv 99)";
+            case EARTH -> "§8Right-click: §2Sand Rain §7(Lv 99)";
+            case AIR   -> "§8Right-click: §fHover §7(slow fall / flight)";
         });
         lore.add("§8▶ Air gust power scales with §5mage gear §8equipped.");
         lore.add("§8" + "─".repeat(26));
@@ -718,6 +735,7 @@ public class ItemFactory {
                 "§8" + "─".repeat(22),
                 "§7Consumed when casting with the",
                 element.color + element.name() + " Staff§7.",
+                "§7Mechanic: §8fuels §7" + element.color + element.name() + " §7spells",
                 "§8" + "─".repeat(22),
                 "§6Craft: §74× " + element.runeCraftIngredient.name() + " §8→ §68× Rune",
                 "§8[DifficultyEngine — Magic Rune]"
@@ -739,6 +757,7 @@ public class ItemFactory {
             meta.setLore(List.of(
                 "§8" + "─".repeat(22),
                 "§7Magical dust — drops from " + dustMobSource(element) + "§7.",
+                "§7Mechanic: §8crafts into §7" + element.runeName,
                 "§6Craft: §74× this §7→ §68× " + element.runeName,
                 "§8[DifficultyEngine — Rune Dust]"
             ));
@@ -915,29 +934,24 @@ public class ItemFactory {
     }
 
     public ItemStack buildEarthBook() {
-        ItemStack item = new ItemStack(Material.WRITTEN_BOOK);
-        BookMeta meta = (BookMeta) item.getItemMeta();
+        ItemStack item = new ItemStack(Material.ENCHANTED_BOOK);
+        ItemMeta meta = item.getItemMeta();
         if (meta != null) {
-            meta.setTitle("§2The Earth Book");
-            meta.setAuthor("§7Earth Archmage");
-            meta.setGeneration(BookMeta.Generation.ORIGINAL);
-            meta.addPage(
-                "§2§l─ The Earth Book ─\n\n" +
-                "§7Requires §aMagic Level 10§7+.\n\n" +
-                "§7Enables throwing heavy blocks from your inventory on Right-Click.\n\n" +
-                "§aSmart Downgrading:\n" +
-                "§7If you exhaust a higher-tier block, the system automatically checks for the next highest valid page/block combo."
-            );
-            meta.addPage(
-                "§2§l─ Block Throwing ─\n\n" +
-                "§71st Right-Click: §2TRAPS §7the target (places block at their feet).\n\n" +
-                "§72nd Right-Click: §c§lSUFFOCATES §7the target (deals massive tier-scaled crushing damage!)."
-            );
-            meta.addPage(
-                "§2§l─ Fallback Bolt ─\n\n" +
-                "§7Left-clicking with the Earth Staff fires a fast, lower-tier dirt bolt.\n\n" +
-                "§7If you have no pages or blocks left, both clicks drop back to this basic bolt without interrupting your combat flow."
-            );
+            meta.setDisplayName("§2✦ Earth Book");
+            meta.addEnchant(Enchantment.UNBREAKING, 1, true);
+            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS, ItemFlag.HIDE_ATTRIBUTES);
+            meta.setLore(List.of(
+                "§8" + "─".repeat(26),
+                "§7Requires: §aMagic Lv 10",
+                "§8" + "─".repeat(26),
+                "§7Mechanic: §2throw blocks §7with the",
+                "§2Earth Staff §7(Left-click).",
+                "§7Unlock pages by finding §2Earth Pages",
+                "§7dropped by mobs and right-clicking them.",
+                "§8" + "─".repeat(26),
+                "§8Right-click to read.",
+                "§8[DifficultyEngine — Earth Book]"
+            ));
             meta.getPersistentDataContainer().set(earthBookKey, PersistentDataType.BYTE, (byte) 1);
             item.setItemMeta(meta);
         }
@@ -1487,16 +1501,16 @@ public class ItemFactory {
             meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
             meta.setLore(List.of(
                 "§8" + "─".repeat(26),
-                "§7Earth Magic Page §8— §aTier " + tier.levelRequired,
+                "§7Earth Page §8— §aTier " + tier.levelRequired,
                 "§8Requires: §aMagic Lv §a" + tier.levelRequired,
                 "§8" + "─".repeat(26),
-                "§7Carry this to throw " + tier.displayName + "§7.",
+                "§7Unlocks throwing " + tier.displayName + "§7.",
                 "§7Trap damage:       §c" + (int)(tier.trapDamage / 2) + " ❤",
                 "§7Suffocate damage:  §c" + (int)(tier.suffocateDamage / 2) + " ❤",
                 "§8" + "─".repeat(26),
-                "§8• Keep in inventory — not consumed.",
-                "§8• Page in a chest = won't activate.",
-                "§8[DifficultyEngine — Earth Magic Page]"
+                "§8• Right-click to insert into your Earth Book.",
+                "§8• One-time unlock — page is consumed.",
+                "§8[DifficultyEngine — Earth Page]"
             ));
             meta.getPersistentDataContainer().set(earthPageKeys.get(tier), PersistentDataType.BYTE, (byte) 1);
             item.setItemMeta(meta);
@@ -1523,6 +1537,17 @@ public class ItemFactory {
     /** Returns the NamespacedKey for an earth page tier. */
     public NamespacedKey getEarthPageKey(EarthBlockTier tier) {
         return earthPageKeys.get(tier);
+    }
+
+    /** Returns the EarthBlockTier of an Earth Page item, or {@code null} if not a page. */
+    public EarthBlockTier getEarthPageTier(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return null;
+        var pdc = item.getItemMeta().getPersistentDataContainer();
+        for (EarthBlockTier tier : EarthBlockTier.values()) {
+            NamespacedKey key = earthPageKeys.get(tier);
+            if (key != null && pdc.has(key, PersistentDataType.BYTE)) return tier;
+        }
+        return null;
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -1834,8 +1859,30 @@ public class ItemFactory {
             case 9  -> buildRegistryPage9();
             case 10 -> buildRegistryPage10();
             case 11 -> buildRegistryPage11();
-            default -> java.util.Collections.emptyList();
+            default -> (page >= QUEST_EGG_PAGE_START && page <= QUEST_EGG_PAGE_END)
+                    ? buildQuestEggPage(page - QUEST_EGG_PAGE_START)
+                    : java.util.Collections.emptyList();
         };
+    }
+
+    // ── Quest NPC Egg pages (dynamic, one 45-item page per 45 quests) ─────────
+
+    /** First registry page number used for Quest NPC Eggs (page 12). */
+    public static final int QUEST_EGG_PAGE_START = 12;
+    /** Last registry page number used for Quest NPC Eggs — computed from the 306 quests. */
+    public static final int QUEST_EGG_PAGE_END =
+            QUEST_EGG_PAGE_START - 1
+            + (int) Math.ceil(com.yourname.difficulty.quests.NpcQuestRegistry.all().size() / 45.0);
+
+    private List<ItemStack> buildQuestEggPage(int zeroBasedIndex) {
+        var questDefs = com.yourname.difficulty.quests.NpcQuestRegistry.all();
+        List<ItemStack> p = new ArrayList<>();
+        int start = zeroBasedIndex * 45;
+        int end   = Math.min(start + 45, questDefs.size());
+        for (int i = start; i < end; i++) {
+            p.add(buildQuestEgg(questDefs.get(i)));
+        }
+        return p;
     }
 
     private List<ItemStack> buildRegistryPage1() {
@@ -1893,6 +1940,8 @@ public class ItemFactory {
         // GunZ Sword — also available in the admin registry for spawning.
         // It additionally drops at 15% from the Infernal Blazefiend boss.
         p.add(buildGunZSword());
+        // Dragon Armour Page — 1% boss drop, unlocks the Dragon Armour recipes.
+        p.add(buildDragonArmourPage());
         return p;
     }
 
@@ -2801,6 +2850,96 @@ public class ItemFactory {
     public boolean isNoSpawnZoneBlock(ItemStack item) {
         if (item == null || !item.hasItemMeta()) return false;
         return item.getItemMeta().getPersistentDataContainer().has(noSpawnZoneKey, PersistentDataType.BYTE);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  DRAGON ARMOUR — crafting-gate items
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Dragon Armour Page — 1% boss drop (Wither, Ender Dragon, Infernal Blazefiend,
+     * Void Zurion, Tempest Overlord). Not consumed on pickup — simply carrying/picking
+     * it up unlocks the 4 Dragon Armour piece recipes in the crafting book. It IS
+     * consumed as a crafting ingredient (1 per piece) once the recipe is discovered.
+     */
+    public ItemStack buildDragonArmourPage() {
+        ItemStack item = new ItemStack(Material.BOOK);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§6§l✦ Dragon Armour Page §6§l✦");
+            meta.setEnchantmentGlintOverride(true);
+            meta.setLore(List.of(
+                "§8" + "─".repeat(30),
+                "§7A scorched page torn from an",
+                "§7ancient dragon-tamer's tome.",
+                "§8" + "─".repeat(30),
+                "§7Reveals the §6Dragon Armour §7recipes",
+                "§7in your crafting book once obtained.",
+                "§8" + "─".repeat(30),
+                "§6Per piece: §71× Netherite piece + 2× Netherite Ingot",
+                "§7+ 5× Diamond + 1× Charged Magic Bottle",
+                "§8" + "─".repeat(30),
+                "§8Rare (§e1%§8) drop from:",
+                "§8  Wither, Ender Dragon,",
+                "§8  Infernal Blazefiend, Void Zurion,",
+                "§8  Tempest Overlord",
+                "§8" + "─".repeat(30),
+                "§8[DifficultyEngine — Dragon Armour Page]"
+            ));
+            meta.getPersistentDataContainer().set(dragonArmourPageKey, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    public boolean isDragonArmourPage(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer().has(dragonArmourPageKey, PersistentDataType.BYTE);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  QUEST NPC EGGS — one Villager Spawn Egg per quest (all 306), used to
+    //  place quest NPCs directly from the Registry instead of /questnpc spawn <id>
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /** Builds a Villager Spawn Egg item tagged with the given quest id. */
+    public ItemStack buildQuestEgg(com.yourname.difficulty.quests.NpcQuestDef def) {
+        ItemStack item = new ItemStack(Material.VILLAGER_SPAWN_EGG);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            String dimColor = switch (def.dimension) {
+                case "world_nether"  -> "§c";
+                case "world_the_end" -> "§d";
+                default              -> "§a";
+            };
+            meta.setDisplayName("§e#" + def.id + " §7— " + dimColor + def.title);
+            meta.setLore(List.of(
+                "§8" + "─".repeat(24),
+                "§7NPC: §f" + def.npcName,
+                "§7Dimension: " + dimColor + def.dimension,
+                def.secret ? "§8[SECRET QUEST]" : "§7[Main Quest]",
+                "§8" + "─".repeat(24),
+                "§8Right-click a block to place this",
+                "§8quest NPC at that location.",
+                "§8[DifficultyEngine — Quest NPC Egg]"
+            ));
+            meta.getPersistentDataContainer().set(questEggIdKey, PersistentDataType.INTEGER, def.id);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    public boolean isQuestEgg(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer().has(questEggIdKey, PersistentDataType.INTEGER);
+    }
+
+    /** Returns the quest id stored on a Quest NPC Egg, or -1 if not a quest egg. */
+    public int getQuestEggId(ItemStack item) {
+        if (!isQuestEgg(item)) return -1;
+        Integer id = item.getItemMeta().getPersistentDataContainer()
+                .get(questEggIdKey, PersistentDataType.INTEGER);
+        return id != null ? id : -1;
     }
 
 

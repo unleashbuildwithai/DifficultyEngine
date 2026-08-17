@@ -49,6 +49,8 @@ import com.yourname.difficulty.listeners.MinecartListener;
 import com.yourname.difficulty.listeners.NightmareAggroListener;
 import com.yourname.difficulty.listeners.NightSpawnBoostListener;
 import com.yourname.difficulty.listeners.MonsterCapListener;
+import com.yourname.difficulty.listeners.AncientRealmMonsterLock;
+import com.yourname.difficulty.listeners.PeacefulIgnoreListener;
 
 import com.yourname.difficulty.listeners.LightningMonsterSummonListener;
 import com.yourname.difficulty.listeners.PrayerListener;
@@ -69,7 +71,10 @@ import com.yourname.difficulty.magic.FavoritesGUI;
 import com.yourname.difficulty.magic.FavoritesGUIListener;
 import com.yourname.difficulty.magic.SpellBookListener;
 import com.yourname.difficulty.magic.SpellBookManager;
+import com.yourname.difficulty.magic.EarthBookListener;
+import com.yourname.difficulty.magic.EarthBookManager;
 import com.yourname.difficulty.monsters.CustomMonsterDropListener;
+import com.yourname.difficulty.monsters.AncientRealmSpawnTask;
 import com.yourname.difficulty.monsters.CustomMonsterManager;
 import com.yourname.difficulty.party.PartyHudTask;
 import com.yourname.difficulty.party.PartyListener;
@@ -81,7 +86,7 @@ import com.yourname.difficulty.quests.NpcQuestSpawner;
 import com.yourname.difficulty.quests.QuestGUI;
 import com.yourname.difficulty.quests.QuestKillListener;
 import com.yourname.difficulty.quests.QuestManager;
-import com.yourname.difficulty.realm.AncientDebrisPortalListener;
+
 import com.yourname.difficulty.skills.CapeDataManager;
 import com.yourname.difficulty.skills.CapeEquipListener;
 import com.yourname.difficulty.skills.ItemLevelListener;
@@ -105,6 +110,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.RecipeChoice;
 import org.bukkit.inventory.ShapelessRecipe;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -155,7 +161,7 @@ public class Main extends JavaPlugin {
     // ── Phase 3: Gold Inventory ────────────────────────────────────────────────
     private GoldInventoryListener goldInventoryListener;
     // ── Phase 7: Ancient Realm ─────────────────────────────────────────────────
-    private AncientDebrisPortalListener ancientPortalListener;
+    
     // ── Phase 8: Nightmare Hardcore ───────────────────────────────────────────
     private NightmareHardcoreListener hardcoreListener;
     // ── Phase 9: Custom Monsters ──────────────────────────────────────────────
@@ -234,7 +240,9 @@ public class Main extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new CapeEquipListener(skillManager, skillCapeManager, this), this);
         getServer().getPluginManager().registerEvents(
-                new ItemLevelListener(skillManager), this);
+                new ItemLevelListener(skillManager, itemFactory), this);
+        getServer().getPluginManager().registerEvents(
+                new PeacefulIgnoreListener(difficultyManager), this);
         getServer().getPluginManager().registerEvents(
                 new SkillCombatListener(skillManager, this), this);
         getServer().getPluginManager().registerEvents(
@@ -290,6 +298,8 @@ public class Main extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new MeleeGearEquipListener(itemFactory, skillManager), this);
         getServer().getPluginManager().registerEvents(
+                new com.yourname.difficulty.boss.DragonArmourPageDropListener(itemFactory, bossEffectListener), this);
+        getServer().getPluginManager().registerEvents(
                 new RangedGearCraftListener(itemFactory), this);
         getServer().getPluginManager().registerEvents(
                 new RangedGearEquipListener(itemFactory, skillManager), this);
@@ -336,6 +346,12 @@ public class Main extends JavaPlugin {
         // Wire FavoritesManager into MagicStaffListener (must be wired after both created)
         magicStaffListener.setFavoritesManager(comboFavoritesManager);
 
+        // ── Earth Book system — per-player unlocked tiers, pages found as drops ──
+        EarthBookManager earthBookManager = new EarthBookManager(this);
+        EarthBookListener earthBookListener = new EarthBookListener(itemFactory, earthBookManager);
+        getServer().getPluginManager().registerEvents(earthBookListener, this);
+        magicStaffListener.setEarthBookManager(earthBookManager);
+
         // ── Elemental Proc system — real dice-roll passive procs on basic hits,
         // gated by Arcane Tome proc-page unlock + Magic level requirement.
         com.yourname.difficulty.magic.ElementalProcManager elementalProcManager =
@@ -345,7 +361,7 @@ public class Main extends JavaPlugin {
 
 
 
-        this.questManager = new QuestManager(this, goldManager, skillManager, itemFactory);
+        this.questManager = new QuestManager(this, goldManager, skillManager, itemFactory, difficultyManager);
         this.questGUI     = new QuestGUI(questManager);
         getServer().getPluginManager().registerEvents(questGUI, this);
 
@@ -354,6 +370,8 @@ public class Main extends JavaPlugin {
         getServer().getPluginManager().registerEvents(npcQuestSpawner, this);
         getServer().getPluginManager().registerEvents(
                 new NpcQuestListener(npcQuestManager, npcQuestSpawner), this);
+        getServer().getPluginManager().registerEvents(
+                new com.yourname.difficulty.quests.QuestEggListener(itemFactory, npcQuestSpawner), this);
 
         org.bukkit.command.PluginCommand questNpcCmd = getCommand("questnpc");
         if (questNpcCmd != null) {
@@ -414,12 +432,6 @@ public class Main extends JavaPlugin {
 
 
 
-        // ── Ancient Debris Portal ──────────────────────────────────────────────
-        this.ancientPortalListener = new AncientDebrisPortalListener(this, skillManager, itemFactory);
-        getServer().getPluginManager().registerEvents(ancientPortalListener, this);
-        this.magicStaffListener.setPortalListener(ancientPortalListener);
-        ancientPortalListener.setBringCommand(bringCommand);
-
         // ── Nightmare Hardcore Mode ────────────────────────────────────────────
         this.hardcoreListener = new NightmareHardcoreListener(
                 this, difficultyManager, skillManager, goldManager);
@@ -428,6 +440,11 @@ public class Main extends JavaPlugin {
         // ── Custom Monster Registry ────────────────────────────────────────────
         this.customMonsterManager = new CustomMonsterManager(this);
         getServer().getPluginManager().registerEvents(customMonsterManager, this);
+
+        // Ancient Realm / Void Realm: custom-monsters-only lockdown + ambient spawner.
+        getServer().getPluginManager().registerEvents(
+                new AncientRealmMonsterLock(customMonsterManager), this);
+        new AncientRealmSpawnTask(this, customMonsterManager).runTaskTimer(this, 300L, 300L);
         getServer().getPluginManager().registerEvents(
                 new CustomMonsterDropListener(this, customMonsterManager), this);
 
@@ -561,6 +578,14 @@ public class Main extends JavaPlugin {
         registerCmd("trade", tradeListener);
 
         registerCmd("vipshop", (sender, cmd, label, args) -> {
+            if (args.length > 0 && args[0].equalsIgnoreCase("remove")) {
+                if (!sender.hasPermission("difficultyengine.cape.admin")) {
+                    sender.sendMessage("§cNo permission."); return true;
+                }
+                int removed = vipShopListener.removeVipKeepers();
+                sender.sendMessage("§6✦ §7Removed §e" + removed + " §7VIP Shop Keeper"
+                        + (removed == 1 ? "" : "s") + "."); return true;
+            }
             if (!(sender instanceof Player player)) {
                 sender.sendMessage("§cOnly players can use /vipshop."); return true;
             }
@@ -571,7 +596,7 @@ public class Main extends JavaPlugin {
                 vipShopListener.spawnVipKeeper(player.getLocation());
                 player.sendMessage("§6✦ §7VIP Shop Keeper spawned!"); return true;
             }
-            player.sendMessage("§6Usage: §e/vipshop spawn §8(Admin)");
+            player.sendMessage("§6Usage: §e/vipshop [spawn|remove] §8(spawn/remove are Admin)");
             return true;
         });
 
@@ -638,9 +663,23 @@ public class Main extends JavaPlugin {
             if (!sender.hasPermission("difficultyengine.cape.admin")) {
                 sender.sendMessage("§cNo permission."); return true;
             }
+            if (args.length > 0 && args[0].equalsIgnoreCase("remove")) {
+                String target = args.length > 1 ? args[1] : null;
+                if (target != null && !target.equalsIgnoreCase("all")
+                        && customMonsterManager.getDefinition(target) == null) {
+                    sender.sendMessage("§c✗ §7Unknown monster: §e" + target); return true;
+                }
+                int removed = customMonsterManager.removeMonsters(
+                        (target == null || target.equalsIgnoreCase("all")) ? null : target);
+                sender.sendMessage("§a✓ §7Removed §e" + removed + " §7custom monster"
+                        + (removed == 1 ? "" : "s") + (target != null && !target.equalsIgnoreCase("all")
+                                ? " §8(" + target + ")" : " §8(all)") + ".");
+                return true;
+            }
             if (args.length == 0) {
                 sender.sendMessage("§7Available monsters: §e"
                         + String.join("§7, §e", customMonsterManager.getDefinitions().keySet()));
+                sender.sendMessage("§7Usage: §e/spawnmob remove <all|monster_id> §7to delete spawned monsters.");
                 return true;
             }
             if (!(sender instanceof Player player)) {
@@ -762,6 +801,7 @@ public class Main extends JavaPlugin {
 
         new MagicGlowTask(itemFactory, skillManager, this).runTaskTimer(this, 5L, 4L);
         new BossQuestCapeTask(this).runTaskTimer(this, 10L, 10L);
+        new com.yourname.difficulty.items.DragonArmourHeartsTask(this, itemFactory).runTaskTimer(this, 20L, 20L);
 
         // Playtime tracking for each difficulty level (1s interval)
         getServer().getScheduler().runTaskTimer(this, () -> {
@@ -957,14 +997,20 @@ public class Main extends JavaPlugin {
             {"NETHERITE_HELMET","melee_netherite_helmet"},{"NETHERITE_CHESTPLATE","melee_netherite_chestplate"},
             {"NETHERITE_LEGGINGS","melee_netherite_leggings"},{"NETHERITE_BOOTS","melee_netherite_boots"}
         }) { addMeleeRecipe(e[0], e[1], Material.NETHERITE_INGOT); }
+        // ── Dragon Armour — gated behind the Dragon Armour Page (1% boss drop) ──
+        // Deliberately NOT added to allRecipeKeys: these are only discoverable once
+        // a player picks up a Dragon Armour Page (see CustomItemCraftListener).
         for (String[] e : new String[][]{
-            {"NETHERITE_HELMET","melee_dragon_helmet"},{"NETHERITE_CHESTPLATE","melee_dragon_chestplate"},
-            {"NETHERITE_LEGGINGS","melee_dragon_leggings"},{"NETHERITE_BOOTS","melee_dragon_boots"}
+            {"NETHERITE_HELMET","dragon_armour_helmet"},{"NETHERITE_CHESTPLATE","dragon_armour_chestplate"},
+            {"NETHERITE_LEGGINGS","dragon_armour_leggings"},{"NETHERITE_BOOTS","dragon_armour_boots"}
         }) {
             Material mat = Material.valueOf(e[0]); NamespacedKey k = new NamespacedKey(this, e[1]);
             ShapelessRecipe r = new ShapelessRecipe(k, new ItemStack(mat));
-            r.addIngredient(mat); r.addIngredient(Material.NETHER_STAR); r.addIngredient(Material.DRAGON_BREATH);
-            getServer().addRecipe(r); allRecipeKeys.add(k);
+            r.addIngredient(mat);
+            r.addIngredient(2, Material.NETHERITE_INGOT);
+            r.addIngredient(5, Material.DIAMOND);
+            r.addIngredient(new RecipeChoice.ExactChoice(itemFactory.buildChargedMagicBottle(4)));
+            getServer().addRecipe(r);
         }
 
         for (String[] e : new String[][]{
@@ -1023,12 +1069,14 @@ public class Main extends JavaPlugin {
         mbr.addIngredient(Material.STRING);
         getServer().addRecipe(mbr); allRecipeKeys.add(mbk);
 
-        for (EarthBlockTier tier : EarthBlockTier.values()) {
-            NamespacedKey pk = new NamespacedKey(this, "de_earth_page_recipe_" + tier.name().toLowerCase());
-            ShapelessRecipe pr = new ShapelessRecipe(pk, new ItemStack(Material.BOOK));
-            pr.addIngredient(Material.BOOK); pr.addIngredient(tier.material); pr.addIngredient(Material.STRING);
-            getServer().addRecipe(pr);
-        }
+        // ── Earth Book — single book whose pages unlock per-tier block throwing ──
+        NamespacedKey earthBookRecipeKey = new NamespacedKey(this, "earth_book_recipe");
+        ShapelessRecipe earthBookRecipe = new ShapelessRecipe(earthBookRecipeKey, itemFactory.buildEarthBook());
+        earthBookRecipe.addIngredient(Material.BOOK);
+        earthBookRecipe.addIngredient(Material.EMERALD);
+        earthBookRecipe.addIngredient(Material.DIRT);
+        getServer().addRecipe(earthBookRecipe);
+        allRecipeKeys.add(earthBookRecipeKey);
 
         addBookRecipe("novice_magic_primer_recipe", itemFactory.buildNoviceMagicPrimer(),
                 Material.BOOK, Material.PAPER, Material.FEATHER);

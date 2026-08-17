@@ -2,6 +2,7 @@ name: DifficultyEngine
 version: 1.0
 main: com.yourname.difficulty.Main
 api-version: 1.21
+softdepend: [Vault]
 description: Per-player difficulty scaling with Peaceful, Easy, Medium, Hard, and Nightmare modes. Includes a full RuneScape-style skill system.
 author: yourname
 
@@ -160,8 +161,8 @@ commands:
     permission-message: §cThis command is for admins only.
 
   spawnmob:
-    description: Spawn a custom monster from monsters.yml at your location.
-    usage: /spawnmob <monster_id>
+    description: Spawn a custom monster from monsters.yml at your location, or remove spawned ones.
+    usage: /spawnmob <monster_id>|remove <all|monster_id>
     aliases: [custommob, spawnmonster]
     permission: difficultyengine.cape.admin
     permission-message: §cThis command is for admins only.
@@ -174,8 +175,8 @@ commands:
     permission-message: You do not have permission to use this command.
 
   vipshop:
-    description: Open or spawn the VIP Shop (admin only for spawn).
-    usage: /vipshop [spawn]
+    description: Open, spawn, or remove the VIP Shop keeper (admin only for spawn/remove).
+    usage: /vipshop [spawn|remove]
     aliases: [vip]
     permission: difficultyengine.use
     permission-message: You do not have permission to use this command.
@@ -229,6 +230,23 @@ commands:
     usage: /death
     permission: difficultyengine.use
     permission-message: You do not have permission to use this command.
+
+  npcwipe:
+    description: Delete quest NPC spawners in your selection (admin).
+    usage: /npcwipe
+    permission: difficultyengine.cape.admin
+  cryingdome:
+    description: Spawn a crying-dome particle effect (admin).
+    usage: /cryingdome
+    permission: difficultyengine.cape.admin
+  share:
+    description: Register shared-account profile names for this login.
+    usage: /share <name> [name2] [name3...]
+    permission: difficultyengine.use
+  profile:
+    description: Switch between registered shared-account profiles.
+    usage: /profile <name>
+    permission: difficultyengine.use
 
 permissions:
   difficultyengine.use:

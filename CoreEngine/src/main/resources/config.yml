@@ -1,0 +1,78 @@
+# =====================================================================
+# CoreEngine - Module 1: Dynamic Market Engine & Order Book
+# =====================================================================
+
+market:
+  # Location the player is teleported to when they confirm "Yes" on /market
+  npc-teleport:
+    world: "world"
+    x: 0.5
+    y: 64.0
+    z: 0.5
+    yaw: 0.0
+    pitch: 0.0
+
+  # Hours an active SELL listing stays live before it expires into the
+  # Unclaimed Escrow inbox.
+  sell-listing-expiration-hours: 24
+
+  # Days a claimable escrow entry (expired sell listing OR item bought
+  # via a fulfilled Buy Order) remains claimable before permanent cleanup.
+  escrow-claim-expiration-days: 90
+
+  # How often (in minutes) the expiration/cleanup task runs.
+  expiration-task-interval-minutes: 5
+
+  # Maximum number of COMBINED active (SELL + BUY) listings per rank tier.
+  # 0 = Non-Member/Default, 1 = Member, 2 = Member+, 3 = Member++
+  rank-listing-caps:
+    0: 3
+    1: 6
+    2: 12
+    3: 25
+
+  # Number of listings displayed per page in the browsing grid (slots 18-44).
+  listings-per-page: 27
+
+  # Server Quick-Sell (Buyback) Floor - instantly deletes the item from the
+  # world economy and pays the player amount * unit price. Materials not
+  # listed here cannot be quick-sold. Prices are PER UNIT.
+  buyback-prices:
+    COBBLESTONE: 0.5
+    STONE: 0.5
+    DIRT: 0.1
+    OAK_LOG: 2.0
+    COAL: 3.0
+    IRON_INGOT: 10.0
+    GOLD_INGOT: 15.0
+    DIAMOND: 100.0
+    EMERALD: 50.0
+    NETHERITE_INGOT: 500.0
+    ROTTEN_FLESH: 0.05
+    WHEAT: 1.0
+
+  # Default minimum price-per-unit floor enforced when a material has no
+  # explicit buyback-prices entry but an admin still wants a generic
+  # fallback quick-sell option. Set to -1 to disable fallback pricing
+  # entirely (recommended - forces explicit configuration per item).
+  default-buyback-fallback-price: -1.0
+
+  # Dynamic (Supply & Demand) Price Engine — robust average of actual
+  # COMPLETED trades (real buys & sells), NOT what players merely list.
+  # Placing an item does NOT change the price. Quick-sell uses this as its
+  # base price.
+  #
+  # Number of most-recent confirmed trades to sample (10k-1M). A large
+  # sample combined with the median is statistically robust against
+  # manipulation — a single cheap/expensive order cannot shift it.
+  dynamic-price:
+    base-price-sample-size: 100000
+    # "median" (default, manipulation-resistant) or "mean"
+    central-measure: median
+
+# ── MonsterGrid (Market safe-zone anchor) ─────────────────────────────────
+# Blocks natural hostile-mob spawns within a radius of the Market NPC so the
+# market plaza is always safe. Admin controls: /monstergrid.
+monstergrid:
+  enabled: true
+  radius: 32

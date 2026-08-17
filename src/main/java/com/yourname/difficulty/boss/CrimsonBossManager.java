@@ -27,18 +27,18 @@ import java.util.*;
 
 
 /**
- * CrimsonBossManager â€” manages Â§cðŸ”¥ The Infernal BlazefiendÂ§r.
+ * CrimsonBossManager — manages §c🔥 The Infernal Blazefiend§r.
  *
- * â”€â”€ Triggering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
- *  â€¢ Striking any ANCIENT_DEBRIS block while boss is dead â†’ boss spawns near it.
- *  â€¢ After death a 15-minute (18 000 tick) timer re-spawns the boss.
- *  â€¢ Admin: /spawnboss crimson
+ * ── Triggering ───────────────────────────────────────────────────────────────
+ *  • Striking any ANCIENT_DEBRIS block while boss is dead → boss spawns near it.
+ *  • After death a 15-minute (18 000 tick) timer re-spawns the boss.
+ *  • Admin: /spawnboss crimson
  *
- * â”€â”€ Starting location â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+ * ── Starting location ────────────────────────────────────────────────────────
  *  Crimson Pit:  -107.964,  -26,  -14.444
  *  But the boss WANDERS freely through the caves after spawning.
  *
- * â”€â”€ Wandering & Block-breaking â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+ * ── Wandering & Block-breaking ───────────────────────────────────────────────
  *  Every 3 s the boss picks a random target 10-25 blocks away in a random
  *  horizontal+vertical direction and flies toward it.  Any breakable blocks
  *  (stone, deepslate, netherrack, gravel, etc.) directly in its path are
@@ -46,19 +46,19 @@ import java.util.*;
  *  Indestructible blocks (bedrock, ancient debris, obsidian, reinforced
  *  deepslate) are not touched.
  *
- * â”€â”€ Attacks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+ * ── Attacks ──────────────────────────────────────────────────────────────────
  *  Same 6 attacks as before (Hellfire, Molten Barrage, Void Pearls,
  *  Fire Blobs, Flame Slimes, Scorch).
  */
 public class CrimsonBossManager implements Listener {
 
-    // â”€â”€ Default spawn coords (used by /spawnboss crimson) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Default spawn coords (used by /spawnboss crimson) ─────────────────────
     public static final double SPAWN_X = -107.964;
     public static final double SPAWN_Y = -26.0;
     public static final double SPAWN_Z = -14.444;
 
-    // â”€â”€ Tunables â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    /** Standard world-boss HP â€” tuned for Lv99 parties. */
+    // ── Tunables ──────────────────────────────────────────────────────────────
+    /** Standard world-boss HP — tuned for Lv99 parties. */
     private static final double BOSS_MAX_HP       = 2_500.0;
     /** Legendary variant HP (1% chance on any spawn). */
     private static final double LEGENDARY_HP      = 25_000.0;
@@ -92,9 +92,9 @@ public class CrimsonBossManager implements Listener {
             Material.BLACK_CONCRETE
     );
 
-    // â”€â”€ Crimson Cube mini-fiend population tunables â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Crimson Cube mini-fiend population tunables ───────────────────────────
     /** Radius (blocks) around each Crimson Cube that counts toward its fiend population.
-     *  Increased to 300 per request â€” mini-fiends roam a much wider area. */
+     *  Increased to 300 per request — mini-fiends roam a much wider area. */
     private static final double CUBE_FIEND_RADIUS = 300.0;
     /** Minimum number of mini Blazefiends kept alive within CUBE_FIEND_RADIUS of each cube.
      *  Lowered from 30 -> 12 so the caves aren't overrun ("keeps spawning and never stops"). */
@@ -126,9 +126,9 @@ public class CrimsonBossManager implements Listener {
     /** How fast the crimson_boss display spins/flickers (radians per tick). */
     private static final double CRIMSON_SPIN_SPEED = 0.05;
 
-    /** Boss carrier UUID â†’ paired visual ItemDisplay UUID (position-synced every tick). */
+    /** Boss carrier UUID → paired visual ItemDisplay UUID (position-synced every tick). */
     private final Map<UUID, UUID> carrierToDisplay = new HashMap<>();
-    /** Boss carrier UUID â†’ current animation angle (radians), advanced each sync tick. */
+    /** Boss carrier UUID → current animation angle (radians), advanced each sync tick. */
     private final Map<UUID, Double> displaySpinAngles = new HashMap<>();
     private final NamespacedKey displayTagKey;
 
@@ -281,7 +281,7 @@ public class CrimsonBossManager implements Listener {
             }
         }, 120L, 80L); // wander every 4 seconds
 
-        // â”€â”€ Crimson Cube population upkeep â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Crimson Cube population upkeep ────────────────────────────────────
         // Ensures at least CUBE_MIN_FIENDS mini Blazefiends are always alive
         // within CUBE_FIEND_RADIUS blocks of every known Crimson Cube. If a
         // fiend wanders outside that radius (or dies), it no longer counts
@@ -305,11 +305,11 @@ public class CrimsonBossManager implements Listener {
      * For every known Crimson Cube, counts mini Blazefiends within
      * CUBE_FIEND_RADIUS and tops up to CUBE_MIN_FIENDS if short.
      * Fiends that wander outside the radius no longer count, causing a
-     * fresh one to spawn near the cube â€” net effect: 1 new fiend spawns
+     * fresh one to spawn near the cube — net effect: 1 new fiend spawns
      * near the cube every time one wanders outside its radius.
      *
      * A hard server-wide cap (globalMaxFiends) is enforced BEFORE spawning
-     * any new batch â€” this is the fix for mini-fiends spiralling out of
+     * any new batch — this is the fix for mini-fiends spiralling out of
      * control and breaking the server. Once the global cap is reached, no
      * further mini-fiends are spawned by this task until some die off.
      */
@@ -323,13 +323,13 @@ public class CrimsonBossManager implements Listener {
             World world = cube.getWorld();
             if (world == null) continue;
 
-            // â”€â”€ Global hard cap check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ── Global hard cap check ─────────────────────────────────────
             int globalCount = countLiveFiends(world);
             if (globalCount >= globalMaxFiends) continue; // server-wide limit reached, skip entirely
 
             int count = 0;
             for (Entity e : world.getNearbyEntities(cube, CUBE_FIEND_RADIUS, CUBE_FIEND_RADIUS, CUBE_FIEND_RADIUS)) {
-                if (e instanceof Blaze blaze && "Â§cðŸ”¥ Blazefiend".equals(blaze.getCustomName()) && !blaze.isDead()) {
+                if (e instanceof Blaze blaze && "§c🔥 Blazefiend".equals(blaze.getCustomName()) && !blaze.isDead()) {
                     count++;
                 }
             }
@@ -346,11 +346,11 @@ public class CrimsonBossManager implements Listener {
         }
     }
 
-    /** Counts all live "Â§cðŸ”¥ Blazefiend" mini-fiends currently in the given world. */
+    /** Counts all live "§c🔥 Blazefiend" mini-fiends currently in the given world. */
     private int countLiveFiends(World world) {
         int count = 0;
         for (Entity e : world.getEntitiesByClass(Blaze.class)) {
-            if (e instanceof Blaze blaze && "Â§cðŸ”¥ Blazefiend".equals(blaze.getCustomName()) && !blaze.isDead()) {
+            if (e instanceof Blaze blaze && "§c🔥 Blazefiend".equals(blaze.getCustomName()) && !blaze.isDead()) {
                 count++;
             }
         }
@@ -381,7 +381,7 @@ public class CrimsonBossManager implements Listener {
             if (!spawnLoc.getBlock().getType().isAir()) continue;
 
             Blaze fiend = (Blaze) world.spawnEntity(spawnLoc, EntityType.BLAZE);
-            fiend.setCustomName("Â§cðŸ”¥ Blazefiend");
+            fiend.setCustomName("§c🔥 Blazefiend");
             fiend.setCustomNameVisible(true);
             fiend.setRemoveWhenFarAway(true);
             return;
@@ -394,7 +394,7 @@ public class CrimsonBossManager implements Listener {
         World world = loc.getWorld();
         if (world == null) return;
 
-        // â”€â”€ Global hard cap check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Global hard cap check ─────────────────────────────────────────
         // Prevents the proximity guard-spawner from pushing the server-wide
         // fiend count above the configured limit (in addition to its own
         // local 15-block/3-guard check below).
@@ -402,7 +402,7 @@ public class CrimsonBossManager implements Listener {
 
         int guardsCount = 0;
         for (Entity e : loc.getWorld().getNearbyEntities(loc, 15, 10, 15)) {
-            if (e instanceof Blaze blaze && "Â§cðŸ”¥ Blazefiend".equals(blaze.getCustomName())) {
+            if (e instanceof Blaze blaze && "§c🔥 Blazefiend".equals(blaze.getCustomName())) {
                 guardsCount++;
             }
         }
@@ -415,7 +415,7 @@ public class CrimsonBossManager implements Listener {
         if (!gl.getBlock().getType().isAir()) return;
 
         Blaze guard = (Blaze) loc.getWorld().spawnEntity(gl, EntityType.BLAZE);
-        guard.setCustomName("Â§cðŸ”¥ Blazefiend");
+        guard.setCustomName("§c🔥 Blazefiend");
         guard.setCustomNameVisible(true);
         guard.setRemoveWhenFarAway(true);
     }
@@ -446,7 +446,7 @@ public class CrimsonBossManager implements Listener {
         }
     }
 
-    // â•â• Public API â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ══ Public API ═══════════════════════════════════════════════════════════
 
     /**
      * Spawns (or replaces) the boss.
@@ -475,7 +475,7 @@ public class CrimsonBossManager implements Listener {
 
         double roll = random.nextDouble();
         double hp = 5000.0;
-        String name = "Â§cðŸ”¥ Â§lÂ§4The Infernal Blazefiend";
+        String name = "§c🔥 §l§4The Infernal Blazefiend";
         boolean legendary = false;
         boolean amalgam = false;
         boolean vortex = false;
@@ -483,21 +483,21 @@ public class CrimsonBossManager implements Listener {
 
         if (isSplitInferno) {
             hp = 10000.0;
-            name = "Â§cðŸ”¥ Â§lÂ§4The Blaze Inferno Â§7(Amalgam Split)";
+            name = "§c🔥 §l§4The Blaze Inferno §7(Amalgam Split)";
             inferno = true;
         } else {
             if (roll < 0.001) { // 0.1% chance: Dual Blaze Amalgam
-                name = "Â§dâ˜  Â§5Â§lTHE DUAL BLAZE AMALGAM Â§dâ˜ ";
+                name = "§d☠ §5§lTHE DUAL BLAZE AMALGAM §d☠";
                 hp = 20000.0;
                 amalgam = true;
                 legendary = true;
             } else if (roll < 0.01) { // 0.9% chance: Blaze Vortex
-                name = "Â§dâ˜  Â§cÂ§lâš¡ THE BLAZE VORTEX âš¡ Â§dâ˜ ";
+                name = "§d☠ §c§l⚡ THE BLAZE VORTEX ⚡ §d☠";
                 hp = 20000.0;
                 vortex = true;
                 legendary = true;
             } else if (roll < 0.03) { // 2% chance: Blaze Inferno
-                name = "Â§cðŸ”¥ Â§lÂ§4The Blaze Inferno";
+                name = "§c🔥 §l§4The Blaze Inferno";
                 hp = 15000.0;
                 inferno = true;
                 legendary = true;
@@ -512,10 +512,10 @@ public class CrimsonBossManager implements Listener {
                 }
                 if (nightmareCount >= 4) {
                     hp = 10000.0;
-                    name = "Â§4â˜  Â§cÂ§lTHE APOCALYPTIC BLAZEFIEND Â§4â˜ ";
+                    name = "§4☠ §c§lTHE APOCALYPTIC BLAZEFIEND §4☠";
                 } else if (nightmareCount > 1) {
                     hp = 7500.0;
-                    name = "Â§cðŸ”¥ Â§lÂ§4The Nightmare Blazefiend";
+                    name = "§c🔥 §l§4The Nightmare Blazefiend";
                 } else {
                     hp = 5000.0;
                 }
@@ -527,7 +527,7 @@ public class CrimsonBossManager implements Listener {
         boss.setCustomNameVisible(false); // name lives on the crimson_boss display instead
         boss.setRemoveWhenFarAway(false);
         boss.setFireTicks(Integer.MAX_VALUE);
-        // Hide the vanilla Blaze silhouette â€” only the custom crimson_boss
+        // Hide the vanilla Blaze silhouette — only the custom crimson_boss
         // ItemDisplay model should be visible. The Blaze remains as an
         // invisible physics/AI/hitbox carrier.
         boss.setInvisible(true);
@@ -597,11 +597,11 @@ public class CrimsonBossManager implements Listener {
             // Server-wide legendary announcement
             for (Player online : plugin.getServer().getOnlinePlayers()) {
                 online.sendMessage("");
-                online.sendMessage("Â§4Â§lâš¡ â˜  Â§cÂ§l" + name.replaceAll("Â§.", "") + " HAS AWAKENED! Â§4Â§lâ˜  âš¡");
-                online.sendMessage("Â§7Â§oA supreme terror rises from the Crimson Pit...");
-                online.sendMessage("Â§6Â§o  Â§e" + (int)hp + " HP Â§6â€” Â§cBring everything you have!");
+                online.sendMessage("§4§l⚡ ☠ §c§l" + name.replaceAll("§.", "") + " HAS AWAKENED! §4§l☠ ⚡");
+                online.sendMessage("§7§oA supreme terror rises from the Crimson Pit...");
+                online.sendMessage("§6§o  §e" + (int)hp + " HP §6— §cBring everything you have!");
                 online.sendMessage("");
-                online.sendTitle("Â§4Â§lâš¡ LEGENDARY BOSS âš¡", "Â§c" + (int)hp + " HP â€” Â§6Crimson Pit!", 10, 100, 20);
+                online.sendTitle("§4§l⚡ LEGENDARY BOSS ⚡", "§c" + (int)hp + " HP — §6Crimson Pit!", 10, 100, 20);
             }
         } else {
             announceSpawn(loc);
@@ -612,7 +612,7 @@ public class CrimsonBossManager implements Listener {
         return boss;
     }
 
-    /** Convenience overload â€” uses default Crimson Pit coords. */
+    /** Convenience overload — uses default Crimson Pit coords. */
     public Blaze spawnBoss() { return spawnBoss(null); }
 
     public boolean isBossAlive() {
@@ -629,9 +629,9 @@ public class CrimsonBossManager implements Listener {
         bossEnderPearls.clear();
     }
 
-    // â•â• AI Task â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ══ AI Task ═══════════════════════════════════════════════════════════════
     // (Spawner block placement/break/interact/activation is now handled by
-    //  com.yourname.difficulty.boss.crimson.CrimsonBossSpawner â€” registered separately in Main.java)
+    //  com.yourname.difficulty.boss.crimson.CrimsonBossSpawner — registered separately in Main.java)
 
     private void startBossAI() {
         if (bossTask != null) return; // Only start AI once
@@ -654,7 +654,7 @@ public class CrimsonBossManager implements Listener {
                     // Keep burning
                     boss.setFireTicks(200);
 
-                    // â”€â”€ Wandering AI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                    // ── Wandering AI ─────────────────────────────────────────
                     if (wanderTick >= WANDER_INTERVAL) {
                         pickNewWanderTarget(boss);
                     }
@@ -669,10 +669,10 @@ public class CrimsonBossManager implements Listener {
                         }
                     }
 
-                    // â”€â”€ Block-breaking in path (every 5 ticks) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                    // ── Block-breaking in path (every 5 ticks) ───────────────────
                     if (tick % 5 == 0) breakBlocksInPath(boss);
 
-                    // â”€â”€ Phase Mechanics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                    // ── Phase Mechanics ──────────────────────────────────────────
                     boolean isPhase2 = boss.getHealth() <= (boss.getAttribute(Attribute.MAX_HEALTH).getValue() * 0.30);
                     
                     // Distinct boss animations/trails
@@ -709,22 +709,22 @@ public class CrimsonBossManager implements Listener {
                     if (nearby.isEmpty()) continue;
 
                     if (bossAttacks != null) {
-                        // â”€â”€ Attack 1: Homing Hellfire (every 60 ticks / 3 s) â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                        // ── Attack 1: Homing Hellfire (every 60 ticks / 3 s) ─────────
                         if (tick % 60 == 0) bossAttacks.attackHomingHellfire(boss, nearby);
 
-                        // â”€â”€ Attack 2: Molten Barrage (every 200 ticks / 10 s) â”€â”€â”€â”€â”€â”€â”€â”€
+                        // ── Attack 2: Molten Barrage (every 200 ticks / 10 s) ────────
                         if (tick % 200 == 0) bossAttacks.attackMoltenBarrage(boss, nearby);
 
-                        // â”€â”€ Attack 3: Void Pearl Volley (every 300 ticks / 15 s) â”€â”€â”€â”€â”€
+                        // ── Attack 3: Void Pearl Volley (every 300 ticks / 15 s) ─────
                         if (tick % 300 == 0) bossAttacks.attackVoidPearls(boss, nearby);
 
-                        // â”€â”€ Attack 4: Fire Blob Summon (every 400 ticks / 20 s) â”€â”€â”€â”€â”€â”€
+                        // ── Attack 4: Fire Blob Summon (every 400 ticks / 20 s) ──────
                         if (tick % 400 == 0) bossAttacks.attackSummonBlobs(boss, nearby);
 
-                        // â”€â”€ Attack 5: Flame Minion Summon (every 600 ticks / 30 s) â”€â”€â”€
+                        // ── Attack 5: Flame Minion Summon (every 600 ticks / 30 s) ───
                         if (tick % 600 == 0) bossAttacks.attackSummonMinions(boss, nearby);
 
-                        // â”€â”€ Attack 6: Passive Scorch (every 80 ticks / 4 s) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                        // ── Attack 6: Passive Scorch (every 80 ticks / 4 s) ──────────
                         if (tick % 80 == 0) bossAttacks.attackScorch(boss, nearby);
                     }
                 }
@@ -764,7 +764,7 @@ public class CrimsonBossManager implements Listener {
         bossTask.runTaskTimer(plugin, 20L, 1L);
     }
 
-    // â•â• Block-breaking â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ══ Block-breaking ════════════════════════════════════════════════════════
 
     /**
      * Breaks any breakable solid block that the boss is currently inside or
@@ -829,7 +829,7 @@ public class CrimsonBossManager implements Listener {
             if (!b.getType().isSolid()) continue;
             if (INDESTRUCTIBLE.contains(b.getType())) continue;
 
-            // Only break "cave" materials â€” not player-built stuff like wood/planks
+            // Only break "cave" materials — not player-built stuff like wood/planks
             if (!isCaveMaterial(b.getType())) continue;
 
             // Small chance of dropping the block (so world isn't stripped bare)
@@ -870,9 +870,9 @@ public class CrimsonBossManager implements Listener {
         };
     }
 
-    // â•â• Event Handlers â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ══ Event Handlers ═════════════════════════════════════════════════════════
     // (Damage/pearl attack event handling now lives in
-    //  com.yourname.difficulty.boss.crimson.CrimsonBossAttacks â€” registered separately in Main.java)
+    //  com.yourname.difficulty.boss.crimson.CrimsonBossAttacks — registered separately in Main.java)
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerDeathDuringBoss(org.bukkit.event.entity.PlayerDeathEvent event) {
@@ -892,9 +892,9 @@ public class CrimsonBossManager implements Listener {
             Location loc = event.getEntity().getLocation();
             for (Player p : nearbyPlayers(loc, ENGAGE_RADIUS * 2)) {
                 p.sendMessage("");
-                p.sendMessage("Â§dâ˜  Â§5Â§lTHE DUAL BLAZE AMALGAM SPLITS! Â§dâ˜ ");
-                p.sendMessage("Â§7Two fierce Blaze Infernos rise from the molten remains!");
-                p.sendTitle("Â§5Â§lAMALGAM SPLIT!", "Â§dTwo Blaze Infernos awaken!", 10, 80, 20);
+                p.sendMessage("§d☠ §5§lTHE DUAL BLAZE AMALGAM SPLITS! §d☠");
+                p.sendMessage("§7Two fierce Blaze Infernos rise from the molten remains!");
+                p.sendTitle("§5§lAMALGAM SPLIT!", "§dTwo Blaze Infernos awaken!", 10, 80, 20);
                 p.playSound(p.getLocation(), Sound.ENTITY_SPIDER_DEATH, 1.0f, 0.5f); // Play sound
             }
             // Spawn 2 split Infernos (each with 10k HP)
@@ -904,7 +904,7 @@ public class CrimsonBossManager implements Listener {
         }
 
         if (isBossAlive()) {
-            // There is still another split boss alive â€” do not announce victory yet
+            // There is still another split boss alive — do not announce victory yet
             return;
         }
 
@@ -917,11 +917,11 @@ public class CrimsonBossManager implements Listener {
         // Victory announcements
         for (Player p : nearbyPlayers(loc, ENGAGE_RADIUS * 2)) {
             p.sendMessage("");
-            p.sendMessage("Â§6âœ¦ Â§cÂ§lðŸ”¥ THE INFERNAL BLAZEFIEND HAS BEEN SLAIN! ðŸ”¥ Â§6âœ¦");
-            p.sendMessage("Â§7The rock grows cool as the ancient fire fades...");
-            p.sendMessage("Â§8Â§oThe Blazefiend will return in Â§715 minutesÂ§8Â§o...");
+            p.sendMessage("§6✦ §c§l🔥 THE INFERNAL BLAZEFIEND HAS BEEN SLAIN! 🔥 §6✦");
+            p.sendMessage("§7The rock grows cool as the ancient fire fades...");
+            p.sendMessage("§8§oThe Blazefiend will return in §715 minutes§8§o...");
             p.sendMessage("");
-            p.sendTitle("Â§6âš” BOSS DEFEATED!", "Â§7The Blazefiend falls to darkness!", 10, 80, 20);
+            p.sendTitle("§6⚔ BOSS DEFEATED!", "§7The Blazefiend falls to darkness!", 10, 80, 20);
         }
 
         // Award Boss Cape to nearby players who participated and did NOT die!
@@ -930,23 +930,23 @@ public class CrimsonBossManager implements Listener {
                 ItemStack bossCape = itemFactory.buildBossCape();
                 p.getInventory().addItem(bossCape);
                 p.sendMessage("");
-                p.sendMessage("Â§5âœ¦ Â§6Â§lâœ¦ BOSS CAPE AWARDED! âœ¦ Â§5âœ¦");
-                p.sendMessage("Â§7You defeated the legendary world boss without dying!");
+                p.sendMessage("§5✦ §6§l✦ BOSS CAPE AWARDED! ✦ §5✦");
+                p.sendMessage("§7You defeated the legendary world boss without dying!");
                 p.sendMessage("");
-                p.sendTitle("Â§5Â§lâœ¦ BOSS CAPE! âœ¦", "Â§7Awarded for flawless victory!", 10, 80, 20);
+                p.sendTitle("§5§l✦ BOSS CAPE! ✦", "§7Awarded for flawless victory!", 10, 80, 20);
                 p.playSound(p.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 1.0f, 1.0f);
             } else {
-                p.sendMessage("Â§câœ— Â§7You died during the fight, so you did not qualify for the flawless Boss Cape reward!");
+                p.sendMessage("§c✗ §7You died during the fight, so you did not qualify for the flawless Boss Cape reward!");
             }
             p.removeMetadata("died_during_boss", plugin); // clear tag
         }
 
-        // â”€â”€ 15% chance: drop the GunZ Sword â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── 15% chance: drop the GunZ Sword ──────────────────────────────────
         if (random.nextDouble() < GUNZ_DROP_CHANCE) {
             loc.getWorld().dropItemNaturally(loc, itemFactory.buildGunZSword());
             for (Player p : nearbyPlayers(loc, ENGAGE_RADIUS * 2)) {
-                p.sendMessage("Â§4âš” Â§cÂ§lâ˜… RARE DROP: Â§4GunZ Sword Â§cÂ§lâ˜… Â§8â€” The Blazefiend's Blade dropped!");
-                p.sendTitle("Â§4Â§lâ˜… RARE DROP!", "Â§cÂ§lâš” GunZ Sword â€” Â§7claim it fast!", 10, 80, 20);
+                p.sendMessage("§4⚔ §c§l★ RARE DROP: §4GunZ Sword §c§l★ §8— The Blazefiend's Blade dropped!");
+                p.sendTitle("§4§l★ RARE DROP!", "§c§l⚔ GunZ Sword — §7claim it fast!", 10, 80, 20);
             }
         }
 
@@ -964,7 +964,7 @@ public class CrimsonBossManager implements Listener {
             }, fi * 8L);
         }
 
-        // â”€â”€ Schedule 15-minute respawn â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Schedule 15-minute respawn ─────────────────────────────────────────
         respawnTask = plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
             respawnTask = null;
             // Find a random deepslate cave-level location near the original pit
@@ -987,13 +987,13 @@ public class CrimsonBossManager implements Listener {
 
             // Server-wide hint (so players know to search for it)
             for (Player p : world.getPlayers()) {
-                p.sendMessage("Â§cðŸ”¥ Â§4The Infernal Blazefiend has re-awoken somewhere in the depths!");
-                p.sendMessage("Â§7Â§oFind it by striking Â§6Spawner Block Â§7Â§oor Â§6searching the cavesÂ§7Â§o...");
+                p.sendMessage("§c🔥 §4The Infernal Blazefiend has re-awoken somewhere in the depths!");
+                p.sendMessage("§7§oFind it by striking §6Spawner Block §7§oor §6searching the caves§7§o...");
             }
         }, RESPAWN_TICKS);
     }
 
-    // â•â• Internal helpers â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ══ Internal helpers ════════════════════════════════════════════════════════
 
     private void dismissExisting() {
         for (UUID uuid : activeBossUuids) {
@@ -1115,7 +1115,7 @@ public class CrimsonBossManager implements Listener {
     // com.yourname.difficulty.boss.voidwither.VoidWitherManager
 
     /**
-     * Builds the Blazefiend's custom Blockbench flame visual â€” a
+     * Builds the Blazefiend's custom Blockbench flame visual — a
      * fixed-orientation ItemDisplay showing the crimson_boss model, entirely
      * independent from the now-invisible vanilla Blaze carrier underneath.
      */
@@ -1138,11 +1138,11 @@ public class CrimsonBossManager implements Listener {
         for (Player p : loc.getWorld().getPlayers()) {
             if (p.getLocation().distance(loc) > ENGAGE_RADIUS * 3) continue;
             p.sendMessage("");
-            p.sendMessage("Â§4â˜  Â§cÂ§lðŸ”¥ THE INFERNAL BLAZEFIEND HAS AWAKENED! ðŸ”¥ Â§4â˜ ");
-            p.sendMessage("Â§7It carves through the rock â€” Â§4HUNT IT DOWNÂ§7 in the caves!");
-            p.sendMessage("Â§6âš  Â§eBring Â§bWater Â§eand Â§aEarth Â§emagic â€” it WILL find you first!");
+            p.sendMessage("§4☠ §c§l🔥 THE INFERNAL BLAZEFIEND HAS AWAKENED! 🔥 §4☠");
+            p.sendMessage("§7It carves through the rock — §4HUNT IT DOWN§7 in the caves!");
+            p.sendMessage("§6⚠ §eBring §bWater §eand §aEarth §emagic — it WILL find you first!");
             p.sendMessage("");
-            p.sendTitle("Â§cÂ§lðŸ”¥ BOSS AWAKENS!", "Â§7Â§oSearch the caves...", 10, 70, 20);
+            p.sendTitle("§c§l🔥 BOSS AWAKENS!", "§7§oSearch the caves...", 10, 70, 20);
             p.playSound(p.getLocation(), Sound.ENTITY_BLAZE_AMBIENT, 1.0f, 0.5f);
         }
     }
